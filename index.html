@@ -85,6 +85,19 @@
           <section class="panel">
             <div class="panel-head">
               <div>
+                <h3 data-i18n="monthlyTrend">月支出趨勢</h3>
+                <p data-i18n="monthlyTrendSub">以月份比較採買、非採買與意外支出</p>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <canvas id="monthlyTrendChart" width="960" height="340" aria-label="月支出趨勢線圖"></canvas>
+              <div id="trendTooltip" class="chart-tooltip hidden"></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
                 <h3 data-i18n="monthWeeks">月份週紀錄</h3>
               </div>
           </div>

@@ -21,6 +21,10 @@ const i18n = {
     latestWeekSpend: "最新週總支出",
     weeklyComposition: "每週支出組成",
     weeklyCompositionSub: "非採買、採買與意外支出堆疊比較",
+    monthlyTrend: "月支出趨勢",
+    monthlyTrendSub: "以月份比較採買、非採買與意外支出",
+    needTwoMonths: "需要至少兩個月份才有趨勢",
+    monthlyTotal: "月總支出",
     monthWeeks: "月份週紀錄",
     period: "週期",
     cumulative: "本月累積",
@@ -110,6 +114,10 @@ const i18n = {
     latestWeekSpend: "Latest period spend",
     weeklyComposition: "Period Spend Breakdown",
     weeklyCompositionSub: "Stacked non-grocery, grocery, and incidental spending",
+    monthlyTrend: "Monthly Spending Trend",
+    monthlyTrendSub: "Compare grocery, non-grocery, and incidental spending by month",
+    needTwoMonths: "At least two months are needed for a trend",
+    monthlyTotal: "Monthly total",
     monthWeeks: "Month Period Records",
     period: "Period",
     cumulative: "Monthly total",
@@ -194,6 +202,7 @@ let appState = normalizeState(structuredClone(DATA_CONFIG.initialState));
 let currentMonthId = appState.currentMonthId;
 let currentWeekId = appState.months[currentMonthId].weeks[0]?.id;
 let chartBars = [];
+let trendPoints = [];
 
 const els = {};
 
@@ -270,6 +279,8 @@ function bindElements() {
     "weekSpendKpi",
     "weeklyChart",
     "chartTooltip",
+    "monthlyTrendChart",
+    "trendTooltip",
     "weeksTable",
     "weekSelect",
     "periodInput",
@@ -353,7 +364,12 @@ function bindEvents() {
   els.weeklyChart.addEventListener("mousemove", showChartTooltip);
   els.weeklyChart.addEventListener("mouseleave", () => els.chartTooltip.classList.add("hidden"));
   els.weeklyChart.addEventListener("click", selectWeekFromChart);
-  window.addEventListener("resize", drawChart);
+  els.monthlyTrendChart.addEventListener("mousemove", showTrendTooltip);
+  els.monthlyTrendChart.addEventListener("mouseleave", () => els.trendTooltip.classList.add("hidden"));
+  window.addEventListener("resize", () => {
+    drawChart();
+    drawMonthlyTrendChart();
+  });
 }
 
 function switchView(view) {
@@ -363,7 +379,10 @@ function switchView(view) {
   document.querySelectorAll(".view").forEach((section) => {
     section.classList.toggle("active", section.id === `${view}View`);
   });
-  if (view === "overview") drawChart();
+  if (view === "overview") {
+    drawChart();
+    drawMonthlyTrendChart();
+  }
 }
 
 function currentMonth() {
@@ -473,7 +492,10 @@ function renderOverview() {
   els.weekSpendKpi.textContent = formatMoney(latest?.weeklyTotal || 0);
 
   renderWeeksTable(rows);
-  requestAnimationFrame(drawChart);
+  requestAnimationFrame(() => {
+    drawChart();
+    drawMonthlyTrendChart();
+  });
 }
 
 function computedWeeks(month) {
@@ -838,6 +860,183 @@ function drawLegend(ctx, width, colors) {
   });
 }
 
+function monthlyTrendRows() {
+  return Object.values(appState.months).map((month) => {
+    const rows = computedWeeks(month);
+    const nonGrocery = rows.reduce((sum, row) => sum + numberOrZero(row.nonGrocery), 0);
+    const grocery = rows.reduce((sum, row) => sum + Math.max(0, numberOrZero(row.grocery)), 0);
+    const incidentals = rows.reduce((sum, row) => sum + numberOrZero(row.incidentals), 0);
+    return {
+      id: month.id,
+      name: month.name,
+      nonGrocery: roundCurrency(nonGrocery),
+      grocery: roundCurrency(grocery),
+      incidentals: roundCurrency(incidentals),
+      total: roundCurrency(nonGrocery + grocery + incidentals),
+    };
+  });
+}
+
+function drawMonthlyTrendChart() {
+  const canvas = els.monthlyTrendChart;
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(720, Math.floor(rect.width * dpr));
+  canvas.height = Math.floor(340 * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const width = canvas.width / dpr;
+  const height = canvas.height / dpr;
+  const rows = monthlyTrendRows();
+  const top = 34;
+  const right = 24;
+  const bottom = 62;
+  const left = 76;
+  const chartWidth = width - left - right;
+  const chartHeight = height - top - bottom;
+  const colors = {
+    nonGrocery: "#24715d",
+    grocery: "#2f5e9e",
+    incidentals: "#c36b2d",
+  };
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  if (rows.length < 2) {
+    ctx.fillStyle = "#66736b";
+    ctx.font = "700 14px Microsoft JhengHei, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(t("needTwoMonths"), width / 2, height / 2);
+    trendPoints = [];
+    drawTrendLegend(ctx, width, colors);
+    return;
+  }
+
+  const maxValue = Math.max(
+    100,
+    ...rows.flatMap((row) => [row.nonGrocery, row.grocery, row.incidentals]),
+  );
+
+  ctx.strokeStyle = "#d8e0d8";
+  ctx.fillStyle = "#66736b";
+  ctx.font = "12px Microsoft JhengHei, sans-serif";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  for (let i = 0; i <= 4; i += 1) {
+    const value = (maxValue / 4) * i;
+    const y = top + chartHeight - (value / maxValue) * chartHeight;
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(width - right, y);
+    ctx.stroke();
+    ctx.fillText(formatCompactMoney(value), left - 10, y);
+  }
+
+  const xForIndex = (index) => left + (chartWidth / Math.max(rows.length - 1, 1)) * index;
+  const yForValue = (value) => top + chartHeight - (value / maxValue) * chartHeight;
+  trendPoints = rows.map((row, index) => ({
+    row,
+    x: xForIndex(index),
+    nonGroceryY: yForValue(row.nonGrocery),
+    groceryY: yForValue(row.grocery),
+    incidentalsY: yForValue(row.incidentals),
+  }));
+
+  drawTrendLine(ctx, trendPoints, "nonGroceryY", colors.nonGrocery);
+  drawTrendLine(ctx, trendPoints, "groceryY", colors.grocery);
+  drawTrendLine(ctx, trendPoints, "incidentalsY", colors.incidentals);
+
+  ctx.fillStyle = "#17201b";
+  ctx.font = "12px Microsoft JhengHei, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  rows.forEach((row, index) => {
+    const x = xForIndex(index);
+    ctx.fillText(shortMonthName(row.name), x, top + chartHeight + 12);
+  });
+
+  drawTrendLegend(ctx, width, colors);
+}
+
+function drawTrendLine(ctx, points, yKey, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) ctx.moveTo(point.x, point[yKey]);
+    else ctx.lineTo(point.x, point[yKey]);
+  });
+  ctx.stroke();
+
+  points.forEach((point) => {
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(point.x, point[yKey], 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function drawTrendLegend(ctx, width, colors) {
+  const items = [
+    [t("nonGrocery"), colors.nonGrocery],
+    [t("grocery"), colors.grocery],
+    [t("incidentals"), colors.incidentals],
+  ];
+  let x = width - 290;
+  items.forEach(([label, color]) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(x, 10, 12, 12);
+    ctx.fillStyle = "#66736b";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = "12px Microsoft JhengHei, sans-serif";
+    ctx.fillText(label, x + 18, 16);
+    x += 92;
+  });
+}
+
+function showTrendTooltip(event) {
+  if (!trendPoints.length) {
+    els.trendTooltip.classList.add("hidden");
+    return;
+  }
+  const rect = els.monthlyTrendChart.getBoundingClientRect();
+  const point = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+  const nearest = trendPoints.reduce((best, item) => {
+    const distance = Math.abs(item.x - point.x);
+    return !best || distance < best.distance ? { item, distance } : best;
+  }, null);
+  if (!nearest || nearest.distance > 36) {
+    els.trendTooltip.classList.add("hidden");
+    return;
+  }
+
+  const row = nearest.item.row;
+  els.trendTooltip.innerHTML = `
+    <strong>${escapeHtml(row.name)}</strong><br />
+    ${escapeHtml(t("monthlyTotal"))}：${formatMoney(row.total)}<br />
+    ${escapeHtml(t("nonGrocery"))}：${formatMoney(row.nonGrocery)}<br />
+    ${escapeHtml(t("grocery"))}：${formatMoney(row.grocery)}<br />
+    ${escapeHtml(t("incidentals"))}：${formatMoney(row.incidentals)}
+  `;
+  els.trendTooltip.style.left = `${Math.min(point.x + 12, els.monthlyTrendChart.clientWidth - 220)}px`;
+  els.trendTooltip.style.top = `${Math.max(point.y - 20, 8)}px`;
+  els.trendTooltip.classList.remove("hidden");
+}
+
 function showChartTooltip(event) {
   const point = chartPoint(event);
   const bar = chartBars.find((item) => point.x >= item.x && point.x <= item.x + item.width);
@@ -1036,6 +1235,12 @@ function valueForInput(value) {
 function shortPeriod(period) {
   if (!period) return "";
   return period.replace(/\s+/g, " ").replace(" - ", "-");
+}
+
+function shortMonthName(name) {
+  if (!name) return "";
+  const cleaned = name.replace(/\s+/g, " ").trim();
+  return cleaned.length > 14 ? `${cleaned.slice(0, 13)}…` : cleaned;
 }
 
 function slugify(value) {
