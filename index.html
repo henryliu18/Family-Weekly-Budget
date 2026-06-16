@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>家庭週預算</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">家</div>
+          <div>
+            <h1>家庭週預算</h1>
+            <p>Weekly budget tracker</p>
+          </div>
+        </div>
+
+        <label class="field">
+          <span data-i18n="month">月份</span>
+          <select id="monthSelect"></select>
+        </label>
+
+        <label class="field">
+          <span data-i18n="language">語言</span>
+          <select id="languageSelect">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+
+        <button id="addMonthBtn" class="secondary-btn" type="button">新增月份</button>
+        <button id="deleteMonthBtn" class="danger-btn" type="button">移除目前月份</button>
+
+        <nav class="nav-tabs" aria-label="主要檢視">
+          <button class="nav-tab active" type="button" data-view="overview">總覽</button>
+          <button class="nav-tab" type="button" data-view="entry">本週輸入</button>
+          <button class="nav-tab" type="button" data-view="history">歷史查詢</button>
+          <button class="nav-tab" type="button" data-view="settings">分類設定</button>
+        </nav>
+      </aside>
+
+      <main class="workspace">
+        <section class="view active" id="overviewView">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow" data-i18n="currentMonth">目前月份</p>
+              <h2 id="overviewTitle">2026 May-Jun</h2>
+            </div>
+          </div>
+
+          <div class="kpi-grid">
+            <article class="kpi">
+              <span data-i18n="creditLimit">信用卡總額度</span>
+              <strong id="limitKpi">$15,000.00</strong>
+            </article>
+            <article class="kpi">
+              <span data-i18n="monthSpend">本月累積支出</span>
+              <strong id="monthSpendKpi">$0.00</strong>
+            </article>
+            <article class="kpi">
+              <span data-i18n="latestAvailable">最新可用餘額</span>
+              <strong id="availableKpi">$0.00</strong>
+            </article>
+            <article class="kpi">
+              <span data-i18n="latestWeekSpend">最新週總支出</span>
+              <strong id="weekSpendKpi">$0.00</strong>
+            </article>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h3 data-i18n="weeklyComposition">每週支出組成</h3>
+                <p data-i18n="weeklyCompositionSub">非採買、採買與意外支出堆疊比較</p>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <canvas id="weeklyChart" width="960" height="360" aria-label="每週支出長條圖"></canvas>
+              <div id="chartTooltip" class="chart-tooltip hidden"></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h3 data-i18n="monthWeeks">月份週紀錄</h3>
+              </div>
+          </div>
+            <div class="table-scroll">
+              <table id="weeksTable"></table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="entryView">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow" data-i18n="entryEyebrow">週次編輯</p>
+              <h2 data-i18n="entryTitle">本週輸入</h2>
+            </div>
+            <button id="saveWeekBtn" class="primary-btn" type="button">儲存週次</button>
+          </div>
+
+          <div class="entry-layout">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3 data-i18n="weekData">週資料</h3>
+                  <p data-i18n="weekDataSub">輸入累積值後，當週總支出會自動推算</p>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label class="field">
+                  <span data-i18n="editPeriod">編輯週次</span>
+                  <select id="weekSelect"></select>
+                </label>
+                <label class="field">
+                  <span>週期</span>
+                  <input id="periodInput" type="text" placeholder="13/6 - 19/6" />
+                </label>
+                <label class="field">
+                  <span>可用餘額</span>
+                  <input id="availableInput" type="number" min="0" step="0.01" />
+                </label>
+                <label class="field readonly">
+                  <span>本月總支出(扣除上月待繳)</span>
+                  <input id="cumulativeInput" type="text" readonly />
+                </label>
+                <label class="field">
+                  <span>上月待繳(如有)</span>
+                  <input id="unpaidInput" type="number" min="0" step="0.01" />
+                </label>
+                <label class="field readonly">
+                  <span>當週總支出</span>
+                  <input id="weeklyTotalInput" type="text" readonly />
+                </label>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3 data-i18n="categoryAmounts">分類金額</h3>
+                  <p data-i18n="categoryAmountsSub">非採買合計與採買支出會依公式自動計算</p>
+                </div>
+              </div>
+              <div id="categoryInputs" class="category-grid"></div>
+              <label class="field note-field">
+                <span>其他非帳單額外支出明細</span>
+                <textarea id="notesInput" rows="3" placeholder="ikea $99; auwitch dns $39.88"></textarea>
+              </label>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="historyView">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow" data-i18n="searchEyebrow">查詢</p>
+              <h2 data-i18n="pastRecords">過去紀錄</h2>
+            </div>
+          </div>
+          <section class="panel">
+            <div class="filters">
+              <label class="field">
+                  <span data-i18n="month">月份</span>
+                <select id="historyMonthFilter">
+                  <option value="all">全部月份</option>
+                </select>
+              </label>
+              <label class="field">
+                  <span data-i18n="category">分類</span>
+                <select id="historyCategoryFilter">
+                  <option value="all">全部分類</option>
+                </select>
+              </label>
+              <label class="field">
+                  <span data-i18n="keyword">關鍵字</span>
+                <input id="historySearchInput" type="search" placeholder="週期、備註、分類" />
+              </label>
+              <label class="field">
+                  <span data-i18n="minAmount">最低金額</span>
+                <input id="historyMinInput" type="number" min="0" step="0.01" />
+              </label>
+            </div>
+            <div class="table-scroll">
+              <table id="historyTable"></table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="settingsView">
+          <div class="page-head">
+            <div>
+              <p class="eyebrow" data-i18n="settings">規則</p>
+              <h2 data-i18n="dataSettingsTitle">資料與分類設定</h2>
+            </div>
+          </div>
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h3 data-i18n="monthData">目前月份資料</h3>
+                <p data-i18n="monthDataSub">這些設定會儲存在後端資料檔</p>
+              </div>
+              <button id="saveMonthSettingsBtn" class="primary-btn" type="button">儲存設定</button>
+            </div>
+            <div class="form-grid">
+              <label class="field">
+                <span>月份名稱</span>
+                <input id="monthNameInput" type="text" />
+              </label>
+              <label class="field">
+                <span>信用卡總額度</span>
+                <input id="creditLimitInput" type="number" min="0" step="0.01" />
+              </label>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h3 data-i18n="backup">資料備份</h3>
+                <p data-i18n="backupSub">可將目前資料匯出，或匯入語言模型/備份產生的資料</p>
+              </div>
+            </div>
+            <div class="data-actions">
+              <button id="exportDataBtn" class="secondary-btn" type="button">匯出資料 JSON</button>
+              <label class="secondary-btn file-btn">
+                <span data-i18n="importJson">匯入資料 JSON</span>
+                <input id="importDataInput" type="file" accept="application/json,.json" />
+              </label>
+              <button id="resetLocalDataBtn" class="ghost-btn" type="button">重置成預設資料</button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h3 data-i18n="categorySettings">分類設定</h3>
+                <p data-i18n="categorySettingsSub">語言模型分類時應輸出其中一個 key</p>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table id="categoryTable"></table>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="monthDialog">
+      <form method="dialog" class="dialog-card">
+        <h3 data-i18n="addMonth">新增月份</h3>
+        <label class="field">
+          <span>月份名稱</span>
+          <input id="newMonthName" type="text" placeholder="2026 Jun-Jul" />
+        </label>
+        <div class="dialog-actions">
+          <button class="ghost-btn" value="cancel" type="submit">取消</button>
+          <button id="confirmMonthBtn" class="primary-btn" value="default" type="button">新增</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="budget-data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

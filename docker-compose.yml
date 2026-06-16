@@ -1,0 +1,12 @@
+services:
+  budget-app:
+    build: .
+    container_name: family-budget-app
+    ports:
+      - "5173:5173"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 5173
+    volumes:
+      - ./budget-store.json:/app/budget-store.json
+    restart: unless-stopped
