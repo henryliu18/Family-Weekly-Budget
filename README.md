@@ -27,10 +27,16 @@ Access url
 http://127.0.0.1:5173/
 ```
 
-Data file
+Example data file
+
+```text
+budget-store.example.json
+```
+
+Local runtime data file
 
 ```text
 budget-store.json
 ```
 
-Docker will be mapping the local file `budget-store.json` to container volume, so that the file can be persistent.
+`budget-store.example.json` is the repo-safe example file. `budget-store.json` is ignored by git and is used as the live local data file. Docker maps the local `budget-store.json` into the container so your working data stays persistent.

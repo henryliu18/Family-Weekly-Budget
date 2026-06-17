@@ -78,9 +78,9 @@
         {
           "id": "3421742a-0291-4fbd-b03d-98c715d2209e",
           "period": "Period 4",
-          "availableBalance": 10998,
+          "availableBalance": 11000,
           "unpaidPrevious": null,
-          "cumulativeSpend": 4002,
+          "cumulativeSpend": 4000,
           "categoryValues": {
             "medical": 0,
             "privateInsurance": 0,
