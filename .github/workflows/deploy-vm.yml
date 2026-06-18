@@ -38,4 +38,5 @@ jobs:
             sudo -n docker --version && \
             sudo -n docker compose version && \
             sudo -n docker compose -p family-budget down && \
+            sudo -n docker compose pull && \
             sudo -n docker compose -p family-budget up -d"
