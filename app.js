@@ -2,6 +2,7 @@ const DATA_CONFIG = window.BUDGET_DATA;
 const CREDIT_LIMIT = DATA_CONFIG.creditLimit;
 const categories = DATA_CONFIG.categories;
 const LANGUAGE_KEY = "family-budget-language";
+const META_FALLBACK = { buildVersion: "", buildTime: "", authEnabled: false };
 const i18n = {
   zh: {
     language: "語言",
@@ -95,6 +96,14 @@ const i18n = {
     secondPeriod: "第二週",
     thirdPeriod: "第三週",
     fourthPeriod: "第四週",
+    buildVersion: "Build version",
+    loginRequired: "需要登入",
+    loginTitle: "輸入密碼",
+    loginSub: "這是受保護的家庭預算資料。",
+    password: "密碼",
+    login: "登入",
+    logout: "登出",
+    loginFailed: "密碼不正確，請再試一次。",
   },
   en: {
     language: "Language",
@@ -188,9 +197,19 @@ const i18n = {
     secondPeriod: "Period 2",
     thirdPeriod: "Period 3",
     fourthPeriod: "Period 4",
+    buildVersion: "Build version",
+    loginRequired: "Login required",
+    loginTitle: "Enter password",
+    loginSub: "This family budget is protected.",
+    password: "Password",
+    login: "Log in",
+    logout: "Log out",
+    loginFailed: "Incorrect password. Please try again.",
   },
 };
 let currentLanguage = localStorage.getItem(LANGUAGE_KEY) || "zh";
+let appMeta = META_FALLBACK;
+let authState = { authEnabled: false, authenticated: true };
 
 const money = new Intl.NumberFormat("en-AU", {
   style: "currency",
@@ -209,13 +228,47 @@ const els = {};
 document.addEventListener("DOMContentLoaded", async () => {
   bindElements();
   bindEvents();
+  await bootstrapApp();
+});
+
+async function bootstrapApp() {
+  await loadMeta();
+  await loadSession();
+  updateBuildVersion();
+  updateAuthUi();
+  if (authState.authEnabled && !authState.authenticated) return;
   await loadState();
   renderAll();
-});
+}
+
+async function loadMeta() {
+  try {
+    const response = await fetch("/api/meta", { cache: "no-store" });
+    if (!response.ok) throw new Error("Meta request failed");
+    appMeta = { ...META_FALLBACK, ...(await response.json()) };
+  } catch {
+    appMeta = META_FALLBACK;
+  }
+}
+
+async function loadSession() {
+  try {
+    const response = await fetch("/api/session", { cache: "no-store" });
+    if (!response.ok) throw new Error("Session request failed");
+    authState = await response.json();
+  } catch {
+    authState = { authEnabled: false, authenticated: true };
+  }
+}
 
 async function loadState() {
   try {
     const response = await fetch("/api/state", { cache: "no-store" });
+    if (response.status === 401) {
+      authState = { ...authState, authenticated: false };
+      updateAuthUi();
+      return;
+    }
     if (!response.ok) throw new Error("State request failed");
     appState = normalizeState(await response.json());
   } catch {
@@ -264,6 +317,7 @@ function createWeek(input = {}) {
 }
 
 function saveState() {
+  if (authState.authEnabled && !authState.authenticated) return;
   appState.currentMonthId = currentMonthId;
   fetch("/api/state", {
     method: "POST",
@@ -315,6 +369,13 @@ function bindElements() {
     "newMonthName",
     "cancelMonthBtn",
     "confirmMonthBtn",
+    "buildVersionValue",
+    "authOverlay",
+    "loginForm",
+    "passwordInput",
+    "loginError",
+    "loginBtn",
+    "logoutBtn",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -373,6 +434,8 @@ function bindEvents() {
   els.exportDataBtn.addEventListener("click", exportData);
   els.importDataInput.addEventListener("change", importData);
   els.resetLocalDataBtn.addEventListener("click", resetLocalData);
+  els.loginForm?.addEventListener("submit", handleLogin);
+  els.logoutBtn?.addEventListener("click", logout);
 
   els.weeklyChart.addEventListener("mousemove", showChartTooltip);
   els.weeklyChart.addEventListener("mouseleave", () => els.chartTooltip.classList.add("hidden"));
@@ -451,6 +514,8 @@ function applyLanguage() {
     "#exportDataBtn": "exportJson",
     "#resetLocalDataBtn": "resetDefault",
     "#confirmMonthBtn": "addMonth",
+    "#loginBtn": "login",
+    "#logoutBtn": "logout",
   };
 
   Object.entries(textBySelector).forEach(([selector, key]) => {
@@ -478,6 +543,75 @@ function applyLanguage() {
   });
 
   els.historySearchInput.placeholder = t("keywordPlaceholder");
+  if (els.loginError?.dataset.key) {
+    els.loginError.textContent = t(els.loginError.dataset.key);
+  }
+}
+
+function updateBuildVersion() {
+  if (!els.buildVersionValue) return;
+  const display = formatBuildVersion(appMeta.buildVersion) || formatBuildTime(appMeta.buildTime);
+  els.buildVersionValue.textContent = display;
+  els.buildVersionValue.title = appMeta.buildVersion || appMeta.buildTime || "";
+}
+
+function updateAuthUi() {
+  const shouldShowOverlay = authState.authEnabled && !authState.authenticated;
+  els.authOverlay?.classList.toggle("hidden", !shouldShowOverlay);
+  els.logoutBtn?.classList.toggle("hidden", !authState.authEnabled || !authState.authenticated);
+  if (shouldShowOverlay) {
+    document.body.classList.add("auth-locked");
+    setTimeout(() => els.passwordInput?.focus(), 0);
+  } else {
+    document.body.classList.remove("auth-locked");
+    clearLoginError();
+  }
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  clearLoginError();
+  const password = els.passwordInput.value;
+  try {
+    const response = await fetch("/api/session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    if (!response.ok) {
+      showLoginError("loginFailed");
+      return;
+    }
+    authState = { authEnabled: true, authenticated: true };
+    els.passwordInput.value = "";
+    updateAuthUi();
+    await loadState();
+    renderAll();
+  } catch {
+    showLoginError("loginFailed");
+  }
+}
+
+async function logout() {
+  try {
+    await fetch("/api/session", { method: "DELETE" });
+  } catch {}
+  authState = { ...authState, authenticated: false };
+  updateAuthUi();
+}
+
+function showLoginError(key) {
+  if (!els.loginError) return;
+  els.loginError.dataset.key = key;
+  els.loginError.textContent = t(key);
+  els.loginError.classList.remove("hidden");
+}
+
+function clearLoginError() {
+  if (!els.loginError) return;
+  delete els.loginError.dataset.key;
+  els.loginError.textContent = "";
+  els.loginError.classList.add("hidden");
 }
 
 function renderMonthOptions() {
@@ -1305,4 +1439,25 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function formatBuildTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+function formatBuildVersion(value) {
+  if (!value) return "";
+  const trimmed = String(value).trim();
+  if (!trimmed) return "";
+  if (!trimmed.startsWith("sha256:")) return trimmed;
+  const digest = trimmed.slice("sha256:".length);
+  return `sha256:${digest.slice(0, 12)}`;
 }

@@ -37,6 +37,12 @@ jobs:
             cd '${{ vars.VM_APP_PATH }}' && \
             sudo -n docker --version && \
             sudo -n docker compose version && \
-            sudo -n docker compose -p family-budget down && \
             sudo -n docker compose pull && \
+            APP_BUILD_VERSION=\$(sudo -n docker image inspect docker.io/henryhhl18/family-budget-app:latest --format '{{index .RepoDigests 0}}' | sed 's|^docker.io/henryhhl18/family-budget-app@||') && \
+            APP_BUILD_TIME=\$(date -u +%Y-%m-%dT%H:%M:%SZ) && \
+            touch .env && \
+            grep -v '^APP_BUILD_VERSION=' .env | grep -v '^APP_BUILD_TIME=' > .env.tmp || true && \
+            mv .env.tmp .env && \
+            printf 'APP_BUILD_VERSION=%s\nAPP_BUILD_TIME=%s\n' \"\$APP_BUILD_VERSION\" \"\$APP_BUILD_TIME\" >> .env && \
+            sudo -n docker compose -p family-budget down && \
             sudo -n docker compose -p family-budget up -d"

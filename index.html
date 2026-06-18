@@ -39,6 +39,14 @@
           <button class="nav-tab" type="button" data-view="history">歷史查詢</button>
           <button class="nav-tab" type="button" data-view="settings">分類設定</button>
         </nav>
+
+        <div class="sidebar-meta">
+          <button id="logoutBtn" class="ghost-btn sidebar-ghost hidden" type="button">登出</button>
+          <div class="build-version">
+            <span data-i18n="buildVersion">Build version</span>
+            <strong id="buildVersionValue">-</strong>
+          </div>
+        </div>
       </aside>
 
       <main class="workspace">
@@ -276,6 +284,22 @@
         </div>
       </form>
     </dialog>
+
+    <section id="authOverlay" class="auth-overlay hidden" aria-live="polite">
+      <form id="loginForm" class="auth-card">
+        <div>
+          <p class="eyebrow" data-i18n="loginRequired">需要登入</p>
+          <h2 data-i18n="loginTitle">輸入密碼</h2>
+          <p class="auth-copy" data-i18n="loginSub">這是受保護的家庭預算資料。</p>
+        </div>
+        <label class="field">
+          <span data-i18n="password">密碼</span>
+          <input id="passwordInput" type="password" autocomplete="current-password" />
+        </label>
+        <p id="loginError" class="auth-error hidden"></p>
+        <button id="loginBtn" class="primary-btn" type="submit">登入</button>
+      </form>
+    </section>
 
     <script src="budget-data.js"></script>
     <script src="app.js"></script>
