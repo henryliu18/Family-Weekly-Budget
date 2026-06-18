@@ -1,6 +1,6 @@
 services:
   budget-app:
-    image: docker.io/henryhhl18/family-budget-app:latest
+    build: .
     container_name: family-budget-app
     ports:
       - "5173:5173"
