@@ -1,10 +1,16 @@
 const http = require("http");
 const fs = require("fs/promises");
 const path = require("path");
+const crypto = require("crypto");
 
 const ROOT = __dirname;
 const STORE_PATH = path.join(ROOT, "budget-store.json");
 const DEFAULT_PORT = 5173;
+const AUTH_COOKIE = "family_budget_session";
+const APP_PASSWORD = process.env.APP_PASSWORD || "";
+const BUILD_VERSION = process.env.APP_BUILD_VERSION || "";
+const BUILD_TIME = process.env.APP_BUILD_TIME || new Date().toISOString();
+const sessions = new Set();
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -26,6 +32,11 @@ function sendJson(res, status, value) {
 function sendText(res, status, value) {
   res.writeHead(status, { "content-type": "text/plain; charset=utf-8" });
   res.end(value);
+}
+
+function sendEmpty(res, status, headers = {}) {
+  res.writeHead(status, headers);
+  res.end();
 }
 
 async function readBody(req) {
@@ -50,7 +61,98 @@ async function loadDefaultState() {
   return sandbox.window.BUDGET_DATA.initialState;
 }
 
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const index = part.indexOf("=");
+        if (index < 0) return [part, ""];
+        return [part.slice(0, index), decodeURIComponent(part.slice(index + 1))];
+      }),
+  );
+}
+
+function isAuthenticated(req) {
+  if (!APP_PASSWORD) return true;
+  const token = parseCookies(req)[AUTH_COOKIE];
+  return !!token && sessions.has(token);
+}
+
+function authRequired(res) {
+  sendJson(res, 401, { error: "Authentication required" });
+}
+
+function createSessionToken() {
+  return crypto.randomBytes(24).toString("hex");
+}
+
+function sessionCookie(token, maxAge = 60 * 60 * 24 * 14) {
+  const parts = [
+    `${AUTH_COOKIE}=${encodeURIComponent(token)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${maxAge}`,
+  ];
+  return parts.join("; ");
+}
+
 async function serveApi(req, res, pathname) {
+  if (pathname === "/api/meta" && req.method === "GET") {
+    sendJson(res, 200, {
+      buildVersion: BUILD_VERSION,
+      buildTime: BUILD_TIME,
+      authEnabled: !!APP_PASSWORD,
+    });
+    return true;
+  }
+
+  if (pathname === "/api/session" && req.method === "GET") {
+    sendJson(res, 200, {
+      authenticated: isAuthenticated(req),
+      authEnabled: !!APP_PASSWORD,
+    });
+    return true;
+  }
+
+  if (pathname === "/api/session" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)) || "{}");
+    if (!APP_PASSWORD) {
+      sendJson(res, 200, { ok: true, authEnabled: false });
+      return true;
+    }
+    if ((body.password || "") !== APP_PASSWORD) {
+      sendJson(res, 401, { error: "Invalid password" });
+      return true;
+    }
+    const token = createSessionToken();
+    sessions.add(token);
+    sendJsonWithCookie(res, 200, { ok: true, authEnabled: true }, sessionCookie(token));
+    return true;
+  }
+
+  if (pathname === "/api/session" && req.method === "DELETE") {
+    const token = parseCookies(req)[AUTH_COOKIE];
+    if (token) sessions.delete(token);
+    sendEmpty(res, 204, {
+      "set-cookie": sessionCookie("", 0),
+      "cache-control": "no-store",
+    });
+    return true;
+  }
+
+  if (
+    ["/api/state", "/api/reset"].includes(pathname) &&
+    !isAuthenticated(req)
+  ) {
+    authRequired(res);
+    return true;
+  }
+
   if (pathname === "/api/state" && req.method === "GET") {
     sendJson(res, 200, await readStore());
     return true;
@@ -74,7 +176,22 @@ async function serveApi(req, res, pathname) {
   return false;
 }
 
+function sendJsonWithCookie(res, status, value, cookie) {
+  const body = JSON.stringify(value, null, 2);
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+    "set-cookie": cookie,
+  });
+  res.end(body);
+}
+
 async function serveStatic(req, res, pathname) {
+  if (pathname === "/budget-store.json") {
+    sendText(res, 403, "Forbidden");
+    return;
+  }
+
   const requested = pathname === "/" ? "/index.html" : pathname;
   const resolved = path.normalize(path.join(ROOT, requested));
 
