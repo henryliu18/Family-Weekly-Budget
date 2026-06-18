@@ -305,6 +305,7 @@ function bindElements() {
     "resetLocalDataBtn",
     "monthDialog",
     "newMonthName",
+    "cancelMonthBtn",
     "confirmMonthBtn",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
@@ -329,9 +330,13 @@ function bindEvents() {
     renderAll();
   });
 
-  els.addMonthBtn.addEventListener("click", () => els.monthDialog.showModal());
+  els.addMonthBtn.addEventListener("click", openMonthDialog);
   els.deleteMonthBtn.addEventListener("click", deleteCurrentMonth);
   els.confirmMonthBtn.addEventListener("click", addMonth);
+  els.cancelMonthBtn?.addEventListener("click", closeMonthDialog);
+  els.monthDialog?.addEventListener("click", (event) => {
+    if (event.target === els.monthDialog) closeMonthDialog();
+  });
 
   els.weekSelect.addEventListener("change", () => {
     currentWeekId = els.weekSelect.value;
@@ -640,6 +645,40 @@ function saveWeekFromForm() {
   switchView("overview");
 }
 
+function supportsModalDialog(dialog) {
+  return !!dialog && typeof dialog.showModal === "function" && typeof dialog.close === "function";
+}
+
+function openMonthDialog() {
+  if (!els.monthDialog) return;
+  if (supportsModalDialog(els.monthDialog)) {
+    try {
+      els.monthDialog.showModal();
+      return;
+    } catch (error) {
+      console.warn("Falling back to non-modal month dialog.", error);
+    }
+  }
+
+  els.monthDialog.setAttribute("open", "open");
+  els.monthDialog.classList.add("dialog-fallback-open");
+  document.body.classList.add("dialog-open");
+}
+
+function closeMonthDialog() {
+  if (!els.monthDialog) return;
+  if (supportsModalDialog(els.monthDialog) && els.monthDialog.open) {
+    try {
+      els.monthDialog.close();
+    } catch (error) {
+      console.warn("Closing month dialog via fallback.", error);
+    }
+  }
+  els.monthDialog.classList.remove("dialog-fallback-open");
+  els.monthDialog.removeAttribute("open");
+  document.body.classList.remove("dialog-open");
+}
+
 function addMonth() {
   const name = els.newMonthName.value.trim();
   if (!name) return;
@@ -656,7 +695,7 @@ function addMonth() {
   currentMonthId = id;
   currentWeekId = appState.months[id].weeks[0].id;
   els.newMonthName.value = "";
-  els.monthDialog.close();
+  closeMonthDialog();
   renderAll();
 }
 
