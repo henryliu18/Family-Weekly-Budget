@@ -35,5 +35,7 @@ jobs:
           ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
             "set -euxo pipefail && \
             cd '${{ vars.VM_APP_PATH }}' && \
-            sudo -n docker compose -p family-budget down \
+            sudo -n docker --version && \
+            sudo -n docker compose version && \
+            sudo -n docker compose -p family-budget down && \
             sudo -n docker compose -p family-budget up -d"
