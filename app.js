@@ -243,9 +243,17 @@ function normalizeState(state) {
   return next;
 }
 
+function createId() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function createWeek(input = {}) {
   return {
-    id: input.id || crypto.randomUUID(),
+    id: input.id || createId(),
     period: input.period || "",
     availableBalance: numberOrNull(input.availableBalance),
     unpaidPrevious: numberOrNull(input.unpaidPrevious),
