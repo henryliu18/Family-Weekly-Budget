@@ -32,9 +32,15 @@ jobs:
 
       - name: Deploy with Docker Compose
         run: |
-          ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" <<EOF
-          set -e
+          ssh -tt -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" /bin/bash <<EOF
+          set -euxo pipefail
+          whoami
+          pwd
+          ls -la "${{ vars.VM_APP_PATH }}"
+          command -v docker
+          sudo docker --version
+          sudo docker compose version
           cd "${{ vars.VM_APP_PATH }}"
-          docker compose pull
-          docker compose up -d
+          sudo docker compose pull
+          sudo docker compose up -d
           EOF
