@@ -10,5 +10,6 @@ ENV HOST=0.0.0.0
 ENV PORT=5173
 
 EXPOSE 5173
+EXPOSE 5443
 
 CMD ["node", "server.js"]

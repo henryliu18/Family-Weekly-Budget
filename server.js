@@ -1,15 +1,20 @@
 const http = require("http");
+const https = require("https");
 const fs = require("fs/promises");
+const fsSync = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
 const ROOT = __dirname;
 const STORE_PATH = path.join(ROOT, "budget-store.json");
 const DEFAULT_PORT = 5173;
+const DEFAULT_HTTPS_PORT = 5443;
 const AUTH_COOKIE = "family_budget_session";
 const APP_PASSWORD = process.env.APP_PASSWORD || "";
 const BUILD_VERSION = process.env.APP_BUILD_VERSION || "";
 const BUILD_TIME = process.env.APP_BUILD_TIME || new Date().toISOString();
+const SSL_CERT_PATH = process.env.SSL_CERT_PATH || "";
+const SSL_KEY_PATH = process.env.SSL_KEY_PATH || "";
 const sessions = new Set();
 
 const mimeTypes = {
@@ -217,7 +222,7 @@ async function serveStatic(req, res, pathname) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
   try {
     const url = new URL(req.url, "http://127.0.0.1");
     if (await serveApi(req, res, url.pathname)) return;
@@ -226,10 +231,26 @@ const server = http.createServer(async (req, res) => {
     console.error(error);
     sendJson(res, 500, { error: "Internal server error" });
   }
-});
+}
 
 const port = Number(process.env.PORT) || DEFAULT_PORT;
+const httpsPort = Number(process.env.HTTPS_PORT) || DEFAULT_HTTPS_PORT;
 const host = process.env.HOST || "127.0.0.1";
+const server = http.createServer(handleRequest);
+
 server.listen(port, host, () => {
   console.log(`Budget app running at http://${host}:${port}`);
 });
+
+if (SSL_CERT_PATH && SSL_KEY_PATH && fsSync.existsSync(SSL_CERT_PATH) && fsSync.existsSync(SSL_KEY_PATH)) {
+  const httpsOptions = {
+    cert: fsSync.readFileSync(SSL_CERT_PATH),
+    key: fsSync.readFileSync(SSL_KEY_PATH),
+  };
+  const httpsServer = https.createServer(httpsOptions, handleRequest);
+  httpsServer.listen(httpsPort, host, () => {
+    console.log(`Budget app running at https://${host}:${httpsPort}`);
+  });
+} else if (SSL_CERT_PATH || SSL_KEY_PATH) {
+  console.warn("HTTPS certificate/key not found. Starting HTTP only.");
+}
