@@ -18,6 +18,13 @@ const SSL_KEY_PATH = process.env.SSL_KEY_PATH || "";
 const REDIRECT_HTTP_TO_HTTPS = process.env.REDIRECT_HTTP_TO_HTTPS === "true";
 const sessions = new Set();
 
+class StorePathError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "StorePathError";
+  }
+}
+
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -52,11 +59,13 @@ async function readBody(req) {
 }
 
 async function readStore() {
+  await ensureStoreFile();
   const text = await fs.readFile(STORE_PATH, "utf8");
   return JSON.parse(text);
 }
 
 async function writeStore(state) {
+  await ensureStoreFile();
   await fs.writeFile(STORE_PATH, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
@@ -65,6 +74,24 @@ async function loadDefaultState() {
   const sandbox = { window: {} };
   Function("window", script)(sandbox.window);
   return sandbox.window.BUDGET_DATA.initialState;
+}
+
+async function ensureStoreFile() {
+  try {
+    const stats = await fs.stat(STORE_PATH);
+    if (stats.isDirectory()) {
+      throw new StorePathError(
+        "budget-store.json is a directory. Replace it with a JSON file before starting the app.",
+      );
+    }
+    return;
+  } catch (error) {
+    if (error instanceof StorePathError) throw error;
+    if (error.code !== "ENOENT") throw error;
+  }
+
+  const state = await loadDefaultState();
+  await fs.writeFile(STORE_PATH, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
 function parseCookies(req) {
@@ -230,6 +257,10 @@ async function handleRequest(req, res) {
     await serveStatic(req, res, decodeURIComponent(url.pathname));
   } catch (error) {
     console.error(error);
+    if (error instanceof StorePathError) {
+      sendJson(res, 500, { error: error.message });
+      return;
+    }
     sendJson(res, 500, { error: "Internal server error" });
   }
 }
@@ -250,20 +281,30 @@ const httpsPort = Number(process.env.HTTPS_PORT) || DEFAULT_HTTPS_PORT;
 const host = process.env.HOST || "127.0.0.1";
 const server = http.createServer(REDIRECT_HTTP_TO_HTTPS ? redirectToHttps : handleRequest);
 
-server.listen(port, host, () => {
-  const mode = REDIRECT_HTTP_TO_HTTPS ? "redirecting HTTP to HTTPS" : `running at http://${host}:${port}`;
-  console.log(`Budget app ${mode}`);
-});
+async function start() {
+  try {
+    await ensureStoreFile();
+  } catch (error) {
+    console.error(error.message || error);
+  }
 
-if (SSL_CERT_PATH && SSL_KEY_PATH && fsSync.existsSync(SSL_CERT_PATH) && fsSync.existsSync(SSL_KEY_PATH)) {
-  const httpsOptions = {
-    cert: fsSync.readFileSync(SSL_CERT_PATH),
-    key: fsSync.readFileSync(SSL_KEY_PATH),
-  };
-  const httpsServer = https.createServer(httpsOptions, handleRequest);
-  httpsServer.listen(httpsPort, host, () => {
-    console.log(`Budget app running at https://${host}:${httpsPort}`);
+  server.listen(port, host, () => {
+    const mode = REDIRECT_HTTP_TO_HTTPS ? "redirecting HTTP to HTTPS" : `running at http://${host}:${port}`;
+    console.log(`Budget app ${mode}`);
   });
-} else if (SSL_CERT_PATH || SSL_KEY_PATH) {
-  console.warn("HTTPS certificate/key not found. Starting HTTP only.");
+
+  if (SSL_CERT_PATH && SSL_KEY_PATH && fsSync.existsSync(SSL_CERT_PATH) && fsSync.existsSync(SSL_KEY_PATH)) {
+    const httpsOptions = {
+      cert: fsSync.readFileSync(SSL_CERT_PATH),
+      key: fsSync.readFileSync(SSL_KEY_PATH),
+    };
+    const httpsServer = https.createServer(httpsOptions, handleRequest);
+    httpsServer.listen(httpsPort, host, () => {
+      console.log(`Budget app running at https://${host}:${httpsPort}`);
+    });
+  } else if (SSL_CERT_PATH || SSL_KEY_PATH) {
+    console.warn("HTTPS certificate/key not found. Starting HTTP only.");
+  }
 }
+
+start();
