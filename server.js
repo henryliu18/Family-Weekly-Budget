@@ -15,6 +15,7 @@ const BUILD_VERSION = process.env.APP_BUILD_VERSION || "";
 const BUILD_TIME = process.env.APP_BUILD_TIME || new Date().toISOString();
 const SSL_CERT_PATH = process.env.SSL_CERT_PATH || "";
 const SSL_KEY_PATH = process.env.SSL_KEY_PATH || "";
+const REDIRECT_HTTP_TO_HTTPS = process.env.REDIRECT_HTTP_TO_HTTPS === "true";
 const sessions = new Set();
 
 const mimeTypes = {
@@ -233,13 +234,25 @@ async function handleRequest(req, res) {
   }
 }
 
+function redirectToHttps(req, res) {
+  const hostHeader = req.headers.host || "";
+  const hostName = hostHeader.split(":")[0];
+  const location = `https://${hostName}${req.url || "/"}`;
+  res.writeHead(308, {
+    location,
+    "cache-control": "no-store",
+  });
+  res.end();
+}
+
 const port = Number(process.env.PORT) || DEFAULT_PORT;
 const httpsPort = Number(process.env.HTTPS_PORT) || DEFAULT_HTTPS_PORT;
 const host = process.env.HOST || "127.0.0.1";
-const server = http.createServer(handleRequest);
+const server = http.createServer(REDIRECT_HTTP_TO_HTTPS ? redirectToHttps : handleRequest);
 
 server.listen(port, host, () => {
-  console.log(`Budget app running at http://${host}:${port}`);
+  const mode = REDIRECT_HTTP_TO_HTTPS ? "redirecting HTTP to HTTPS" : `running at http://${host}:${port}`;
+  console.log(`Budget app ${mode}`);
 });
 
 if (SSL_CERT_PATH && SSL_KEY_PATH && fsSync.existsSync(SSL_CERT_PATH) && fsSync.existsSync(SSL_KEY_PATH)) {
