@@ -1457,7 +1457,10 @@ function formatBuildVersion(value) {
   if (!value) return "";
   const trimmed = String(value).trim();
   if (!trimmed) return "";
-  if (!trimmed.startsWith("sha256:")) return trimmed;
-  const digest = trimmed.slice("sha256:".length);
+  const digestSource = trimmed.includes("@sha256:")
+    ? trimmed.slice(trimmed.indexOf("@sha256:") + 1)
+    : trimmed;
+  if (!digestSource.startsWith("sha256:")) return trimmed;
+  const digest = digestSource.slice("sha256:".length);
   return `sha256:${digest.slice(0, 12)}`;
 }

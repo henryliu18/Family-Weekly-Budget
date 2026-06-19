@@ -186,19 +186,27 @@ textarea:focus {
 .sidebar-meta {
   display: grid;
   gap: 12px;
+  justify-items: start;
   margin-top: auto;
   padding-top: 12px;
+  min-width: 0;
 }
 
 .sidebar-ghost {
+  width: auto;
+  min-height: 34px;
   border-color: #3a473f;
   background: transparent;
   color: #e0ebe3;
+  padding: 7px 11px;
+  font-size: 13px;
 }
 
 .build-version {
   display: grid;
   gap: 4px;
+  width: 100%;
+  min-width: 0;
   padding-top: 10px;
   border-top: 1px solid #2c3932;
 }
@@ -212,6 +220,8 @@ textarea:focus {
   color: #f7fbf7;
   font-size: 13px;
   font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .nav-tab,
