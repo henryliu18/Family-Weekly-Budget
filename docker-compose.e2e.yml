@@ -3,8 +3,8 @@ services:
     image: docker.io/henryhhl18/family-budget-app:${APP_IMAGE_TAG:-latest}
     container_name: family-budget-e2e
     ports:
-      - "18080:5173"
-      - "18443:5443"
+      - "127.0.0.1:18080:5173"
+      - "127.0.0.1:18443:5443"
     environment:
       HOST: 0.0.0.0
       PORT: 5173
