@@ -6,33 +6,33 @@
 Create the local runtime data file if it does not already exist:
 
 ```powershell
-if (!(Test-Path budget-store.json)) { Copy-Item budget-store.example.json budget-store.json }
+if (!(Test-Path budget-store.json)) { Copy-Item data/budget-store.example.json budget-store.json }
 ```
 
 If `budget-store.json` was accidentally created as a directory, stop the app, remove that directory, then run the copy command above again:
 
 ```powershell
-docker compose -p family-budget down
+docker compose -f deploy/docker-compose.yml -p family-budget down
 Remove-Item -Recurse budget-store.json
-Copy-Item budget-store.example.json budget-store.json
+Copy-Item data/budget-store.example.json budget-store.json
 ```
 
 Build and start locally:
 
 ```powershell
-docker compose -p family-budget up --build
+docker compose -f deploy/docker-compose.yml -p family-budget up --build
 ```
 
 Start in the background:
 
 ```powershell
-docker compose -p family-budget up -d --build
+docker compose -f deploy/docker-compose.yml -p family-budget up -d --build
 ```
 
 Stop
 
 ```powershell
-docker compose -p family-budget down
+docker compose -f deploy/docker-compose.yml -p family-budget down
 ```
 
 Access url
@@ -44,7 +44,7 @@ http://127.0.0.1:5173/
 Example data file
 
 ```text
-budget-store.example.json
+data/budget-store.example.json
 ```
 
 Local runtime data file
@@ -53,13 +53,13 @@ Local runtime data file
 budget-store.json
 ```
 
-`budget-store.example.json` is the repo-safe example file. `budget-store.json` is ignored by git and is used as the live local data file. Docker maps the local `budget-store.json` into the container so your working data stays persistent.
+`data/budget-store.example.json` is the repo-safe example file. `budget-store.json` is ignored by git and is used as the live local data file. Docker maps the local `budget-store.json` into the container so your working data stays persistent.
 
 `budget-store.json` must be a JSON file, not a directory. Docker can create a directory at that path if a file bind mount is started before the file exists.
 
 ## Production Docker deployment
 
-The VM deployment uses `docker-compose.prod.yml`, which pulls the published image, redirects HTTP to HTTPS, and mounts certificates from `./certs`.
+The VM deployment uses `deploy/docker-compose.prod.yml`, which pulls the published image, redirects HTTP to HTTPS, and mounts certificates from `./certs`.
 
 ## Post-build E2E deployment test
 
@@ -68,7 +68,7 @@ After `Docker Image CI` builds and pushes the image from `main`, `Deploy E2E Tes
 The E2E deployment uses:
 
 ```text
-docker-compose.e2e.yml
+deploy/docker-compose.e2e.yml
 ${VM_APP_PATH}/e2e
 family-budget-e2e
 VM localhost only: 127.0.0.1:18080 and 127.0.0.1:18443
