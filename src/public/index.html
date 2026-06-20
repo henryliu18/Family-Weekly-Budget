@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>家庭週預算</title>
+    <title>Family Weekly Budget</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -20,14 +20,6 @@
         <label class="field">
           <span data-i18n="month">月份</span>
           <select id="monthSelect"></select>
-        </label>
-
-        <label class="field">
-          <span data-i18n="language">語言</span>
-          <select id="languageSelect">
-            <option value="zh">中文</option>
-            <option value="en">English</option>
-          </select>
         </label>
 
         <button id="addMonthBtn" class="secondary-btn" type="button">新增月份</button>
@@ -50,6 +42,16 @@
       </aside>
 
       <main class="workspace">
+        <div class="workspace-toolbar">
+          <label class="field language-control">
+            <span data-i18n="language">Language</span>
+            <select id="languageSelect">
+              <option value="zh">中文</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+        </div>
+
         <section class="view active" id="overviewView">
           <div class="page-head">
             <div>
@@ -288,16 +290,16 @@
     <section id="authOverlay" class="auth-overlay hidden" aria-live="polite">
       <form id="loginForm" class="auth-card">
         <div>
-          <p class="eyebrow" data-i18n="loginRequired">需要登入</p>
-          <h2 data-i18n="loginTitle">輸入密碼</h2>
-          <p class="auth-copy" data-i18n="loginSub">這是受保護的家庭預算資料。</p>
+          <p class="eyebrow" data-i18n="loginRequired">Login required</p>
+          <h2 data-i18n="loginTitle">Enter password</h2>
+          <p class="auth-copy" data-i18n="loginSub">This family budget is protected.</p>
         </div>
         <label class="field">
-          <span data-i18n="password">密碼</span>
+          <span data-i18n="password">Password</span>
           <input id="passwordInput" type="password" autocomplete="current-password" />
         </label>
         <p id="loginError" class="auth-error hidden"></p>
-        <button id="loginBtn" class="primary-btn" type="submit">登入</button>
+        <button id="loginBtn" class="primary-btn" type="submit">Log in</button>
       </form>
     </section>
 

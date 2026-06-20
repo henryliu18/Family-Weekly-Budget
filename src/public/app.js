@@ -2,6 +2,7 @@ const DATA_CONFIG = window.BUDGET_DATA;
 const CREDIT_LIMIT = DATA_CONFIG.creditLimit;
 const categories = DATA_CONFIG.categories;
 const LANGUAGE_KEY = "family-budget-language";
+const DEFAULT_LANGUAGE = "en";
 const META_FALLBACK = { buildVersion: "", buildTime: "", authEnabled: false };
 const i18n = {
   zh: {
@@ -207,7 +208,7 @@ const i18n = {
     loginFailed: "Incorrect password. Please try again.",
   },
 };
-let currentLanguage = localStorage.getItem(LANGUAGE_KEY) || "zh";
+let currentLanguage = localStorage.getItem(LANGUAGE_KEY) || DEFAULT_LANGUAGE;
 let appMeta = META_FALLBACK;
 let authState = { authEnabled: false, authenticated: true };
 
@@ -234,6 +235,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function bootstrapApp() {
   await loadMeta();
   await loadSession();
+  applyLanguage();
   updateBuildVersion();
   updateAuthUi();
   if (authState.authEnabled && !authState.authenticated) return;
@@ -471,6 +473,11 @@ function currentWeek() {
 
 function renderAll() {
   applyLanguage();
+  updateBuildVersion();
+  if (isAuthLocked()) {
+    clearSensitiveUi();
+    return;
+  }
   renderMonthOptions();
   renderOverview();
   renderEntryForm();
@@ -488,6 +495,10 @@ function t(key, ...args) {
 
 function categoryLabel(category) {
   return t("categoryLabels")?.[category.key] || category.label;
+}
+
+function isAuthLocked() {
+  return authState.authEnabled && !authState.authenticated;
 }
 
 function applyLanguage() {
@@ -530,6 +541,7 @@ function applyLanguage() {
     availableInput: "availableBalance",
     cumulativeInput: "cumulativeAfterUnpaid",
     unpaidInput: "unpaidPrevious",
+    weeklyTotalInput: "weeklyTotal",
     notesInput: "otherDetails",
     historySearchInput: "keyword",
     historyMinInput: "minAmount",
@@ -556,11 +568,12 @@ function updateBuildVersion() {
 }
 
 function updateAuthUi() {
-  const shouldShowOverlay = authState.authEnabled && !authState.authenticated;
+  const shouldShowOverlay = isAuthLocked();
   els.authOverlay?.classList.toggle("hidden", !shouldShowOverlay);
   els.logoutBtn?.classList.toggle("hidden", !authState.authEnabled || !authState.authenticated);
   if (shouldShowOverlay) {
     document.body.classList.add("auth-locked");
+    clearSensitiveUi();
     setTimeout(() => els.passwordInput?.focus(), 0);
   } else {
     document.body.classList.remove("auth-locked");
@@ -598,6 +611,57 @@ async function logout() {
   } catch {}
   authState = { ...authState, authenticated: false };
   updateAuthUi();
+}
+
+function clearSensitiveUi() {
+  [
+    els.limitKpi,
+    els.monthSpendKpi,
+    els.availableKpi,
+    els.weekSpendKpi,
+    els.overviewTitle,
+  ].forEach((element) => {
+    if (element) element.textContent = "-";
+  });
+
+  [
+    els.monthSelect,
+    els.weeksTable,
+    els.weekSelect,
+    els.historyMonthFilter,
+    els.historyCategoryFilter,
+    els.historyTable,
+    els.categoryTable,
+    els.categoryInputs,
+  ].forEach((element) => {
+    if (element) element.innerHTML = "";
+  });
+
+  [
+    els.periodInput,
+    els.availableInput,
+    els.cumulativeInput,
+    els.unpaidInput,
+    els.weeklyTotalInput,
+    els.notesInput,
+    els.historySearchInput,
+    els.historyMinInput,
+    els.monthNameInput,
+    els.creditLimitInput,
+    els.newMonthName,
+  ].forEach((element) => {
+    if (element) element.value = "";
+  });
+
+  [els.chartTooltip, els.trendTooltip].forEach((element) => element?.classList.add("hidden"));
+  clearCanvas(els.weeklyChart);
+  clearCanvas(els.monthlyTrendChart);
+}
+
+function clearCanvas(canvas) {
+  if (!canvas) return;
+  const context = canvas.getContext("2d");
+  context?.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function showLoginError(key) {

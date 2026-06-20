@@ -94,6 +94,16 @@ button {
   padding: 28px;
 }
 
+.workspace-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 18px;
+}
+
+.language-control {
+  width: min(180px, 100%);
+}
+
 .view {
   display: none;
 }
@@ -560,6 +570,10 @@ body.dialog-open::before {
   .workspace,
   .sidebar {
     padding: 18px;
+  }
+
+  .workspace-toolbar {
+    margin-bottom: 14px;
   }
 
   .page-head,
