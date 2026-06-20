@@ -37,7 +37,7 @@ jobs:
         id: e2e
         run: |
           set -euo pipefail
-          E2E_APP_PATH='${{ vars.VM_APP_PATH }}-e2e'
+          E2E_APP_PATH='${{ vars.VM_APP_PATH }}/e2e'
           E2E_HOST='${{ vars.VM_DOMAIN }}'
           IMAGE_TAG='${{ github.event_name == 'workflow_dispatch' && 'latest' || format('sha-{0}', github.event.workflow_run.head_sha) }}'
           if [ -z "$E2E_HOST" ]; then E2E_HOST='${{ vars.VM_SSH_HOST }}'; fi
@@ -54,7 +54,9 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
-            "rm -rf '${{ steps.e2e.outputs.app_path }}' && mkdir -p '${{ steps.e2e.outputs.app_path }}/certs'"
+            "sudo -n rm -rf '${{ steps.e2e.outputs.app_path }}' && \
+            sudo -n mkdir -p '${{ steps.e2e.outputs.app_path }}/certs' && \
+            sudo -n chown -R '${{ vars.VM_SSH_USER }}':'${{ vars.VM_SSH_USER }}' '${{ steps.e2e.outputs.app_path }}'"
           scp -o BatchMode=yes docker-compose.e2e.yml \
             "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ steps.e2e.outputs.app_path }}/docker-compose.yml"
           scp -o BatchMode=yes budget-store.example.json \
@@ -123,4 +125,4 @@ jobs:
         if: always()
         run: |
           ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
-            "cd '${{ steps.e2e.outputs.app_path }}' && sudo -n docker compose -p family-budget-e2e down --remove-orphans || true; rm -rf '${{ steps.e2e.outputs.app_path }}'"
+            "cd '${{ steps.e2e.outputs.app_path }}' && sudo -n docker compose -p family-budget-e2e down --remove-orphans || true; sudo -n rm -rf '${{ steps.e2e.outputs.app_path }}'"
