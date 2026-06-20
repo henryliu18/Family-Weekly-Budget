@@ -37,7 +37,7 @@ jobs:
         run: |
           ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
             "mkdir -p '${{ vars.VM_APP_PATH }}'"
-          scp -o BatchMode=yes deploy/docker-compose.prod.yml \
+          scp -o BatchMode=yes docker-compose.prod.yml \
             "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ vars.VM_APP_PATH }}/docker-compose.yml"
 
       - name: Deploy with Docker Compose

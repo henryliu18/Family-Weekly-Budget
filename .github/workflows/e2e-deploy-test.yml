@@ -54,9 +54,9 @@ jobs:
             "sudo -n rm -rf '${{ steps.e2e.outputs.app_path }}' && \
             sudo -n mkdir -p '${{ steps.e2e.outputs.app_path }}/certs' && \
             sudo -n chown -R '${{ vars.VM_SSH_USER }}':'${{ vars.VM_SSH_USER }}' '${{ steps.e2e.outputs.app_path }}'"
-          scp -o BatchMode=yes deploy/docker-compose.e2e.yml \
+          scp -o BatchMode=yes docker-compose.e2e.yml \
             "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ steps.e2e.outputs.app_path }}/docker-compose.yml"
-          scp -o BatchMode=yes data/budget-store.example.json \
+          scp -o BatchMode=yes budget-store.example.json \
             "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ steps.e2e.outputs.app_path }}/budget-store.json"
 
       - name: Start E2E deployment
