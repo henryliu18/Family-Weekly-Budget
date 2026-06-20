@@ -1,17 +1,17 @@
 services:
-  budget-app:
+  budget-app-e2e:
     image: docker.io/henryhhl18/family-budget-app:${APP_IMAGE_TAG:-latest}
-    container_name: family-budget-app
+    container_name: family-budget-e2e
     ports:
-      - "80:5173"
-      - "443:5443"
+      - "18080:5173"
+      - "18443:5443"
     environment:
       HOST: 0.0.0.0
       PORT: 5173
       HTTPS_PORT: 5443
       REDIRECT_HTTP_TO_HTTPS: "true"
-      APP_PASSWORD: ${APP_PASSWORD:-}
-      APP_BUILD_VERSION: ${APP_BUILD_VERSION:-}
+      APP_PASSWORD: ${APP_PASSWORD}
+      APP_BUILD_VERSION: ${APP_BUILD_VERSION:-e2e}
       APP_BUILD_TIME: ${APP_BUILD_TIME:-}
       SSL_CERT_PATH: ${SSL_CERT_PATH:-/app/certs/server.crt}
       SSL_KEY_PATH: ${SSL_KEY_PATH:-/app/certs/server.key}

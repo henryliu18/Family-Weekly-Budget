@@ -144,6 +144,17 @@ async function serveApi(req, res, pathname) {
     return true;
   }
 
+  if (pathname === "/api/health" && req.method === "GET") {
+    await ensureStoreFile();
+    sendJson(res, 200, {
+      ok: true,
+      buildVersion: BUILD_VERSION,
+      buildTime: BUILD_TIME,
+      authEnabled: !!APP_PASSWORD,
+    });
+    return true;
+  }
+
   if (pathname === "/api/session" && req.method === "GET") {
     sendJson(res, 200, {
       authenticated: isAuthenticated(req),

@@ -61,11 +61,31 @@ budget-store.json
 
 The VM deployment uses `docker-compose.prod.yml`, which pulls the published image, redirects HTTP to HTTPS, and mounts certificates from `./certs`.
 
+## Post-build E2E deployment test
+
+After `Docker Image CI` builds and pushes the image from `main`, `Deploy E2E Test` starts an isolated VM test deployment before production deploy runs.
+
+The E2E deployment uses:
+
+```text
+docker-compose.e2e.yml
+${VM_APP_PATH}-e2e
+family-budget-e2e
+http://<VM_DOMAIN or VM_SSH_HOST>:18080/
+https://<VM_DOMAIN or VM_SSH_HOST>:18443/
+```
+
+The workflow generates its own `budget-store.json`, TLS certificate, and random `APP_PASSWORD`, then runs Playwright checks against the isolated service. Production deploy is triggered only after the E2E workflow succeeds.
+
+Automatic E2E and production deploys use the immutable Docker tag `sha-<commit>` from the completed build. Manual workflow runs fall back to `latest`.
+
 ## GitHub Actions deploy
 
 `docker-image.yml` builds and pushes the Docker image.
 
-`deploy-vm.yml` deploys to the VM after a successful push build on `main`, or can be run manually with `workflow_dispatch`.
+`e2e-deploy-test.yml` deploys the pushed image to the isolated E2E environment and runs browser checks.
+
+`deploy-vm.yml` deploys to the VM after successful E2E checks on `main`, or can be run manually with `workflow_dispatch`.
 
 Required GitHub secrets:
 
