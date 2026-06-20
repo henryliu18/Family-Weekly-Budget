@@ -11,17 +11,27 @@ async function login(page) {
   await expect(page.locator("#authOverlay")).toBeHidden();
 }
 
-async function expectCanvasHasPixels(page, selector) {
-  const hasPixels = await page.locator(selector).evaluate((canvas) => {
-    const context = canvas.getContext("2d");
-    const { width, height } = canvas;
-    const data = context.getImageData(0, 0, width, height).data;
-    for (let index = 3; index < data.length; index += 4) {
-      if (data[index] !== 0) return true;
-    }
-    return false;
-  });
-  expect(hasPixels).toBe(true);
+async function expectCanvasReady(page, selector) {
+  const canvas = page.locator(selector);
+  await expect(canvas).toBeVisible();
+  await expect
+    .poll(async () =>
+      canvas.evaluate((element) => ({
+        ready:
+          element.width > 0 &&
+          element.height > 0 &&
+          element.clientWidth > 0 &&
+          element.clientHeight > 0 &&
+          element.toDataURL("image/png").length > "data:image/png;base64,".length,
+      })),
+    )
+    .toEqual({ ready: true });
+}
+
+async function expectTableHasRows(page, selector) {
+  await expect
+    .poll(async () => page.locator(`${selector} tbody tr`).count())
+    .toBeGreaterThan(0);
 }
 
 test("HTTP redirects to HTTPS", async ({ request }) => {
@@ -44,8 +54,9 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await expect(page.locator("#addMonthBtn")).toBeEnabled();
   await expect(page.locator("#deleteMonthBtn")).toBeEnabled();
   await expect(page.locator("#saveWeekBtn")).toBeEnabled();
-  await expectCanvasHasPixels(page, "#weeklyChart");
-  await expectCanvasHasPixels(page, "#monthlyTrendChart");
+  await expectCanvasReady(page, "#weeklyChart");
+  await expectCanvasReady(page, "#monthlyTrendChart");
+  await expectTableHasRows(page, "#weeksTable");
 
   for (const view of ["entry", "history", "settings", "overview"]) {
     await page.locator(`.nav-tab[data-view="${view}"]`).click();
