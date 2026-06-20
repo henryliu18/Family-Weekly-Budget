@@ -5,9 +5,8 @@ const fsSync = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
-const ROOT = process.env.APP_ROOT || path.resolve(__dirname, "..", "..");
-const PUBLIC_ROOT = process.env.PUBLIC_ROOT || path.join(ROOT, "src", "public");
-const STORE_PATH = process.env.STORE_PATH || path.join(ROOT, "budget-store.json");
+const ROOT = __dirname;
+const STORE_PATH = path.join(ROOT, "budget-store.json");
 const DEFAULT_PORT = 5173;
 const DEFAULT_HTTPS_PORT = 5443;
 const AUTH_COOKIE = "family_budget_session";
@@ -71,7 +70,7 @@ async function writeStore(state) {
 }
 
 async function loadDefaultState() {
-  const script = await fs.readFile(path.join(PUBLIC_ROOT, "budget-data.js"), "utf8");
+  const script = await fs.readFile(path.join(ROOT, "budget-data.js"), "utf8");
   const sandbox = { window: {} };
   Function("window", script)(sandbox.window);
   return sandbox.window.BUDGET_DATA.initialState;
@@ -238,10 +237,9 @@ async function serveStatic(req, res, pathname) {
   }
 
   const requested = pathname === "/" ? "/index.html" : pathname;
-  const resolved = path.normalize(path.join(PUBLIC_ROOT, requested));
-  const relative = path.relative(PUBLIC_ROOT, resolved);
+  const resolved = path.normalize(path.join(ROOT, requested));
 
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (!resolved.startsWith(ROOT)) {
     sendText(res, 403, "Forbidden");
     return;
   }

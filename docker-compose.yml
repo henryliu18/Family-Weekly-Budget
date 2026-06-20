@@ -1,8 +1,6 @@
 services:
   budget-app:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    build: .
     container_name: family-budget-app
     ports:
       - "5173:5173"
@@ -14,5 +12,5 @@ services:
       APP_BUILD_VERSION: ${APP_BUILD_VERSION:-}
       APP_BUILD_TIME: ${APP_BUILD_TIME:-}
     volumes:
-      - ../budget-store.json:/app/budget-store.json
+      - ./budget-store.json:/app/budget-store.json
     restart: unless-stopped

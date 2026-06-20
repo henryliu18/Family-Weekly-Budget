@@ -2,6 +2,6 @@
 .gitignore
 node_modules
 npm-debug.log
-budget-store.json
-certs
+Dockerfile
+docker-compose.yml
 accounting.xlsx

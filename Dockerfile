@@ -2,14 +2,12 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-COPY src/server/server.js ./
-COPY src/public ./public
+COPY server.js ./
+COPY index.html styles.css app.js budget-data.js ./
 
 ENV NODE_ENV=production
-ENV APP_ROOT=/app
 ENV HOST=0.0.0.0
 ENV PORT=5173
-ENV PUBLIC_ROOT=/app/public
 
 EXPOSE 5173
 EXPOSE 5443
