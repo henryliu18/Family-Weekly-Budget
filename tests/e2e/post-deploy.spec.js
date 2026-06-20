@@ -84,7 +84,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await page.locator("#newMonthName").fill(monthName);
   await page.locator("#confirmMonthBtn").click();
   await expect(page.locator("#monthDialog")).toBeHidden();
-  await expect(page.locator("#monthSelect")).toHaveValue(monthName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
+  await expect(page.locator("#monthSelect option:checked")).toHaveText(monthName);
   await expect(page.locator("#overviewTitle")).toHaveText(monthName);
 
   page.on("dialog", async (dialog) => {
