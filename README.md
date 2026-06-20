@@ -71,11 +71,11 @@ The E2E deployment uses:
 docker-compose.e2e.yml
 ${VM_APP_PATH}/e2e
 family-budget-e2e
-http://<VM_DOMAIN or VM_SSH_HOST>:18080/
-https://<VM_DOMAIN or VM_SSH_HOST>:18443/
+VM localhost only: 127.0.0.1:18080 and 127.0.0.1:18443
+GitHub Actions runner access: SSH tunnel to https://127.0.0.1:18443/
 ```
 
-The workflow generates its own `budget-store.json`, TLS certificate, and random `APP_PASSWORD`, then runs Playwright checks against the isolated service. Production deploy is triggered only after the E2E workflow succeeds.
+The workflow generates its own `budget-store.json`, localhost TLS certificate, and random `APP_PASSWORD`, then runs Playwright checks through an SSH tunnel against the isolated service. Production deploy is triggered only after the E2E workflow succeeds.
 
 Automatic E2E and production deploys use the immutable Docker tag `sha-<commit>` from the completed build. Manual workflow runs fall back to `latest`.
 

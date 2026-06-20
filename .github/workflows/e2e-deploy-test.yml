@@ -38,14 +38,11 @@ jobs:
         run: |
           set -euo pipefail
           E2E_APP_PATH='${{ vars.VM_APP_PATH }}/e2e'
-          E2E_HOST='${{ vars.VM_DOMAIN }}'
           IMAGE_TAG='${{ github.event_name == 'workflow_dispatch' && 'latest' || format('sha-{0}', github.event.workflow_run.head_sha) }}'
-          if [ -z "$E2E_HOST" ]; then E2E_HOST='${{ vars.VM_SSH_HOST }}'; fi
           E2E_PASSWORD="$(openssl rand -hex 16)"
           echo "::add-mask::$E2E_PASSWORD"
           {
             echo "app_path=$E2E_APP_PATH"
-            echo "host=$E2E_HOST"
             echo "image_tag=$IMAGE_TAG"
             echo "password=$E2E_PASSWORD"
           } >> "$GITHUB_OUTPUT"
@@ -68,17 +65,12 @@ jobs:
           ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
             "set -euxo pipefail && \
             cd '${{ steps.e2e.outputs.app_path }}' && \
-            TLS_NAME='${{ steps.e2e.outputs.host }}' && \
-            if printf '%s' \"\$TLS_NAME\" | grep -Eq '^[0-9]+(\\.[0-9]+){3}$'; then \
-              TLS_SAN=\"IP:\$TLS_NAME\"; \
-            else \
-              TLS_SAN=\"DNS:\$TLS_NAME,IP:${{ vars.VM_SSH_HOST }}\"; \
-            fi && \
+            TLS_NAME='localhost' && \
             openssl req -x509 -newkey rsa:4096 -sha256 -days 7 -nodes \
               -keyout certs/server.key \
               -out certs/server.crt \
               -subj \"/CN=\$TLS_NAME\" \
-              -addext \"subjectAltName=\$TLS_SAN\" && \
+              -addext \"subjectAltName=DNS:localhost,IP:127.0.0.1\" && \
             sudo -n docker compose -p family-budget-e2e down --remove-orphans || true && \
             APP_PASSWORD='${{ steps.e2e.outputs.password }}' \
             APP_IMAGE_TAG='${{ steps.e2e.outputs.image_tag }}' \
@@ -94,13 +86,17 @@ jobs:
       - name: Wait for E2E health
         run: |
           set -euo pipefail
+          ssh -f -N -o BatchMode=yes \
+            -L 18080:127.0.0.1:18080 \
+            -L 18443:127.0.0.1:18443 \
+            "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}"
           for attempt in $(seq 1 30); do
-            if curl -ksf "https://${{ steps.e2e.outputs.host }}:18443/api/health" >/dev/null; then
+            if curl -ksf "https://127.0.0.1:18443/api/health" >/dev/null; then
               exit 0
             fi
             sleep 2
           done
-          curl -k "https://${{ steps.e2e.outputs.host }}:18443/api/health" || true
+          curl -k "https://127.0.0.1:18443/api/health" || true
           exit 1
 
       - name: Install Playwright
@@ -110,8 +106,8 @@ jobs:
 
       - name: Run E2E checks
         env:
-          E2E_BASE_URL: https://${{ steps.e2e.outputs.host }}:18443
-          E2E_HTTP_URL: http://${{ steps.e2e.outputs.host }}:18080
+          E2E_BASE_URL: https://127.0.0.1:18443
+          E2E_HTTP_URL: http://127.0.0.1:18080
           E2E_APP_PASSWORD: ${{ steps.e2e.outputs.password }}
         run: npm run test:e2e -- --project=chromium
 
