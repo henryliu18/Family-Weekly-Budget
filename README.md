@@ -69,7 +69,7 @@ The E2E deployment uses:
 
 ```text
 docker-compose.e2e.yml
-${VM_APP_PATH}-e2e
+${VM_APP_PATH}/e2e
 family-budget-e2e
 http://<VM_DOMAIN or VM_SSH_HOST>:18080/
 https://<VM_DOMAIN or VM_SSH_HOST>:18443/
