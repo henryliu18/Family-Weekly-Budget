@@ -41,6 +41,10 @@ const i18n = {
     entryEyebrow: "週次編輯",
     entryTitle: "本週輸入",
     saveWeek: "儲存週次",
+    updateThisWeek: "更新本週",
+    updateThisWeekSub: "先輸入本週基本資料，再確認系統計算出的金額。",
+    liveSummary: "即時計算",
+    calculatedTotals: "計算結果",
     weekData: "週資料",
     weekDataSub: "輸入累積值後，當週總支出會自動推算",
     editPeriod: "編輯週次",
@@ -48,8 +52,11 @@ const i18n = {
     cumulativeAfterUnpaid: "本月總支出(扣除上月待繳)",
     unpaidPrevious: "上月待繳(如有)",
     categoryAmounts: "分類金額",
-    categoryAmountsSub: "非採買合計與採買支出會依公式自動計算",
-    otherDetails: "其他非帳單額外支出明細",
+    categoryAmountsSub: "保留完整明細分類；採買支出會依公式自動計算。",
+    otherDetails: "突發事件或少見意外支出備註",
+    incidentalsDetailsTitle: "意外 / 少見事件備註",
+    incidentalsDetailsSub: "只在少見、不可避免、突發事件時填寫。",
+    incidentalsRareHint: "少見、不可避免、突發事件，例如緊急維修、突發醫療或事故相關費用。",
     searchEyebrow: "查詢",
     pastRecords: "過去紀錄",
     allMonths: "全部月份",
@@ -57,7 +64,7 @@ const i18n = {
     category: "分類",
     keyword: "關鍵字",
     keywordPlaceholder: "週期、備註、分類",
-    notesPlaceholder: "例如：項目名稱 $金額\n項目名稱 $金額",
+    notesPlaceholder: "例如：緊急維修 $金額\n突發費用 $金額",
     minAmount: "最低金額",
     amount: "金額",
     noRecords: "沒有符合條件的紀錄",
@@ -100,6 +107,8 @@ const i18n = {
     thirdPeriod: "第三週",
     fourthPeriod: "第四週",
     buildVersion: "Build version",
+    editingPeriod: (period) => `正在編輯：${period}`,
+    saveSuccess: "已儲存本週資料",
     loginRequired: "需要登入",
     loginTitle: "輸入密碼",
     loginSub: "這是受保護的家庭預算資料。",
@@ -144,6 +153,10 @@ const i18n = {
     entryEyebrow: "Period editor",
     entryTitle: "Weekly Entry",
     saveWeek: "Save period",
+    updateThisWeek: "Update this week",
+    updateThisWeekSub: "Enter the weekly basics first, then review the calculated totals.",
+    liveSummary: "Live summary",
+    calculatedTotals: "Calculated totals",
     weekData: "Period data",
     weekDataSub: "Period total is calculated from the running monthly total",
     editPeriod: "Edit period",
@@ -151,8 +164,11 @@ const i18n = {
     cumulativeAfterUnpaid: "Monthly spend after unpaid balance",
     unpaidPrevious: "Unpaid previous balance",
     categoryAmounts: "Category amounts",
-    categoryAmountsSub: "Non-grocery total and grocery spend are calculated automatically",
-    otherDetails: "Other incidental details",
+    categoryAmountsSub: "Keep the full detailed category list; grocery spend is calculated automatically.",
+    otherDetails: "Rare-event or incidental notes",
+    incidentalsDetailsTitle: "Incidentals / rare-event notes",
+    incidentalsDetailsSub: "Use only for unusual, unavoidable events.",
+    incidentalsRareHint: "Rare, unavoidable events such as emergency repairs, sudden medical costs, or accident-related expenses.",
     searchEyebrow: "Search",
     pastRecords: "Past Records",
     allMonths: "All months",
@@ -160,7 +176,7 @@ const i18n = {
     category: "Category",
     keyword: "Keyword",
     keywordPlaceholder: "Period, notes, category",
-    notesPlaceholder: "e.g. item name $amount\nitem name $amount",
+    notesPlaceholder: "e.g. emergency repair $amount\nunexpected fee $amount",
     minAmount: "Minimum amount",
     amount: "Amount",
     noRecords: "No matching records",
@@ -203,6 +219,8 @@ const i18n = {
     thirdPeriod: "Period 3",
     fourthPeriod: "Period 4",
     buildVersion: "Build version",
+    editingPeriod: (period) => `Editing ${period}`,
+    saveSuccess: "Weekly entry saved",
     loginRequired: "Login required",
     loginTitle: "Enter password",
     loginSub: "This family budget is protected.",
@@ -351,6 +369,7 @@ function bindElements() {
     "trendTooltip",
     "weeksTable",
     "weekSelect",
+    "entryEditBanner",
     "periodInput",
     "periodStartInput",
     "periodEndInput",
@@ -361,6 +380,9 @@ function bindElements() {
     "categoryInputs",
     "notesInput",
     "saveWeekBtn",
+    "saveStatus",
+    "saveToast",
+    "incidentalsDetails",
     "historyMonthFilter",
     "historyCategoryFilter",
     "historySearchInput",
@@ -798,6 +820,7 @@ function renderEntryForm() {
   const month = currentMonth();
   if (!currentWeekId && month.weeks.length) currentWeekId = month.weeks[0].id;
   const week = currentWeek();
+  const incidentalsWasOpen = !!els.incidentalsDetails?.open;
 
   els.weekSelect.innerHTML = month.weeks
     .map((item) => `<option value="${item.id}">${escapeHtml(item.period || t("unnamedPeriod"))}</option>`)
@@ -808,25 +831,44 @@ function renderEntryForm() {
   els.periodStartInput.value = periodRange.start;
   els.periodEndInput.value = periodRange.end;
   els.periodInput.value = formatPeriodFromDates() || week?.period || "";
+  renderEntryEditBanner(week);
   els.availableInput.value = valueForInput(week?.availableBalance);
   els.cumulativeInput.value = formatMoney(computeCumulativeFromAvailable(week, currentMonth()));
   els.unpaidInput.value = valueForInput(week?.unpaidPrevious);
   els.notesInput.value = week?.notes || "";
+  if (els.incidentalsDetails) {
+    els.incidentalsDetails.open = incidentalsWasOpen || !!week?.notes;
+  }
 
   els.categoryInputs.innerHTML = categories
     .map(
-      (category) => `
-        <label class="field">
+      (category) => {
+        const rareHint =
+          category.key === "incidentals"
+            ? `<small class="category-hint">${escapeHtml(t("incidentalsRareHint"))}</small>`
+            : "";
+        const rareClass = category.key === "incidentals" ? " category-input-card-rare" : "";
+        return `
+        <label class="field category-input-card${rareClass}">
           <span>${escapeHtml(categoryLabel(category))}</span>
           <input data-category="${category.key}" type="number" min="0" step="0.01" value="${valueForInput(
             week?.categoryValues?.[category.key],
           )}" />
+          ${rareHint}
         </label>
-      `,
+      `;
+      },
     )
     .join("");
 
   renderLiveWeeklyTotal();
+}
+
+function renderEntryEditBanner(week) {
+  if (!els.entryEditBanner) return;
+  const label = week?.period || t("unnamedPeriod");
+  els.entryEditBanner.textContent = t("editingPeriod", label);
+  els.entryEditBanner.classList.toggle("hidden", !week);
 }
 
 function renderLiveWeeklyTotal() {
@@ -876,6 +918,23 @@ function saveWeekFromForm() {
   currentWeekId = next.id;
   renderAll();
   switchView("overview");
+  showSaveFeedback();
+}
+
+function showSaveFeedback() {
+  const message = t("saveSuccess");
+  if (els.saveStatus) {
+    els.saveStatus.textContent = message;
+    els.saveStatus.classList.remove("hidden");
+    setTimeout(() => els.saveStatus?.classList.add("hidden"), 2200);
+  }
+  if (!els.saveToast) return;
+  els.saveToast.textContent = message;
+  els.saveToast.classList.remove("hidden");
+  clearTimeout(showSaveFeedback.timeoutId);
+  showSaveFeedback.timeoutId = setTimeout(() => {
+    els.saveToast?.classList.add("hidden");
+  }, 2200);
 }
 
 function supportsModalDialog(dialog) {
