@@ -29,6 +29,7 @@ const i18n = {
     monthlyTotal: "月總支出",
     monthWeeks: "月份週紀錄",
     period: "週期",
+    to: "至",
     cumulative: "本月累積",
     weeklyTotal: "當週總支出",
     nonGrocery: "非採買",
@@ -130,6 +131,7 @@ const i18n = {
     monthlyTotal: "Monthly total",
     monthWeeks: "Month Period Records",
     period: "Period",
+    to: "to",
     cumulative: "Monthly total",
     weeklyTotal: "Period total",
     nonGrocery: "Non-grocery",
@@ -348,6 +350,8 @@ function bindElements() {
     "weeksTable",
     "weekSelect",
     "periodInput",
+    "periodStartInput",
+    "periodEndInput",
     "availableInput",
     "cumulativeInput",
     "unpaidInput",
@@ -416,6 +420,8 @@ function bindEvents() {
 
   [
     els.periodInput,
+    els.periodStartInput,
+    els.periodEndInput,
     els.availableInput,
     els.cumulativeInput,
     els.unpaidInput,
@@ -639,6 +645,8 @@ function clearSensitiveUi() {
 
   [
     els.periodInput,
+    els.periodStartInput,
+    els.periodEndInput,
     els.availableInput,
     els.cumulativeInput,
     els.unpaidInput,
@@ -782,7 +790,10 @@ function renderEntryForm() {
     .join("");
   if (week) els.weekSelect.value = week.id;
 
-  els.periodInput.value = week?.period || "";
+  const periodRange = parsePeriodRange(week?.period || "");
+  els.periodStartInput.value = periodRange.start;
+  els.periodEndInput.value = periodRange.end;
+  els.periodInput.value = formatPeriodFromDates() || week?.period || "";
   els.availableInput.value = valueForInput(week?.availableBalance);
   els.cumulativeInput.value = formatMoney(computeCumulativeFromAvailable(week, currentMonth()));
   els.unpaidInput.value = valueForInput(week?.unpaidPrevious);
@@ -822,10 +833,12 @@ function previewWeekFromForm() {
   els.categoryInputs.querySelectorAll("input[data-category]").forEach((input) => {
     categoryValues[input.dataset.category] = numberOrZero(input.value);
   });
+  const period = formatPeriodFromDates() || els.periodInput.value.trim();
+  els.periodInput.value = period;
 
   return createWeek({
     id: currentWeekId,
-    period: els.periodInput.value.trim(),
+    period,
     availableBalance: numberOrNull(els.availableInput.value),
     unpaidPrevious: numberOrNull(els.unpaidInput.value),
     cumulativeSpend: computeCumulativeFromAvailable({
@@ -1480,6 +1493,23 @@ function valueForInput(value) {
 function shortPeriod(period) {
   if (!period) return "";
   return period.replace(/\s+/g, " ").replace(" - ", "-");
+}
+
+function parsePeriodRange(period) {
+  const match = String(period || "").match(
+    /^\s*(\d{4}-\d{2}-\d{2})(?:\s*(?:-|to|至)\s*(\d{4}-\d{2}-\d{2}))?\s*$/i,
+  );
+  return {
+    start: match?.[1] || "",
+    end: match?.[2] || "",
+  };
+}
+
+function formatPeriodFromDates() {
+  const start = els.periodStartInput?.value || "";
+  const end = els.periodEndInput?.value || "";
+  if (start && end) return `${start} - ${end}`;
+  return start || end;
 }
 
 function shortMonthName(name) {
