@@ -100,3 +100,32 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await page.locator("#logoutBtn").click();
   await expect(page.locator("#authOverlay")).toBeVisible();
 });
+
+test("mobile overview stays within the viewport", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  await expectCanvasReady(page, "#weeklyChart");
+  await expectCanvasReady(page, "#monthlyTrendChart");
+  await expectTableHasRows(page, "#weeksTable");
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const weeklyRight = document.querySelector("#weeklyChart").getBoundingClientRect().right;
+        const trendRight = document.querySelector("#monthlyTrendChart").getBoundingClientRect().right;
+        return {
+          pageFits: document.documentElement.scrollWidth <= window.innerWidth + 1,
+          chartsFit: weeklyRight <= window.innerWidth + 1 && trendRight <= window.innerWidth + 1,
+          recordCards: window.getComputedStyle(document.querySelector("#weeksTable tbody tr")).display === "block",
+        };
+      }),
+    )
+    .toEqual({
+      pageFits: true,
+      chartsFit: true,
+      recordCards: true,
+    });
+});
