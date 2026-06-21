@@ -44,6 +44,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
+  await page.locator("#languageSelect").selectOption("en");
 
   await expect(page.locator("#monthSelect")).toBeVisible();
   await expect(page.locator("#limitKpi")).toContainText("$");
@@ -65,13 +66,37 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
 
   await page.locator('.nav-tab[data-view="entry"]').click();
   await expect(page.locator("#entryView")).toHaveClass(/active/);
+  for (const label of [
+    "Medical out-of-pocket",
+    "Private insurance",
+    "Electricity",
+    "Gas",
+    "Internet, mobile, subscriptions",
+    "Water",
+    "School fees",
+    "Home insurance",
+    "Car insurance",
+    "Transport",
+    "Government fees",
+    "Shopping and dining",
+    "Incidentals",
+  ]) {
+    await expect(page.locator("#categoryInputs")).toContainText(label);
+  }
+  await expect(page.locator(".category-input-card-rare")).toContainText("Rare, unavoidable events");
+  await expect(page.locator("#notesInput")).toHaveAttribute("placeholder", /emergency repair/);
+  await page.locator("#languageSelect").selectOption("zh");
+  await expect(page.locator("#notesInput")).toHaveAttribute("placeholder", /緊急維修/);
+  await page.locator("#languageSelect").selectOption("en");
   const note = `e2e note ${Date.now()}`;
   await page.locator("#periodStartInput").fill("2026-06-01");
   await page.locator("#periodEndInput").fill("2026-06-07");
   await page.locator("#availableInput").fill("12345.67");
   await page.locator("#unpaidInput").fill("12.34");
+  await page.locator("#incidentalsDetails summary").click();
   await page.locator("#notesInput").fill(note);
   await page.locator("#saveWeekBtn").click();
+  await expect(page.locator("#saveToast")).toContainText("Weekly entry saved");
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await page.reload();
   await expect(page.locator("#logoutBtn")).toBeVisible();

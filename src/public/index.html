@@ -124,47 +124,60 @@
               <p class="eyebrow" data-i18n="entryEyebrow">週次編輯</p>
               <h2 data-i18n="entryTitle">本週輸入</h2>
             </div>
-            <button id="saveWeekBtn" class="primary-btn" type="button">儲存週次</button>
+            <div class="entry-actions">
+              <p id="saveStatus" class="save-status hidden" aria-live="polite"></p>
+              <button id="saveWeekBtn" class="primary-btn" type="button">儲存週次</button>
+            </div>
           </div>
 
           <div class="entry-layout">
-            <section class="panel">
+            <section class="panel weekly-update-panel">
               <div class="panel-head">
                 <div>
-                  <h3 data-i18n="weekData">週資料</h3>
-                  <p data-i18n="weekDataSub">輸入累積值後，當週總支出會自動推算</p>
+                  <h3 data-i18n="updateThisWeek">Update this week</h3>
+                  <p data-i18n="updateThisWeekSub">Enter the weekly basics first, then review the calculated totals.</p>
                 </div>
               </div>
-              <div class="form-grid">
-                <label class="field">
-                  <span data-i18n="editPeriod">編輯週次</span>
-                  <select id="weekSelect"></select>
-                </label>
-                <label class="field period-range-field">
-                  <span>週期</span>
-                  <div class="date-range-inputs">
-                    <input id="periodStartInput" type="date" />
-                    <span class="date-range-separator" data-i18n="to">to</span>
-                    <input id="periodEndInput" type="date" />
+              <div id="entryEditBanner" class="entry-edit-banner hidden"></div>
+              <div class="weekly-entry-grid">
+                <div class="form-grid weekly-basics-grid">
+                  <label class="field">
+                    <span data-i18n="editPeriod">編輯週次</span>
+                    <select id="weekSelect"></select>
+                  </label>
+                  <label class="field period-range-field">
+                    <span>週期</span>
+                    <div class="date-range-inputs">
+                      <input id="periodStartInput" type="date" />
+                      <span class="date-range-separator" data-i18n="to">to</span>
+                      <input id="periodEndInput" type="date" />
+                    </div>
+                    <input id="periodInput" type="hidden" />
+                  </label>
+                  <label class="field">
+                    <span>可用餘額</span>
+                    <input id="availableInput" type="number" min="0" step="0.01" />
+                  </label>
+                  <label class="field">
+                    <span>上月待繳(如有)</span>
+                    <input id="unpaidInput" type="number" min="0" step="0.01" />
+                  </label>
+                </div>
+
+                <aside class="live-summary-card" aria-live="polite">
+                  <div>
+                    <p class="eyebrow" data-i18n="liveSummary">Live summary</p>
+                    <h3 data-i18n="calculatedTotals">Calculated totals</h3>
                   </div>
-                  <input id="periodInput" type="hidden" />
-                </label>
-                <label class="field">
-                  <span>可用餘額</span>
-                  <input id="availableInput" type="number" min="0" step="0.01" />
-                </label>
-                <label class="field readonly">
-                  <span>本月總支出(扣除上月待繳)</span>
-                  <input id="cumulativeInput" type="text" readonly />
-                </label>
-                <label class="field">
-                  <span>上月待繳(如有)</span>
-                  <input id="unpaidInput" type="number" min="0" step="0.01" />
-                </label>
-                <label class="field readonly">
-                  <span>當週總支出</span>
-                  <input id="weeklyTotalInput" type="text" readonly />
-                </label>
+                  <label class="field readonly summary-field">
+                    <span>本月總支出(扣除上月待繳)</span>
+                    <input id="cumulativeInput" type="text" readonly />
+                  </label>
+                  <label class="field readonly summary-field">
+                    <span>當週總支出</span>
+                    <input id="weeklyTotalInput" type="text" readonly />
+                  </label>
+                </aside>
               </div>
             </section>
 
@@ -176,11 +189,18 @@
                 </div>
               </div>
               <div id="categoryInputs" class="category-grid"></div>
+            </section>
+
+            <details id="incidentalsDetails" class="panel incidentals-panel">
+              <summary>
+                <span data-i18n="incidentalsDetailsTitle">Incidentals / rare-event notes</span>
+                <small data-i18n="incidentalsDetailsSub">Use only for unusual, unavoidable events.</small>
+              </summary>
               <label class="field note-field">
                 <span>其他非帳單額外支出明細</span>
-                <textarea id="notesInput" rows="3" placeholder="e.g. item name $amount&#10;item name $amount"></textarea>
+                <textarea id="notesInput" rows="3" placeholder="e.g. emergency repair $amount&#10;unexpected fee $amount"></textarea>
               </label>
-            </section>
+            </details>
           </div>
         </section>
 
@@ -308,6 +328,8 @@
         <button id="loginBtn" class="primary-btn" type="submit">Log in</button>
       </form>
     </section>
+
+    <div id="saveToast" class="save-toast hidden" role="status" aria-live="polite"></div>
 
     <script src="budget-data.js"></script>
     <script src="app.js"></script>
