@@ -743,16 +743,27 @@ function computedWeeks(month) {
 }
 
 function renderWeeksTable(rows) {
+  const labels = {
+    period: escapeHtml(t("period")),
+    cumulative: escapeHtml(t("cumulative")),
+    weeklyTotal: escapeHtml(t("weeklyTotal")),
+    nonGrocery: escapeHtml(t("nonGrocery")),
+    grocery: escapeHtml(t("grocery")),
+    incidentals: escapeHtml(t("incidentals")),
+    notes: escapeHtml(t("notes")),
+    edit: escapeHtml(t("edit")),
+  };
+
   els.weeksTable.innerHTML = `
     <thead>
       <tr>
-        <th>${escapeHtml(t("period"))}</th>
-        <th class="amount">${escapeHtml(t("cumulative"))}</th>
-        <th class="amount">${escapeHtml(t("weeklyTotal"))}</th>
-        <th class="amount">${escapeHtml(t("nonGrocery"))}</th>
-        <th class="amount">${escapeHtml(t("grocery"))}</th>
-        <th class="amount">${escapeHtml(t("incidentals"))}</th>
-        <th>${escapeHtml(t("notes"))}</th>
+        <th>${labels.period}</th>
+        <th class="amount">${labels.cumulative}</th>
+        <th class="amount">${labels.weeklyTotal}</th>
+        <th class="amount">${labels.nonGrocery}</th>
+        <th class="amount">${labels.grocery}</th>
+        <th class="amount">${labels.incidentals}</th>
+        <th>${labels.notes}</th>
         <th></th>
       </tr>
     </thead>
@@ -761,14 +772,14 @@ function renderWeeksTable(rows) {
         .map(
           (row) => `
             <tr>
-              <td>${escapeHtml(row.week.period || t("unnamedPeriod"))}</td>
-              <td class="amount">${formatMoney(row.cumulativeSpend)}</td>
-              <td class="amount">${formatMoney(row.weeklyTotal)}</td>
-              <td class="amount">${formatMoney(row.nonGrocery)}</td>
-              <td class="amount">${formatMoney(row.grocery)}</td>
-              <td class="amount">${formatMoney(row.incidentals)}</td>
-              <td>${escapeHtml(row.week.notes || "")}</td>
-              <td><button class="ghost-btn" type="button" onclick="editWeek('${row.week.id}')">${escapeHtml(t("edit"))}</button></td>
+              <td data-label="${labels.period}">${escapeHtml(row.week.period || t("unnamedPeriod"))}</td>
+              <td class="amount" data-label="${labels.cumulative}">${formatMoney(row.cumulativeSpend)}</td>
+              <td class="amount" data-label="${labels.weeklyTotal}">${formatMoney(row.weeklyTotal)}</td>
+              <td class="amount" data-label="${labels.nonGrocery}">${formatMoney(row.nonGrocery)}</td>
+              <td class="amount" data-label="${labels.grocery}">${formatMoney(row.grocery)}</td>
+              <td class="amount" data-label="${labels.incidentals}">${formatMoney(row.incidentals)}</td>
+              <td data-label="${labels.notes}">${escapeHtml(row.week.notes || "")}</td>
+              <td data-label="${labels.edit}"><button class="ghost-btn" type="button" onclick="editWeek('${row.week.id}')">${labels.edit}</button></td>
             </tr>
           `,
         )
@@ -1004,26 +1015,33 @@ async function resetLocalData() {
   renderAll();
 }
 
+function prepareCanvas(canvas, fallbackHeight) {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const width = Math.max(1, rect.width);
+  const height = canvas.clientHeight || fallbackHeight;
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(height * dpr);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { ctx, width, height };
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, width, height };
+}
+
 function drawChart() {
   const canvas = els.weeklyChart;
   if (!canvas) return;
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.max(720, Math.floor(rect.width * dpr));
-  canvas.height = Math.floor(360 * dpr);
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const width = canvas.width / dpr;
-  const height = canvas.height / dpr;
+  const { ctx, width, height } = prepareCanvas(canvas, 360);
+  if (!ctx) return;
   const rows = computedWeeks(currentMonth());
   const maxValue = Math.max(100, ...rows.map((row) => Math.max(row.weeklyTotal, row.nonGrocery + row.grocery + row.incidentals)));
   const top = 28;
-  const right = 20;
+  const compact = width < 460;
+  const right = compact ? 12 : 20;
   const bottom = 54;
-  const left = 76;
-  const chartWidth = width - left - right;
-  const chartHeight = height - top - bottom;
+  const left = compact ? 54 : 76;
+  const chartWidth = Math.max(1, width - left - right);
+  const chartHeight = Math.max(1, height - top - bottom);
 
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#ffffff";
@@ -1046,8 +1064,9 @@ function drawChart() {
   }
 
   chartBars = [];
-  const gap = 26;
-  const barWidth = Math.max(34, (chartWidth - gap * (rows.length + 1)) / Math.max(rows.length, 1));
+  const gap = compact ? 10 : 26;
+  const minBarWidth = compact ? 20 : 34;
+  const barWidth = Math.max(minBarWidth, (chartWidth - gap * (rows.length + 1)) / Math.max(rows.length, 1));
   const colors = {
     nonGrocery: "#24715d",
     grocery: "#2f5e9e",
@@ -1074,7 +1093,7 @@ function drawChart() {
     ctx.fillStyle = "#17201b";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillText(shortPeriod(row.week.period), x + barWidth / 2, top + chartHeight + 10);
+    ctx.fillText(compact ? `P${index + 1}` : shortPeriod(row.week.period), x + barWidth / 2, top + chartHeight + 10);
 
     chartBars.push({ x, y: top, width: barWidth, height: chartHeight, row });
   });
@@ -1092,7 +1111,7 @@ function drawSegmentLabel(ctx, label, value, x, y, width, height) {
   const centerX = x + width / 2;
   const centerY = y + height / 2;
   const text = height >= 48 ? `${label}\n${formatCompactMoney(value)}` : label;
-  const lines = text.split("\n");
+  const lines = width < 72 ? [formatCompactMoney(value)] : text.split("\n");
   if (lines.length === 1) {
     ctx.fillText(lines[0], centerX, centerY);
   } else {
@@ -1109,7 +1128,7 @@ function drawLegend(ctx, width, colors) {
     [t("grocery"), colors.grocery],
     [t("incidentals"), colors.incidentals],
   ];
-  let x = width - 250;
+  let x = Math.max(8, width - 250);
   items.forEach(([label, color]) => {
     ctx.fillStyle = color;
     ctx.fillRect(x, 8, 12, 12);
@@ -1141,22 +1160,16 @@ function monthlyTrendRows() {
 function drawMonthlyTrendChart() {
   const canvas = els.monthlyTrendChart;
   if (!canvas) return;
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.max(720, Math.floor(rect.width * dpr));
-  canvas.height = Math.floor(340 * dpr);
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const width = canvas.width / dpr;
-  const height = canvas.height / dpr;
+  const { ctx, width, height } = prepareCanvas(canvas, 340);
+  if (!ctx) return;
   const rows = monthlyTrendRows();
   const top = 34;
-  const right = 24;
+  const compact = width < 460;
+  const right = compact ? 12 : 24;
   const bottom = 62;
-  const left = 76;
-  const chartWidth = width - left - right;
-  const chartHeight = height - top - bottom;
+  const left = compact ? 54 : 76;
+  const chartWidth = Math.max(1, width - left - right);
+  const chartHeight = Math.max(1, height - top - bottom);
   const colors = {
     nonGrocery: "#24715d",
     grocery: "#2f5e9e",
@@ -1253,7 +1266,7 @@ function drawTrendLegend(ctx, width, colors) {
     [t("grocery"), colors.grocery],
     [t("incidentals"), colors.incidentals],
   ];
-  let x = width - 290;
+  let x = Math.max(8, width - 290);
   items.forEach(([label, color]) => {
     ctx.fillStyle = color;
     ctx.fillRect(x, 10, 12, 12);
@@ -1350,6 +1363,13 @@ function renderHistory() {
   const categoryFilter = els.historyCategoryFilter.value || "all";
   const search = (els.historySearchInput.value || "").trim().toLowerCase();
   const minAmount = numberOrZero(els.historyMinInput.value);
+  const labels = {
+    month: escapeHtml(t("month")),
+    period: escapeHtml(t("period")),
+    category: escapeHtml(t("category")),
+    amount: escapeHtml(t("amount")),
+    notes: escapeHtml(t("notes")),
+  };
 
   const rows = [];
   Object.values(appState.months).forEach((month) => {
@@ -1369,11 +1389,11 @@ function renderHistory() {
   els.historyTable.innerHTML = `
     <thead>
       <tr>
-        <th>${escapeHtml(t("month"))}</th>
-        <th>${escapeHtml(t("period"))}</th>
-        <th>${escapeHtml(t("category"))}</th>
-        <th class="amount">${escapeHtml(t("amount"))}</th>
-        <th>${escapeHtml(t("notes"))}</th>
+        <th>${labels.month}</th>
+        <th>${labels.period}</th>
+        <th>${labels.category}</th>
+        <th class="amount">${labels.amount}</th>
+        <th>${labels.notes}</th>
       </tr>
     </thead>
     <tbody>
@@ -1383,11 +1403,11 @@ function renderHistory() {
               .map(
                 (item) => `
                   <tr>
-                    <td>${escapeHtml(item.month.name)}</td>
-                    <td>${escapeHtml(item.row.week.period || "")}</td>
-                    <td>${escapeHtml(item.label)}</td>
-                    <td class="amount">${formatMoney(item.amount)}</td>
-                    <td>${escapeHtml(item.row.week.notes || "")}</td>
+                    <td data-label="${labels.month}">${escapeHtml(item.month.name)}</td>
+                    <td data-label="${labels.period}">${escapeHtml(item.row.week.period || "")}</td>
+                    <td data-label="${labels.category}">${escapeHtml(item.label)}</td>
+                    <td class="amount" data-label="${labels.amount}">${formatMoney(item.amount)}</td>
+                    <td data-label="${labels.notes}">${escapeHtml(item.row.week.notes || "")}</td>
                   </tr>
                 `,
               )

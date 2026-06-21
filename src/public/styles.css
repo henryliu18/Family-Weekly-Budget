@@ -106,6 +106,7 @@ button {
 
 .view {
   display: none;
+  min-width: 0;
 }
 
 .view.active {
@@ -317,18 +318,26 @@ textarea:focus {
 .panel {
   padding: 18px;
   margin-bottom: 18px;
+  min-width: 0;
 }
 
 .chart-wrap {
   position: relative;
   width: 100%;
+  max-width: 100%;
   min-height: 310px;
 }
 
-#weeklyChart {
+#weeklyChart,
+#monthlyTrendChart {
   display: block;
   width: 100%;
+  max-width: 100%;
   height: 360px;
+}
+
+#monthlyTrendChart {
+  height: 340px;
 }
 
 .chart-tooltip {
@@ -349,7 +358,12 @@ textarea:focus {
 }
 
 .table-scroll {
-  overflow: auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
 }
 
 table {
@@ -618,5 +632,83 @@ body.dialog-open::before {
 
   .page-head h2 {
     font-size: 24px;
+  }
+
+  .panel {
+    padding: 16px;
+  }
+
+  .chart-wrap {
+    min-height: 280px;
+  }
+
+  #weeklyChart,
+  #monthlyTrendChart {
+    height: 300px;
+  }
+
+  #weeksTable,
+  #historyTable {
+    min-width: 0;
+  }
+
+  #weeksTable thead,
+  #historyTable thead {
+    display: none;
+  }
+
+  #weeksTable,
+  #weeksTable tbody,
+  #weeksTable tr,
+  #weeksTable td,
+  #historyTable,
+  #historyTable tbody,
+  #historyTable tr,
+  #historyTable td {
+    display: block;
+    width: 100%;
+  }
+
+  #weeksTable tr,
+  #historyTable tr {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #ffffff;
+    overflow: hidden;
+  }
+
+  #weeksTable tr + tr,
+  #historyTable tr + tr {
+    margin-top: 10px;
+  }
+
+  #weeksTable td,
+  #historyTable td {
+    display: grid;
+    grid-template-columns: minmax(100px, 0.85fr) minmax(0, 1fr);
+    gap: 12px;
+    border-bottom: 1px solid var(--line);
+    padding: 10px 12px;
+    text-align: left;
+    white-space: normal;
+  }
+
+  #weeksTable td:last-child,
+  #historyTable td:last-child {
+    border-bottom: 0;
+  }
+
+  #weeksTable td::before,
+  #historyTable td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 750;
+  }
+
+  #weeksTable td.amount,
+  #historyTable td.amount {
+    text-align: left;
+    white-space: normal;
   }
 }
