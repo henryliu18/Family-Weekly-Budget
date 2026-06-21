@@ -45,6 +45,11 @@ const i18n = {
     updateThisWeekSub: "先輸入本週基本資料，再確認系統計算出的金額。",
     liveSummary: "即時計算",
     calculatedTotals: "計算結果",
+    thisPeriodSpend: "本期支出",
+    entryMonthSpend: "本月支出",
+    liveSummaryCopy: "輸入可用餘額與上月待繳後，上方卡片會即時更新。",
+    availableFormula: "信用卡總額度 - 可用餘額 - 上月待繳",
+    periodFormula: "目前本月支出 - 前一期本月支出",
     weekData: "週資料",
     weekDataSub: "輸入累積值後，當週總支出會自動推算",
     editPeriod: "編輯週次",
@@ -157,6 +162,11 @@ const i18n = {
     updateThisWeekSub: "Enter the weekly basics first, then review the calculated totals.",
     liveSummary: "Live summary",
     calculatedTotals: "Calculated totals",
+    thisPeriodSpend: "This period spend",
+    entryMonthSpend: "Month spend",
+    liveSummaryCopy: "Totals update in the cards above as you enter the available balance and unpaid previous balance.",
+    availableFormula: "Credit limit - available balance - unpaid previous balance",
+    periodFormula: "Current monthly spend - previous period monthly spend",
     weekData: "Period data",
     weekDataSub: "Period total is calculated from the running monthly total",
     editPeriod: "Edit period",
@@ -370,6 +380,9 @@ function bindElements() {
     "weeksTable",
     "weekSelect",
     "entryEditBanner",
+    "entryMonthKpi",
+    "entryPeriodSpendKpi",
+    "entryMonthSpendKpi",
     "periodInput",
     "periodStartInput",
     "periodEndInput",
@@ -650,6 +663,9 @@ function clearSensitiveUi() {
     els.monthSpendKpi,
     els.availableKpi,
     els.weekSpendKpi,
+    els.entryMonthKpi,
+    els.entryPeriodSpendKpi,
+    els.entryMonthSpendKpi,
     els.overviewTitle,
   ].forEach((element) => {
     if (element) element.textContent = "-";
@@ -832,6 +848,7 @@ function renderEntryForm() {
   els.periodEndInput.value = periodRange.end;
   els.periodInput.value = formatPeriodFromDates() || week?.period || "";
   renderEntryEditBanner(week);
+  renderEntrySummary(month.name, 0, computeCumulativeFromAvailable(week, month));
   els.availableInput.value = valueForInput(week?.availableBalance);
   els.cumulativeInput.value = formatMoney(computeCumulativeFromAvailable(week, currentMonth()));
   els.unpaidInput.value = valueForInput(week?.unpaidPrevious);
@@ -871,6 +888,12 @@ function renderEntryEditBanner(week) {
   els.entryEditBanner.classList.toggle("hidden", !week);
 }
 
+function renderEntrySummary(monthName, weeklyTotal, cumulative) {
+  if (els.entryMonthKpi) els.entryMonthKpi.textContent = monthName || "-";
+  if (els.entryPeriodSpendKpi) els.entryPeriodSpendKpi.textContent = formatMoney(weeklyTotal);
+  if (els.entryMonthSpendKpi) els.entryMonthSpendKpi.textContent = cumulative === null ? "-" : formatMoney(cumulative);
+}
+
 function renderLiveWeeklyTotal() {
   const preview = previewWeekFromForm();
   const month = currentMonth();
@@ -882,6 +905,7 @@ function renderLiveWeeklyTotal() {
     cumulative === null ? 0 : index <= 0 ? cumulative : cumulative - previousCumulative;
   els.cumulativeInput.value = cumulative === null ? "" : formatMoney(cumulative);
   els.weeklyTotalInput.value = formatMoney(weeklyTotal);
+  renderEntrySummary(month.name, weeklyTotal, cumulative);
 }
 
 function previewWeekFromForm() {
