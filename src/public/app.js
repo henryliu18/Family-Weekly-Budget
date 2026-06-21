@@ -57,6 +57,7 @@ const i18n = {
     category: "分類",
     keyword: "關鍵字",
     keywordPlaceholder: "週期、備註、分類",
+    notesPlaceholder: "例如：項目名稱 $金額\n項目名稱 $金額",
     minAmount: "最低金額",
     amount: "金額",
     noRecords: "沒有符合條件的紀錄",
@@ -159,6 +160,7 @@ const i18n = {
     category: "Category",
     keyword: "Keyword",
     keywordPlaceholder: "Period, notes, category",
+    notesPlaceholder: "e.g. item name $amount\nitem name $amount",
     minAmount: "Minimum amount",
     amount: "Amount",
     noRecords: "No matching records",
@@ -561,6 +563,7 @@ function applyLanguage() {
   });
 
   els.historySearchInput.placeholder = t("keywordPlaceholder");
+  els.notesInput.placeholder = t("notesPlaceholder");
   if (els.loginError?.dataset.key) {
     els.loginError.textContent = t(els.loginError.dataset.key);
   }
