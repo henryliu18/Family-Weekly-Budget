@@ -440,11 +440,76 @@ tr:hover td {
   font-weight: 700;
 }
 
+.entry-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(24, 38, 31, 0.07);
+  overflow: hidden;
+}
+
+.entry-summary-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "icon label"
+    "icon value";
+  align-items: center;
+  column-gap: 12px;
+  min-width: 0;
+  padding: 18px 20px;
+}
+
+.entry-summary-card + .entry-summary-card {
+  border-left: 1px solid var(--line);
+}
+
+.entry-summary-icon {
+  display: grid;
+  grid-area: icon;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 999px;
+  color: #0f6a45;
+}
+
+.entry-summary-icon svg {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.entry-summary-label {
+  grid-area: label;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.entry-summary-card strong {
+  grid-area: value;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 21px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
 .live-summary-card {
   display: grid;
   gap: 12px;
   border-radius: 8px;
-  background: var(--surface-2);
+  border: 1px solid #dce7dd;
+  background: linear-gradient(180deg, #f8fbf7 0%, #eef5ef 100%);
   padding: 14px;
 }
 
@@ -453,8 +518,35 @@ tr:hover td {
   font-size: 18px;
 }
 
-.summary-field input {
-  font-size: 20px;
+.summary-copy {
+  margin: 0;
+  color: #4f5d55;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.summary-formula-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.summary-formula-list div {
+  display: grid;
+  gap: 3px;
+}
+
+.summary-formula-list dt {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.summary-formula-list dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .form-grid,
@@ -524,6 +616,7 @@ tr:hover td {
   display: grid;
   gap: 4px;
   cursor: pointer;
+  color: var(--warn);
   font-weight: 800;
 }
 
@@ -531,6 +624,38 @@ tr:hover td {
   color: var(--muted);
   font-size: 13px;
   font-weight: 650;
+}
+
+.incidentals-panel {
+  border-color: #f0c998;
+  background: #fffaf3;
+  box-shadow: 0 14px 34px rgba(195, 107, 45, 0.09);
+}
+
+.incidentals-summary-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.incidentals-icon {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: #ef7d22;
+  flex: 0 0 auto;
+}
+
+.incidentals-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .save-toast {
@@ -714,11 +839,21 @@ body.dialog-open::before {
 
   .nav-tabs,
   .kpi-grid,
+  .entry-summary-strip,
   .form-grid,
   .category-grid,
   .weekly-entry-grid,
   .filters {
     grid-template-columns: 1fr;
+  }
+
+  .entry-summary-card {
+    padding: 14px;
+  }
+
+  .entry-summary-card + .entry-summary-card {
+    border-top: 1px solid var(--line);
+    border-left: 0;
   }
 
   .entry-actions {
