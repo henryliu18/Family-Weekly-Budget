@@ -66,7 +66,8 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await page.locator('.nav-tab[data-view="entry"]').click();
   await expect(page.locator("#entryView")).toHaveClass(/active/);
   const note = `e2e note ${Date.now()}`;
-  await page.locator("#periodInput").fill("E2E Period");
+  await page.locator("#periodStartInput").fill("2026-06-01");
+  await page.locator("#periodEndInput").fill("2026-06-07");
   await page.locator("#availableInput").fill("12345.67");
   await page.locator("#unpaidInput").fill("12.34");
   await page.locator("#notesInput").fill(note);
@@ -75,7 +76,9 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await page.reload();
   await expect(page.locator("#logoutBtn")).toBeVisible();
   await page.locator('.nav-tab[data-view="entry"]').click();
-  await expect(page.locator("#periodInput")).toHaveValue("E2E Period");
+  await expect(page.locator("#periodStartInput")).toHaveValue("2026-06-01");
+  await expect(page.locator("#periodEndInput")).toHaveValue("2026-06-07");
+  await expect(page.locator("#periodInput")).toHaveValue("2026-06-01 - 2026-06-07");
   await expect(page.locator("#notesInput")).toHaveValue(note);
 
   const monthName = `E2E Test ${Date.now()}`;

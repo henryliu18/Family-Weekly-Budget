@@ -408,6 +408,24 @@ tr:hover td {
   align-items: end;
 }
 
+.period-range-field {
+  min-width: 0;
+}
+
+.date-range-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.date-range-separator {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
 .readonly input {
   background: var(--surface-2);
   font-weight: 800;
@@ -588,6 +606,14 @@ body.dialog-open::before {
   .category-grid,
   .filters {
     grid-template-columns: 1fr;
+  }
+
+  .date-range-inputs {
+    grid-template-columns: 1fr;
+  }
+
+  .date-range-separator {
+    justify-self: start;
   }
 
   .page-head h2 {

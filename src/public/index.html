@@ -140,9 +140,14 @@
                   <span data-i18n="editPeriod">編輯週次</span>
                   <select id="weekSelect"></select>
                 </label>
-                <label class="field">
+                <label class="field period-range-field">
                   <span>週期</span>
-                  <input id="periodInput" type="text" placeholder="13/6 - 19/6" />
+                  <div class="date-range-inputs">
+                    <input id="periodStartInput" type="date" />
+                    <span class="date-range-separator" data-i18n="to">to</span>
+                    <input id="periodEndInput" type="date" />
+                  </div>
+                  <input id="periodInput" type="hidden" />
                 </label>
                 <label class="field">
                   <span>可用餘額</span>
