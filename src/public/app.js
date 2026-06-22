@@ -865,9 +865,10 @@ function renderEntryForm() {
             ? `<small class="category-hint">${escapeHtml(t("incidentalsRareHint"))}</small>`
             : "";
         const rareClass = category.key === "incidentals" ? " category-input-card-rare" : "";
+        const emoji = category.emoji || "";
         return `
         <label class="field category-input-card${rareClass}">
-          <span>${escapeHtml(categoryLabel(category))}</span>
+          <span><span class="category-emoji">${emoji}</span>${escapeHtml(categoryLabel(category))}</span>
           <input data-category="${category.key}" type="number" min="0" step="0.01" value="${valueForInput(
             week?.categoryValues?.[category.key],
           )}" />
@@ -1529,16 +1530,19 @@ function renderCategoryTable() {
     </thead>
     <tbody>
       ${categories
-        .map(
-          (category) => `
-            <tr>
-              <td>${escapeHtml(category.key)}</td>
-              <td>${escapeHtml(categoryLabel(category))}</td>
-              <td>${categoryTypePill(category.type)}</td>
-              <td>${escapeHtml(category.hint)}</td>
-            </tr>
-          `,
-        )
+      .map(
+      (category) => {
+        const emoji = category.emoji || "";
+        return `
+        <tr>
+          <td><span class="category-emoji">${emoji}</span>${escapeHtml(category.key)}</td>
+          <td>${escapeHtml(categoryLabel(category))}</td>
+          <td>${categoryTypePill(category.type)}</td>
+          <td>${escapeHtml(category.hint)}</td>
+        </tr>
+      `;
+      },
+      )
         .join("")}
       <tr>
         <td>grocery</td>
