@@ -133,6 +133,8 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await expect(page.locator("#monthDialog")).toBeHidden();
   await expect(page.locator("#monthSelect option:checked")).toHaveText(monthName);
   await expect(page.locator("#overviewTitle")).toHaveText(monthName);
+  await page.locator('.nav-tab[data-view="overview"]').click();
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await expect(page.locator("#overviewOnboarding")).toBeVisible();
   await expect(page.locator("#weeklyChartEmpty")).toBeVisible();
   await expect(page.locator("#monthlyTrendEmpty")).toBeVisible();
