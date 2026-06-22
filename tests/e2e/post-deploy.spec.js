@@ -51,6 +51,12 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await expect(page.locator("#monthSpendKpi")).toContainText("$");
   await expect(page.locator("#availableKpi")).toContainText("$");
   await expect(page.locator("#weekSpendKpi")).toContainText("$");
+  await expect(page.locator("#overviewStatusTitle")).not.toBeEmpty();
+  await expect(page.locator("#overviewStatusPill")).not.toBeEmpty();
+  await expect(page.locator("#statusMetricsLine")).toContainText("%");
+  await expect(page.locator("#overviewDriverLine")).not.toBeEmpty();
+  await expect(page.locator("#nextActionValue")).not.toBeEmpty();
+  await expect(page.locator("#overviewActionBtn")).toHaveText("Open weekly entry");
   await expect(page.locator("#buildVersionValue")).not.toHaveText("-");
   await expect(page.locator("#addMonthBtn")).toBeEnabled();
   await expect(page.locator("#deleteMonthBtn")).toBeEnabled();
@@ -141,9 +147,11 @@ test("mobile overview stays within the viewport", async ({ page }) => {
       page.evaluate(() => {
         const weeklyRight = document.querySelector("#weeklyChart").getBoundingClientRect().right;
         const trendRight = document.querySelector("#monthlyTrendChart").getBoundingClientRect().right;
+        const decisionRight = document.querySelector(".overview-decision").getBoundingClientRect().right;
         return {
           pageFits: document.documentElement.scrollWidth <= window.innerWidth + 1,
           chartsFit: weeklyRight <= window.innerWidth + 1 && trendRight <= window.innerWidth + 1,
+          dashboardFits: decisionRight <= window.innerWidth + 1,
           recordCards: window.getComputedStyle(document.querySelector("#weeksTable tbody tr")).display === "block",
         };
       }),
@@ -151,6 +159,7 @@ test("mobile overview stays within the viewport", async ({ page }) => {
     .toEqual({
       pageFits: true,
       chartsFit: true,
+      dashboardFits: true,
       recordCards: true,
     });
 });
