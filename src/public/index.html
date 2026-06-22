@@ -84,6 +84,17 @@
             </article>
           </section>
 
+          <section id="overviewOnboarding" class="overview-onboarding hidden" aria-live="polite">
+            <div>
+              <p class="eyebrow" data-i18n="onboardingTitle">Welcome</p>
+              <h3 data-i18n="onboardingCopy">Welcome. Add a month and enter your first weekly balance to see the monthly status.</h3>
+            </div>
+            <div class="onboarding-actions">
+              <button id="emptyAddMonthBtn" class="secondary-btn" type="button" data-i18n="addMonth">Add month</button>
+              <button id="emptyOpenEntryBtn" class="primary-btn" type="button" data-i18n="openWeeklyEntry">Open weekly entry</button>
+            </div>
+          </section>
+
           <div class="kpi-grid">
             <article class="kpi">
               <span data-i18n="creditLimit">信用卡總額度</span>
@@ -112,6 +123,7 @@
             </div>
             <div class="chart-wrap">
               <canvas id="weeklyChart" width="960" height="360" aria-label="每週支出長條圖"></canvas>
+              <div id="weeklyChartEmpty" class="chart-empty hidden" data-i18n="emptyChartCopy">Enter your first completed weekly balance to build this chart.</div>
               <div id="chartTooltip" class="chart-tooltip hidden"></div>
             </div>
           </section>
@@ -125,6 +137,7 @@
             </div>
             <div class="chart-wrap">
               <canvas id="monthlyTrendChart" width="960" height="340" aria-label="月支出趨勢線圖"></canvas>
+              <div id="monthlyTrendEmpty" class="chart-empty hidden" data-i18n="emptyChartCopy">Enter your first completed weekly balance to build this chart.</div>
               <div id="trendTooltip" class="chart-tooltip hidden"></div>
             </div>
           </section>
@@ -138,6 +151,7 @@
             <div class="table-scroll">
               <table id="weeksTable"></table>
             </div>
+            <div id="weeksTableEmpty" class="table-empty hidden" data-i18n="emptyWeeksCopy">No completed weekly records yet.</div>
           </section>
         </section>
 
@@ -246,6 +260,7 @@
                 <div>
                   <h3 data-i18n="categoryAmounts">分類金額</h3>
                   <p data-i18n="categoryAmountsSub">非採買合計與採買支出會依公式自動計算</p>
+                  <p class="grocery-explainer" data-i18n="groceryExplainer">Grocery is auto-calculated from period total minus detailed non-grocery and incidentals.</p>
                 </div>
               </div>
               <div id="categoryInputs" class="category-grid"></div>
@@ -386,7 +401,7 @@
         <div>
           <p class="eyebrow" data-i18n="loginRequired">Login required</p>
           <h2 data-i18n="loginTitle">Enter password</h2>
-          <p class="auth-copy" data-i18n="loginSub">This family budget is protected.</p>
+          <p class="auth-copy" data-i18n="loginSub">This family budget is password-protected. Ask the household budget owner for access.</p>
         </div>
         <label class="field">
           <span data-i18n="password">Password</span>

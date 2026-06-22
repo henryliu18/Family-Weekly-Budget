@@ -412,6 +412,33 @@ textarea:focus {
   box-shadow: 0 0 0 5px rgba(47, 94, 158, 0.13);
 }
 
+.overview-onboarding {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #cfded4;
+  border-radius: 8px;
+  background: #f5faf6;
+  padding: 16px;
+  margin-bottom: 18px;
+  min-width: 0;
+}
+
+.overview-onboarding h3 {
+  margin: 4px 0 0;
+  color: #26332b;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .decision-summary-lines {
   display: grid;
   grid-column: 1 / -1;
@@ -464,6 +491,25 @@ textarea:focus {
   min-height: 310px;
 }
 
+.chart-empty,
+.table-empty {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  border: 1px dashed #cfded4;
+  border-radius: 8px;
+  background: #f8fbf8;
+  color: var(--muted);
+  padding: 18px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.table-empty {
+  min-height: 120px;
+}
+
 #weeklyChart,
 #monthlyTrendChart {
   display: block;
@@ -491,6 +537,13 @@ textarea:focus {
 
 .chart-tooltip.hidden {
   display: none;
+}
+
+.grocery-explainer {
+  margin: 8px 0 0;
+  color: #405048;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .table-scroll {
@@ -1024,6 +1077,20 @@ body.dialog-open::before {
 
   .panel {
     padding: 16px;
+  }
+
+  .overview-onboarding {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .onboarding-actions {
+    justify-content: stretch;
+  }
+
+  .onboarding-actions .primary-btn,
+  .onboarding-actions .secondary-btn {
+    flex: 1 1 100%;
   }
 
   .chart-wrap {
