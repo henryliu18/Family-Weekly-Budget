@@ -6,6 +6,9 @@ const password = process.env.E2E_APP_PASSWORD || "";
 async function login(page) {
   await page.goto("/");
   await expect(page.locator("#authOverlay")).toBeVisible();
+  await expect(page.locator(".auth-copy")).toHaveText(
+    "This family budget is password-protected. Ask the household budget owner for access.",
+  );
   await page.locator("#passwordInput").fill(password);
   await page.locator("#loginBtn").click();
   await expect(page.locator("#authOverlay")).toBeHidden();
@@ -89,9 +92,17 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   ]) {
     await expect(page.locator("#categoryInputs")).toContainText(label);
   }
+  await expect(page.locator(".grocery-explainer")).toHaveText(
+    "Grocery is auto-calculated from period total minus detailed non-grocery and incidentals.",
+  );
+  await expect(page.locator("#entryEditBanner")).toContainText(
+    "Editing an existing period. Saving will replace these values.",
+  );
   await expect(page.locator(".category-input-card-rare")).toContainText("Rare, unavoidable events");
   await expect(page.locator("#notesInput")).toHaveAttribute("placeholder", /emergency repair/);
   await page.locator("#languageSelect").selectOption("zh");
+  await expect(page.locator(".grocery-explainer")).toContainText("採買會由本期總支出");
+  await expect(page.locator("#entryEditBanner")).toContainText("正在編輯既有週期");
   await expect(page.locator("#notesInput")).toHaveAttribute("placeholder", /緊急維修/);
   await page.locator("#languageSelect").selectOption("en");
   const note = `e2e note ${Date.now()}`;
@@ -102,7 +113,9 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await page.locator("#incidentalsDetails summary").click();
   await page.locator("#notesInput").fill(note);
   await page.locator("#saveWeekBtn").click();
-  await expect(page.locator("#saveToast")).toContainText("Weekly entry saved");
+  await expect(page.locator("#saveToast")).toContainText("Saved 2026-06-01 - 2026-06-07:");
+  await expect(page.locator("#saveToast")).toContainText("period total");
+  await expect(page.locator("#saveToast")).toContainText("grocery");
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await page.reload();
   await expect(page.locator("#logoutBtn")).toBeVisible();
@@ -120,6 +133,10 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await expect(page.locator("#monthDialog")).toBeHidden();
   await expect(page.locator("#monthSelect option:checked")).toHaveText(monthName);
   await expect(page.locator("#overviewTitle")).toHaveText(monthName);
+  await expect(page.locator("#overviewOnboarding")).toBeVisible();
+  await expect(page.locator("#weeklyChartEmpty")).toBeVisible();
+  await expect(page.locator("#monthlyTrendEmpty")).toBeVisible();
+  await expect(page.locator("#weeksTableEmpty")).toBeVisible();
 
   page.on("dialog", async (dialog) => {
     expect(dialog.type()).toBe("confirm");

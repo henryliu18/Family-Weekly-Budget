@@ -44,6 +44,10 @@ const i18n = {
     nextActionReview: (driver) => `檢查${driver}`,
     nextActionWatch: "留意下一週支出",
     openWeeklyEntry: "開啟週輸入",
+    onboardingTitle: "歡迎使用",
+    onboardingCopy: "歡迎使用。先新增月份並輸入第一週餘額，就能看到本月狀態。",
+    emptyChartCopy: "輸入第一週餘額後，這裡會建立圖表。",
+    emptyWeeksCopy: "目前還沒有完成的週紀錄。",
     weeklyComposition: "每週支出組成",
     weeklyCompositionSub: "非採買、採買與意外支出堆疊比較",
     monthlyTrend: "月支出趨勢",
@@ -81,6 +85,7 @@ const i18n = {
     unpaidPrevious: "上月待繳(如有)",
     categoryAmounts: "分類金額",
     categoryAmountsSub: "保留完整明細分類；採買支出會依公式自動計算。",
+    groceryExplainer: "採買會由本期總支出扣除明細非採買與意外支出後自動計算。",
     otherDetails: "突發事件或少見意外支出備註",
     incidentalsDetailsTitle: "意外 / 少見事件備註",
     incidentalsDetailsSub: "只在少見、不可避免、突發事件時填寫。",
@@ -136,10 +141,12 @@ const i18n = {
     fourthPeriod: "第四週",
     buildVersion: "Build version",
     editingPeriod: (period) => `正在編輯：${period}`,
+    editingExistingPeriod: "正在編輯既有週期；儲存後會覆蓋目前數值。",
     saveSuccess: "已儲存本週資料",
+    saveSuccessDetailed: (period, total, grocery) => `已儲存 ${period}：本期總支出 ${total}，採買 ${grocery}。`,
     loginRequired: "需要登入",
     loginTitle: "輸入密碼",
-    loginSub: "這是受保護的家庭預算資料。",
+    loginSub: "這份家庭預算受密碼保護；請向家庭預算管理者取得密碼。",
     password: "密碼",
     login: "登入",
     logout: "登出",
@@ -184,6 +191,10 @@ const i18n = {
     nextActionReview: (driver) => `Review ${driver}`,
     nextActionWatch: "Watch the next period",
     openWeeklyEntry: "Open weekly entry",
+    onboardingTitle: "Welcome",
+    onboardingCopy: "Welcome. Add a month and enter your first weekly balance to see the monthly status.",
+    emptyChartCopy: "Enter your first completed weekly balance to build this chart.",
+    emptyWeeksCopy: "No completed weekly records yet.",
     weeklyComposition: "Period Spend Breakdown",
     weeklyCompositionSub: "Stacked non-grocery, grocery, and incidental spending",
     monthlyTrend: "Monthly Spending Trend",
@@ -221,6 +232,7 @@ const i18n = {
     unpaidPrevious: "Unpaid previous balance",
     categoryAmounts: "Category amounts",
     categoryAmountsSub: "Keep the full detailed category list; grocery spend is calculated automatically.",
+    groceryExplainer: "Grocery is auto-calculated from period total minus detailed non-grocery and incidentals.",
     otherDetails: "Rare-event or incidental notes",
     incidentalsDetailsTitle: "Incidentals / rare-event notes",
     incidentalsDetailsSub: "Use only for unusual, unavoidable events.",
@@ -276,10 +288,12 @@ const i18n = {
     fourthPeriod: "Period 4",
     buildVersion: "Build version",
     editingPeriod: (period) => `Editing ${period}`,
+    editingExistingPeriod: "Editing an existing period. Saving will replace these values.",
     saveSuccess: "Weekly entry saved",
+    saveSuccessDetailed: (period, total, grocery) => `Saved ${period}: ${total} period total, ${grocery} grocery.`,
     loginRequired: "Login required",
     loginTitle: "Enter password",
-    loginSub: "This family budget is protected.",
+    loginSub: "This family budget is password-protected. Ask the household budget owner for access.",
     password: "Password",
     login: "Log in",
     logout: "Log out",
@@ -427,11 +441,17 @@ function bindElements() {
     "overviewDriverLine",
     "nextActionValue",
     "overviewActionBtn",
+    "overviewOnboarding",
+    "emptyAddMonthBtn",
+    "emptyOpenEntryBtn",
     "weeklyChart",
+    "weeklyChartEmpty",
     "chartTooltip",
     "monthlyTrendChart",
+    "monthlyTrendEmpty",
     "trendTooltip",
     "weeksTable",
+    "weeksTableEmpty",
     "weekSelect",
     "entryEditBanner",
     "entryMonthKpi",
@@ -499,6 +519,8 @@ function bindEvents() {
   els.addMonthBtn.addEventListener("click", openMonthDialog);
   els.deleteMonthBtn.addEventListener("click", deleteCurrentMonth);
   els.overviewActionBtn?.addEventListener("click", () => switchView("entry"));
+  els.emptyAddMonthBtn?.addEventListener("click", openMonthDialog);
+  els.emptyOpenEntryBtn?.addEventListener("click", () => switchView("entry"));
   els.confirmMonthBtn.addEventListener("click", addMonth);
   els.cancelMonthBtn?.addEventListener("click", closeMonthDialog);
   els.monthDialog?.addEventListener("click", (event) => {
@@ -764,7 +786,14 @@ function clearSensitiveUi() {
     if (element) element.value = "";
   });
 
-  [els.chartTooltip, els.trendTooltip].forEach((element) => element?.classList.add("hidden"));
+  [
+    els.chartTooltip,
+    els.trendTooltip,
+    els.overviewOnboarding,
+    els.weeklyChartEmpty,
+    els.monthlyTrendEmpty,
+    els.weeksTableEmpty,
+  ].forEach((element) => element?.classList.add("hidden"));
   clearCanvas(els.weeklyChart);
   clearCanvas(els.monthlyTrendChart);
 }
@@ -805,7 +834,9 @@ function renderMonthOptions() {
 function renderOverview() {
   const month = currentMonth();
   const rows = computedWeeks(month);
-  const latest = [...rows].reverse().find((row) => row.week.cumulativeSpend !== null) || rows[0];
+  const completedRows = rows.filter((row) => row.week.cumulativeSpend !== null);
+  const hasCompletedWeeks = completedRows.length > 0;
+  const latest = completedRows[completedRows.length - 1] || rows[0];
 
   els.overviewTitle.textContent = month.name;
   els.limitKpi.textContent = formatMoney(month.creditLimit);
@@ -815,10 +846,29 @@ function renderOverview() {
 
   renderOverviewDecision(month, rows);
   renderWeeksTable(rows);
-  requestAnimationFrame(() => {
-    drawChart();
-    drawMonthlyTrendChart();
-  });
+  renderOverviewEmptyState(hasCompletedWeeks);
+
+  if (hasCompletedWeeks) {
+    requestAnimationFrame(() => {
+      drawChart();
+      drawMonthlyTrendChart();
+    });
+  } else {
+    clearCanvas(els.weeklyChart);
+    clearCanvas(els.monthlyTrendChart);
+    els.chartTooltip?.classList.add("hidden");
+    els.trendTooltip?.classList.add("hidden");
+  }
+}
+
+function renderOverviewEmptyState(hasCompletedWeeks) {
+  els.overviewOnboarding?.classList.toggle("hidden", hasCompletedWeeks);
+  els.weeklyChart?.classList.toggle("hidden", !hasCompletedWeeks);
+  els.monthlyTrendChart?.classList.toggle("hidden", !hasCompletedWeeks);
+  els.weeklyChartEmpty?.classList.toggle("hidden", hasCompletedWeeks);
+  els.monthlyTrendEmpty?.classList.toggle("hidden", hasCompletedWeeks);
+  els.weeksTableEmpty?.classList.toggle("hidden", hasCompletedWeeks);
+  els.weeksTable?.closest(".table-scroll")?.classList.toggle("hidden", !hasCompletedWeeks);
 }
 
 function renderOverviewDecision(month, rows) {
@@ -1053,9 +1103,20 @@ function renderEntryForm() {
 
 function renderEntryEditBanner(week) {
   if (!els.entryEditBanner) return;
-  const label = week?.period || t("unnamedPeriod");
-  els.entryEditBanner.textContent = t("editingPeriod", label);
-  els.entryEditBanner.classList.toggle("hidden", !week);
+  els.entryEditBanner.textContent = t("editingExistingPeriod");
+  els.entryEditBanner.classList.toggle("hidden", !weekHasSavedValues(week));
+}
+
+function weekHasSavedValues(week) {
+  if (!week) return false;
+  const hasCategoryValues = Object.values(week.categoryValues || {}).some((value) => numberOrZero(value) !== 0);
+  return (
+    numberOrNull(week.availableBalance) !== null ||
+    numberOrNull(week.cumulativeSpend) !== null ||
+    numberOrNull(week.unpaidPrevious) !== null ||
+    hasCategoryValues ||
+    !!week.notes?.trim()
+  );
 }
 
 function renderEntrySummary(monthName, weeklyTotal, cumulative) {
@@ -1110,13 +1171,22 @@ function saveWeekFromForm() {
     month.weeks.push(next);
   }
   currentWeekId = next.id;
+  const savedRow = computedWeeks(month).find((row) => row.week.id === next.id);
+  const feedback = {
+    period: next.period || t("unnamedPeriod"),
+    total: formatMoney(savedRow?.weeklyTotal || 0),
+    grocery: formatMoney(savedRow?.grocery || 0),
+  };
   renderAll();
   switchView("overview");
-  showSaveFeedback();
+  showSaveFeedback(feedback);
 }
 
-function showSaveFeedback() {
-  const message = t("saveSuccess");
+function showSaveFeedback(feedback = {}) {
+  const message =
+    feedback.period && feedback.total && feedback.grocery
+      ? t("saveSuccessDetailed", feedback.period, feedback.total, feedback.grocery)
+      : t("saveSuccess");
   if (els.saveStatus) {
     els.saveStatus.textContent = message;
     els.saveStatus.classList.remove("hidden");
