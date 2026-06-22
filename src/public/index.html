@@ -61,6 +61,29 @@
             </div>
           </div>
 
+          <section class="overview-decision" aria-live="polite">
+            <article class="decision-status-card">
+              <div class="decision-status-main">
+                <p class="eyebrow" data-i18n="monthlyStatus">Monthly status</p>
+                <div class="decision-title-row">
+                  <span id="overviewStatusDot" class="status-dot status-good" aria-hidden="true"></span>
+                  <h3 id="overviewStatusTitle">On track</h3>
+                </div>
+                <p id="overviewStatusCopy">Spending is within the expected pace for this month.</p>
+              </div>
+              <span id="overviewStatusPill" class="status-pill status-good">On track</span>
+              <div class="decision-summary-lines">
+                <p id="statusMetricsLine">$0.00 average per period</p>
+                <p id="overviewDriverLine">Notable spending this period: -</p>
+                <p class="decision-next-line">
+                  <span data-i18n="nextAction">Next action</span>
+                  <strong id="nextActionValue">Update this week</strong>
+                  <button id="overviewActionBtn" class="ghost-btn" type="button">Open weekly entry</button>
+                </p>
+              </div>
+            </article>
+          </section>
+
           <div class="kpi-grid">
             <article class="kpi">
               <span data-i18n="creditLimit">信用卡總額度</span>

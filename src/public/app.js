@@ -21,6 +21,29 @@ const i18n = {
     monthSpend: "本月累積支出",
     latestAvailable: "最新可用餘額",
     latestWeekSpend: "最新週總支出",
+    monthlyStatus: "本月狀態",
+    statusOnTrack: "狀態良好",
+    statusWatch: "需要留意",
+    statusOver: "超出節奏",
+    statusNoData: "等待資料",
+    statusOnTrackCopy: "花費與上月同期相當或更低。",
+    statusWatchCopy: "本期花費比上月同期高，建議留意主要支出來源。",
+    statusOverCopy: "本期花費明顯高於上月同期，需要檢查主要支出來源。",
+    statusNoDataCopy: "輸入本週資料後，這裡會顯示本月判斷。",
+    spendingPace: (used, average, comparison) => `已用 ${used} · 平均每週 ${average} · ${comparison}`,
+    samePeriodLower: (change) => `較上月同期 ${change}`,
+    samePeriodHigher: (change) => `較上月同期 +${change}`,
+    samePeriodUnavailable: "缺少上月同期資料",
+    latestPeriodChange: "最新週變化",
+    comparedSamePeriod: "與上月同週相比",
+    largestDriver: "本週顯著支出",
+    topDriversLine: (first, second) => (second ? `本週顯著支出：${first} · ${second}` : `本週顯著支出：${first}`),
+    noDriverYet: "本週尚無顯著支出",
+    nextAction: "下一步",
+    nextActionUpdate: "更新本週資料",
+    nextActionReview: (driver) => `檢查${driver}`,
+    nextActionWatch: "留意下一週支出",
+    openWeeklyEntry: "開啟週輸入",
     weeklyComposition: "每週支出組成",
     weeklyCompositionSub: "非採買、採買與意外支出堆疊比較",
     monthlyTrend: "月支出趨勢",
@@ -138,6 +161,29 @@ const i18n = {
     monthSpend: "Monthly spend to date",
     latestAvailable: "Latest available balance",
     latestWeekSpend: "Latest period spend",
+    monthlyStatus: "Monthly status",
+    statusOnTrack: "On track",
+    statusWatch: "Watch",
+    statusOver: "Over pace",
+    statusNoData: "Waiting for data",
+    statusOnTrackCopy: "Spending is in line with or below the same period last month.",
+    statusWatchCopy: "This period is higher than the same period last month. Watch the main drivers.",
+    statusOverCopy: "This period is meaningfully higher than the same period last month.",
+    statusNoDataCopy: "Enter this week's figures to see the monthly readout.",
+    spendingPace: (used, average, comparison) => `${used} used · avg ${average}/period · ${comparison}`,
+    samePeriodLower: (change) => `${change} vs same period last month`,
+    samePeriodHigher: (change) => `+${change} vs same period last month`,
+    samePeriodUnavailable: "No same-period data last month",
+    latestPeriodChange: "Latest period change",
+    comparedSamePeriod: "Compared with same period last month",
+    largestDriver: "Notable spending this period",
+    topDriversLine: (first, second) => (second ? `Notable spending: ${first} · ${second}` : `Notable spending: ${first}`),
+    noDriverYet: "No notable spending this period",
+    nextAction: "Next action",
+    nextActionUpdate: "Update this week",
+    nextActionReview: (driver) => `Review ${driver}`,
+    nextActionWatch: "Watch the next period",
+    openWeeklyEntry: "Open weekly entry",
     weeklyComposition: "Period Spend Breakdown",
     weeklyCompositionSub: "Stacked non-grocery, grocery, and incidental spending",
     monthlyTrend: "Monthly Spending Trend",
@@ -373,6 +419,14 @@ function bindElements() {
     "monthSpendKpi",
     "availableKpi",
     "weekSpendKpi",
+    "overviewStatusTitle",
+    "overviewStatusCopy",
+    "overviewStatusPill",
+    "overviewStatusDot",
+    "statusMetricsLine",
+    "overviewDriverLine",
+    "nextActionValue",
+    "overviewActionBtn",
     "weeklyChart",
     "chartTooltip",
     "monthlyTrendChart",
@@ -444,6 +498,7 @@ function bindEvents() {
 
   els.addMonthBtn.addEventListener("click", openMonthDialog);
   els.deleteMonthBtn.addEventListener("click", deleteCurrentMonth);
+  els.overviewActionBtn?.addEventListener("click", () => switchView("entry"));
   els.confirmMonthBtn.addEventListener("click", addMonth);
   els.cancelMonthBtn?.addEventListener("click", closeMonthDialog);
   els.monthDialog?.addEventListener("click", (event) => {
@@ -564,6 +619,7 @@ function applyLanguage() {
     '[data-view="history"]': "history",
     '[data-view="settings"]': "settings",
     "#saveWeekBtn": "saveWeek",
+    "#overviewActionBtn": "openWeeklyEntry",
     "#saveMonthSettingsBtn": "saveSettings",
     "#exportDataBtn": "exportJson",
     "#resetLocalDataBtn": "resetDefault",
@@ -663,6 +719,12 @@ function clearSensitiveUi() {
     els.monthSpendKpi,
     els.availableKpi,
     els.weekSpendKpi,
+    els.overviewStatusTitle,
+    els.overviewStatusCopy,
+    els.overviewStatusPill,
+    els.statusMetricsLine,
+    els.overviewDriverLine,
+    els.nextActionValue,
     els.entryMonthKpi,
     els.entryPeriodSpendKpi,
     els.entryMonthSpendKpi,
@@ -751,11 +813,119 @@ function renderOverview() {
   els.availableKpi.textContent = formatMoney(latest?.week.availableBalance || month.creditLimit);
   els.weekSpendKpi.textContent = formatMoney(latest?.weeklyTotal || 0);
 
+  renderOverviewDecision(month, rows);
   renderWeeksTable(rows);
   requestAnimationFrame(() => {
     drawChart();
     drawMonthlyTrendChart();
   });
+}
+
+function renderOverviewDecision(month, rows) {
+  const completedRows = rows.filter((row) => row.week.cumulativeSpend !== null);
+  const latest = completedRows[completedRows.length - 1];
+  const limit = numberOrZero(month.creditLimit || CREDIT_LIMIT);
+
+  if (!latest) {
+    setOverviewStatus("empty", t("statusNoData"), t("statusNoDataCopy"));
+    setText(els.statusMetricsLine, t("spendingPace", formatPercent(0), formatMoney(0), t("samePeriodUnavailable")));
+    setText(els.overviewDriverLine, t("noDriverYet"));
+    setText(els.nextActionValue, t("nextActionUpdate"));
+    return;
+  }
+
+  const latestIndex = rows.findIndex((row) => row.week.id === latest.week.id);
+  const samePeriodRow = samePeriodComparisonRow(month, latestIndex);
+  const elapsedShare = Math.min(1, Math.max((latestIndex + 1) / Math.max(rows.length, 1), 0));
+  const cumulative = numberOrZero(latest.cumulativeSpend);
+  const usedShare = limit > 0 ? cumulative / limit : 0;
+  const projected = elapsedShare > 0 ? cumulative / elapsedShare : cumulative;
+  const paceRatio = elapsedShare > 0 && limit > 0 ? usedShare / elapsedShare : 0;
+  const comparison = samePeriodComparison(latest, samePeriodRow);
+  const drivers = topSpendingDrivers(latest, 2);
+  const mainDriver = drivers[0];
+
+  if (comparison?.ratio > 0.15 || (!comparison && projected > limit)) {
+    setOverviewStatus("over", t("statusOver"), t("statusOverCopy"));
+  } else if (comparison?.ratio > 0 || (!comparison && (paceRatio >= 0.9 || usedShare >= 0.85))) {
+    setOverviewStatus("watch", t("statusWatch"), t("statusWatchCopy"));
+  } else {
+    setOverviewStatus("good", t("statusOnTrack"), t("statusOnTrackCopy"));
+  }
+
+  const averagePerPeriod = cumulative / Math.max(latestIndex + 1, 1);
+  setText(
+    els.statusMetricsLine,
+    t("spendingPace", formatPercent(usedShare), formatMoney(averagePerPeriod), comparisonLabel(comparison)),
+  );
+
+  setText(els.overviewDriverLine, drivers.length ? topDriversLine(drivers) : t("noDriverYet"));
+
+  const action =
+    mainDriver && (comparison?.ratio > 0 || paceRatio >= 0.9) ? t("nextActionReview", mainDriver.label) : t("nextActionUpdate");
+  setText(els.nextActionValue, action);
+}
+
+function setOverviewStatus(kind, title, copy) {
+  setText(els.overviewStatusTitle, title);
+  setText(els.overviewStatusCopy, copy);
+  if (!els.overviewStatusPill) return;
+  els.overviewStatusPill.textContent = title;
+  els.overviewStatusPill.className = `status-pill status-${kind}`;
+  if (els.overviewStatusDot) {
+    els.overviewStatusDot.className = `status-dot status-${kind}`;
+  }
+}
+
+function samePeriodComparisonRow(month, weekIndex) {
+  const months = Object.values(appState.months);
+  const currentIndex = months.findIndex((item) => item.id === month.id);
+  const previousMonth = currentIndex > 0 ? months[currentIndex - 1] : null;
+  if (!previousMonth) return null;
+  return computedWeeks(previousMonth)[weekIndex] || null;
+}
+
+function samePeriodComparison(latest, samePeriodRow) {
+  if (!samePeriodRow || samePeriodRow.week.cumulativeSpend === null) return null;
+  const previousAmount = numberOrZero(samePeriodRow.weeklyTotal);
+  if (previousAmount <= 0) return null;
+  const change = latest.weeklyTotal - previousAmount;
+  return {
+    amount: roundCurrency(change),
+    ratio: change / previousAmount,
+  };
+}
+
+function comparisonLabel(comparison) {
+  if (!comparison) return t("samePeriodUnavailable");
+  const value = formatPercent(Math.abs(comparison.ratio));
+  return comparison.amount <= 0 ? t("samePeriodLower", `-${value}`) : t("samePeriodHigher", value);
+}
+
+function topSpendingDrivers(row, count) {
+  const drivers = [
+    { label: t("grocery"), amount: Math.max(0, numberOrZero(row.grocery)) },
+    { label: t("incidentals"), amount: Math.max(0, numberOrZero(row.incidentals)) },
+    ...categories
+      .filter((category) => category.key !== "incidentals")
+      .map((category) => ({
+        label: categoryLabel(category),
+        amount: Math.max(0, numberOrZero(row.week.categoryValues?.[category.key])),
+      })),
+  ];
+  return drivers
+    .filter((driver) => driver.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, count);
+}
+
+function topDriversLine(drivers) {
+  const [first, second] = drivers.map((driver) => `${driver.label} ${formatMoney(driver.amount)}`);
+  return t("topDriversLine", first, second);
+}
+
+function setText(element, value) {
+  if (element) element.textContent = value;
 }
 
 function computedWeeks(month) {
@@ -1585,6 +1755,17 @@ function roundCurrency(value) {
 
 function formatMoney(value) {
   return money.format(roundCurrency(value));
+}
+
+function formatSignedMoney(value) {
+  const rounded = roundCurrency(value);
+  if (rounded === 0) return formatMoney(0);
+  return `${rounded > 0 ? "+" : "-"}${formatMoney(Math.abs(rounded))}`;
+}
+
+function formatPercent(value) {
+  const percent = Math.max(0, numberOrZero(value)) * 100;
+  return `${Math.round(percent)}%`;
 }
 
 function formatCompactMoney(value) {
