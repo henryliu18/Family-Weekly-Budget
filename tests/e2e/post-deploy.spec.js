@@ -57,7 +57,11 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await expect(page.locator("#overviewStatusTitle")).not.toBeEmpty();
   await expect(page.locator("#overviewStatusPill")).not.toBeEmpty();
   await expect(page.locator("#statusMetricsLine")).toContainText("%");
+  await expect(page.locator("#statusMetricsLine")).toContainText(
+    /vs last month same progress|vs last month|No same-progress data last month|No last-month data/,
+  );
   await expect(page.locator("#overviewDriverLine")).not.toBeEmpty();
+  await expect(page.locator("#overviewDriverLine")).toContainText("month");
   await expect(page.locator("#nextActionValue")).not.toBeEmpty();
   await expect(page.locator("#overviewActionBtn")).toHaveText("Open weekly entry");
   await expect(page.locator("#buildVersionValue")).not.toHaveText("-");
@@ -75,6 +79,18 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
 
   await page.locator('.nav-tab[data-view="entry"]').click();
   await expect(page.locator("#entryView")).toHaveClass(/active/);
+  await expect(page.locator("#entryPeriodComparison")).toBeVisible();
+  await expect(page.locator("#entryPeriodComparisonTitle")).not.toBeEmpty();
+  await expect(page.locator("#entryPeriodComparisonCopy")).toContainText(/same period last month|No same-period data last month/);
+  await expect(page.locator("#entryPeriodDrivers")).not.toBeEmpty();
+  await expect(page.locator("#entryPeriodComparisonPill")).not.toBeEmpty();
+  const entryPeriodOptions = await page.locator("#weekSelect option").count();
+  if (entryPeriodOptions > 1) {
+    const nextPeriodValue = await page.locator("#weekSelect option").nth(1).getAttribute("value");
+    const nextPeriodLabel = await page.locator("#weekSelect option").nth(1).textContent();
+    await page.locator("#weekSelect").selectOption(nextPeriodValue);
+    await expect(page.locator("#entryPeriodComparisonTitle")).toHaveText(nextPeriodLabel.trim());
+  }
   for (const label of [
     "Medical out-of-pocket",
     "Private insurance",
@@ -371,5 +387,22 @@ test("mobile overview stays within the viewport", async ({ page }) => {
       chartsFit: true,
       dashboardFits: true,
       recordCards: true,
+    });
+
+  await page.locator('.nav-tab[data-view="entry"]').click();
+  await expect(page.locator("#entryView")).toHaveClass(/active/);
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const comparisonRight = document.querySelector("#entryPeriodComparison").getBoundingClientRect().right;
+        return {
+          pageFits: document.documentElement.scrollWidth <= window.innerWidth + 1,
+          comparisonFits: comparisonRight <= window.innerWidth + 1,
+        };
+      }),
+    )
+    .toEqual({
+      pageFits: true,
+      comparisonFits: true,
     });
 });

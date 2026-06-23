@@ -871,6 +871,48 @@ tr:hover td {
   overflow-wrap: anywhere;
 }
 
+.entry-period-comparison {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.entry-period-comparison.status-good {
+  border-left-color: var(--accent);
+}
+
+.entry-period-comparison.status-watch {
+  border-left-color: #c36b2d;
+}
+
+.entry-period-comparison.status-over {
+  border-left-color: var(--danger);
+}
+
+.entry-period-comparison.status-empty {
+  border-left-color: var(--accent-2);
+}
+
+.entry-period-comparison h3 {
+  margin: 3px 0 4px;
+  font-size: 16px;
+}
+
+.entry-period-comparison p:not(.eyebrow) {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .live-summary-card {
   display: grid;
   gap: 12px;
@@ -1230,6 +1272,11 @@ body.dialog-open::before {
   .entry-summary-card + .entry-summary-card {
     border-top: 1px solid var(--line);
     border-left: 0;
+  }
+
+  .entry-period-comparison {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .entry-actions {
