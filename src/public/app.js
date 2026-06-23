@@ -105,6 +105,7 @@ const i18n = {
     noImportRows: "這個區塊目前沒有交易。",
     importParseEmpty: "請先貼上交易資料。",
     importApplied: (count) => `已套用 ${count} 筆交易到目前草稿。`,
+    importBalancesUpdated: "已從貼上內容更新可用餘額與未繳金額。",
     importNeedsPeriod: "請先設定 Period start 和 Period end。",
     importBalanceWarning: (importTotal, periodTotal) =>
       `匯入交易合計為 ${importTotal}，但目前餘額推算的本期支出為 ${periodTotal}。請檢查待入帳交易、退款或日期界線。`,
@@ -291,6 +292,7 @@ const i18n = {
     noImportRows: "No transactions in this section.",
     importParseEmpty: "Paste transaction rows first.",
     importApplied: (count) => `Applied ${count} transactions to the current draft.`,
+    importBalancesUpdated: "Updated available balance and unpaid amount from pasted text.",
     importNeedsPeriod: "Set Period start and Period end before importing.",
     importBalanceWarning: (importTotal, periodTotal) =>
       `Imported transaction total is ${importTotal}, but the current period spend from balances is ${periodTotal}. Check pending transactions, refunds, or date boundaries before saving.`,
@@ -484,7 +486,7 @@ const MERCHANT_RULES = [
     categoryKey: "internetMobile",
     confidence: IMPORT_CONFIDENCE.HIGH,
   })),
-  ...["BP", "EG GROUP", "DGB PETRO", "SHELL", "CALTEX", "AMPOL", "EASTLINK", "MYKI", "DEPARTMENT OF TRANSPOR", "VOLVOCARS"].map((pattern) => ({
+  ...["BP", "EG GROUP", "DGB PETRO", "SHELL", "CALTEX", "AMPOL", "EASTLINK", "MYKI", "PUBLIC TRANSPORT", "POINT PARKING", "DEPARTMENT OF TRANSPOR", "VOLVOCARS"].map((pattern) => ({
     pattern,
     categoryKey: "transport",
     confidence: IMPORT_CONFIDENCE.HIGH,
@@ -1391,6 +1393,8 @@ function parseTransactionImport() {
     showImportStatus(t("importParseEmpty"));
     return;
   }
+  const balanceHints = parseBalanceHints(source);
+  applyBalanceHints(balanceHints);
   if (!range.start || !range.end) {
     showImportStatus(t("importNeedsPeriod"));
     return;
@@ -1402,6 +1406,9 @@ function parseTransactionImport() {
     parsed: true,
   };
   renderImportDraft();
+  if (balanceHints.available !== null || balanceHints.unpaid !== null) {
+    showImportStatus(t("importBalancesUpdated"));
+  }
 }
 
 function buildImportRows(source, range) {
@@ -1456,7 +1463,11 @@ function buildImportRows(source, range) {
 }
 
 function parseTransactionRows(source) {
-  return source
+  const transactionSource = stripBalanceHintLines(source);
+  const looseRows = parseLooseTransactionText(transactionSource);
+  if (looseRows.length) return looseRows;
+
+  return transactionSource
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -1476,6 +1487,109 @@ function parseTransactionRows(source) {
         error: Number.isNaN(amount) ? "unsupported row format" : "",
       };
     });
+}
+
+function parseBalanceHints(source) {
+  const lines = source.split(/\r?\n/).map((line) => line.trim());
+  return lines.reduce(
+    (hints, line, index) => {
+      const label = line.toLowerCase();
+      if (label.includes("available")) {
+        const amount = parseLooseAmount(line);
+        const nextAmount = Number.isNaN(amount) ? parseLooseAmount(nextNonEmptyLine(lines, index)) : amount;
+        if (!Number.isNaN(nextAmount)) hints.available = Math.abs(nextAmount);
+      }
+      if (label.includes("total owing") || label.includes("unpaid")) {
+        const amount = parseLooseAmount(line);
+        const nextAmount = Number.isNaN(amount) ? parseLooseAmount(nextNonEmptyLine(lines, index)) : amount;
+        if (!Number.isNaN(nextAmount)) hints.unpaid = Math.abs(nextAmount);
+      }
+      return hints;
+    },
+    { available: null, unpaid: null },
+  );
+}
+
+function applyBalanceHints(hints) {
+  let changed = false;
+  if (hints.available !== null) {
+    els.availableInput.value = valueForInput(roundCurrency(hints.available));
+    changed = true;
+  }
+  if (hints.unpaid !== null) {
+    els.unpaidInput.value = valueForInput(roundCurrency(hints.unpaid));
+    changed = true;
+  }
+  if (changed) renderLiveWeeklyTotal();
+}
+
+function nextNonEmptyLine(lines, index) {
+  return lines.slice(index + 1).find((line) => line.trim()) || "";
+}
+
+function stripBalanceHintLines(source) {
+  const lines = source.split(/\r?\n/);
+  const skip = new Set();
+  lines.forEach((line, index) => {
+    const label = line.trim().toLowerCase();
+    if (!label.includes("available") && !label.includes("total owing") && !label.includes("unpaid")) return;
+    skip.add(index);
+    if (Number.isNaN(parseLooseAmount(line))) {
+      const nextIndex = lines.findIndex((candidate, candidateIndex) => candidateIndex > index && candidate.trim());
+      if (nextIndex > index) skip.add(nextIndex);
+    }
+  });
+  return lines.filter((_, index) => !skip.has(index)).join("\n");
+}
+
+function parseLooseTransactionText(source) {
+  const lines = source
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const rows = [];
+  let current = null;
+
+  const flush = () => {
+    if (!current) return;
+    const description = cleanLooseDescription(current.descriptionParts.join(" "));
+    rows.push({
+      sourceLine: current.sourceLines.join(" "),
+      rawDate: current.rawDate,
+      dateIso: current.dateIso,
+      amount: current.amount,
+      description: description || current.sourceLines.join(" "),
+      error: Number.isNaN(current.amount) ? "unsupported row format" : "",
+    });
+    current = null;
+  };
+
+  lines.forEach((line) => {
+    const dateIso = parseImportDate(line);
+    if (dateIso) {
+      flush();
+      current = {
+        rawDate: line,
+        dateIso,
+        amount: NaN,
+        descriptionParts: [],
+        sourceLines: [line],
+      };
+      return;
+    }
+
+    if (!current) return;
+    current.sourceLines.push(line);
+    const amount = parseLooseAmount(line);
+    if (!Number.isNaN(amount)) {
+      current.amount = amount;
+      return;
+    }
+    current.descriptionParts.push(line);
+  });
+
+  flush();
+  return rows.filter((row) => row.dateIso || row.description || !Number.isNaN(row.amount));
 }
 
 function parseCsvLine(line) {
@@ -1507,7 +1621,27 @@ function parseImportDate(value) {
   if (dmy) return toIsoDate(Number(dmy[3]), Number(dmy[2]), Number(dmy[1]));
   const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (iso) return toIsoDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  const named = trimmed.match(/^(\d{1,2})\s+([a-z]{3,9})\s+(\d{4})$/i);
+  if (named) return toIsoDate(Number(named[3]), monthNameToNumber(named[2]), Number(named[1]));
   return "";
+}
+
+function monthNameToNumber(value) {
+  const key = String(value || "").slice(0, 3).toLowerCase();
+  return {
+    jan: 1,
+    feb: 2,
+    mar: 3,
+    apr: 4,
+    may: 5,
+    jun: 6,
+    jul: 7,
+    aug: 8,
+    sep: 9,
+    oct: 10,
+    nov: 11,
+    dec: 12,
+  }[key] || 0;
 }
 
 function toIsoDate(year, month, day) {
@@ -1521,6 +1655,19 @@ function parseImportAmount(value) {
   if (!cleaned) return NaN;
   const bracketed = cleaned.match(/^\((.+)\)$/);
   return Number(bracketed ? `-${bracketed[1]}` : cleaned);
+}
+
+function parseLooseAmount(value) {
+  const match = String(value || "").match(/[+-]?\$?\s*\d[\d,]*(?:\.\d{2})?/);
+  return match ? parseImportAmount(match[0]) : NaN;
+}
+
+function cleanLooseDescription(value) {
+  return String(value || "")
+    .replace(/Open transaction details/gi, "")
+    .replace(/\bPENDING\s*-\s*/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function importExclusionReason(base, row, range) {
