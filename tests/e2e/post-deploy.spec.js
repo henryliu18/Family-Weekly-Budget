@@ -126,7 +126,10 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await page.locator("#periodEndInput").fill("2026-06-07");
   await page.locator("#availableInput").fill("12345.67");
   await page.locator("#unpaidInput").fill("12.34");
-  await page.locator("#incidentalsDetails summary").click();
+  const incidentalsOpen = await page.locator("#incidentalsDetails").evaluate((element) => element.open);
+  if (!incidentalsOpen) {
+    await page.locator("#incidentalsDetails summary").click();
+  }
   await page.locator("#notesInput").fill(note);
   await page.locator("#saveWeekBtn").click();
   await expect(page.locator("#saveToast")).toContainText("Saved 2026-06-01 - 2026-06-07:");
