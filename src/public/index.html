@@ -284,6 +284,38 @@
                 <textarea id="notesInput" rows="3" placeholder="e.g. emergency repair $amount&#10;unexpected fee $amount"></textarea>
               </label>
             </details>
+
+            <section class="panel transaction-import-panel">
+              <div class="panel-head">
+                <div>
+                  <h3 data-i18n="transactionImportTitle">Import transactions</h3>
+                  <p data-i18n="transactionImportSub">Paste bank or card rows, review the draft, then apply confirmed rows to this period only.</p>
+                </div>
+              </div>
+              <div class="import-period-line">
+                <span data-i18n="currentPeriod">Current period</span>
+                <strong id="importPeriodLabel">-</strong>
+              </div>
+              <label class="field import-input-field">
+                <span data-i18n="pasteTransactions">Paste transactions</span>
+                <textarea id="transactionImportInput" rows="5" placeholder="20/06/2026,&quot;-36.35&quot;,&quot;COLES 7735 DONCASTER VIC&quot;,&quot;&quot;"></textarea>
+              </label>
+              <div class="import-actions">
+                <button id="parseImportBtn" class="secondary-btn" type="button" data-i18n="parseTransactions">Parse transactions</button>
+                <button id="applyImportBtn" class="primary-btn" type="button" data-i18n="applyConfirmedRows" disabled>Apply confirmed rows</button>
+                <p id="importStatus" class="save-status hidden" aria-live="polite"></p>
+              </div>
+              <div id="importSummary" class="import-summary hidden" aria-live="polite"></div>
+              <div id="importWarning" class="import-warning hidden" aria-live="polite"></div>
+              <div id="importReview" class="import-review hidden">
+                <div class="import-tabs" role="tablist" aria-label="Transaction import review">
+                  <button class="import-tab active" type="button" data-import-tab="included">Included</button>
+                  <button class="import-tab" type="button" data-import-tab="review">Needs review</button>
+                  <button class="import-tab" type="button" data-import-tab="excluded">Excluded</button>
+                </div>
+                <div id="importRows" class="import-rows"></div>
+              </div>
+            </section>
           </div>
         </section>
 
