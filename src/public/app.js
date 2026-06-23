@@ -26,19 +26,34 @@ const i18n = {
     statusWatch: "需要留意",
     statusOver: "超出節奏",
     statusNoData: "等待資料",
-    statusOnTrackCopy: "花費與上月同期相當或更低。",
-    statusWatchCopy: "本期花費比上月同期高，建議留意主要支出來源。",
-    statusOverCopy: "本期花費明顯高於上月同期，需要檢查主要支出來源。",
+    statusOnTrackCopy: "本月花費與上月可比進度相當或更低。",
+    statusWatchCopy: "本月花費高於上月可比進度，建議留意主要支出來源。",
+    statusOverCopy: "本月花費明顯高於上月可比進度，需要檢查主要支出來源。",
     statusNoDataCopy: "輸入本週資料後，這裡會顯示本月判斷。",
     spendingPace: (used, average, comparison) => `已用 ${used} · 平均每週 ${average} · ${comparison}`,
     samePeriodLower: (change) => `較上月同期 ${change}`,
     samePeriodHigher: (change) => `較上月同期 +${change}`,
     samePeriodUnavailable: "缺少上月同期資料",
+    sameProgressLower: (change) => `較上月同進度 ${change}`,
+    sameProgressHigher: (change) => `較上月同進度 +${change}`,
+    sameProgressUnavailable: "缺少上月同進度資料",
+    lastMonthLower: (change) => `較上月 ${change}`,
+    lastMonthHigher: (change) => `較上月 +${change}`,
+    lastMonthUnavailable: "缺少上月資料",
+    selectedPeriodComparison: "所選週期比較",
+    periodComparisonLower: (change) => `-${change} vs 上月同週期`,
+    periodComparisonHigher: (change) => `+${change} vs 上月同週期`,
+    periodComparisonFlat: "與上月同週期相同",
+    periodComparisonUnavailable: "此週期沒有可比較的上月同週期資料。",
     latestPeriodChange: "最新週變化",
     comparedSamePeriod: "與上月同週相比",
     largestDriver: "本週顯著支出",
     topDriversLine: (first, second) => (second ? `本週顯著支出：${first} · ${second}` : `本週顯著支出：${first}`),
     noDriverYet: "本週尚無顯著支出",
+    noPeriodDriverYet: "此週期尚無顯著支出",
+    topMonthlyDriversLine: (first, second) =>
+      second ? `本月顯著支出：${first} · ${second}` : `本月顯著支出：${first}`,
+    noMonthlyDriverYet: "本月尚無顯著支出",
     nextAction: "下一步",
     nextActionUpdate: "更新本週資料",
     nextActionReview: (driver) => `檢查${driver}`,
@@ -213,19 +228,34 @@ const i18n = {
     statusWatch: "Watch",
     statusOver: "Over pace",
     statusNoData: "Waiting for data",
-    statusOnTrackCopy: "Spending is in line with or below the same period last month.",
-    statusWatchCopy: "This period is higher than the same period last month. Watch the main drivers.",
-    statusOverCopy: "This period is meaningfully higher than the same period last month.",
+    statusOnTrackCopy: "Monthly spending is in line with or below last month's comparable pace.",
+    statusWatchCopy: "Monthly spending is higher than last month's comparable pace. Watch the main drivers.",
+    statusOverCopy: "Monthly spending is meaningfully higher than last month's comparable pace.",
     statusNoDataCopy: "Enter this week's figures to see the monthly readout.",
     spendingPace: (used, average, comparison) => `${used} used · avg ${average}/period · ${comparison}`,
     samePeriodLower: (change) => `${change} vs same period last month`,
     samePeriodHigher: (change) => `+${change} vs same period last month`,
     samePeriodUnavailable: "No same-period data last month",
+    sameProgressLower: (change) => `${change} vs last month same progress`,
+    sameProgressHigher: (change) => `+${change} vs last month same progress`,
+    sameProgressUnavailable: "No same-progress data last month",
+    lastMonthLower: (change) => `${change} vs last month`,
+    lastMonthHigher: (change) => `+${change} vs last month`,
+    lastMonthUnavailable: "No last-month data",
+    selectedPeriodComparison: "Selected period comparison",
+    periodComparisonLower: (change) => `-${change} vs same period last month`,
+    periodComparisonHigher: (change) => `+${change} vs same period last month`,
+    periodComparisonFlat: "No change vs same period last month",
+    periodComparisonUnavailable: "No same-period data last month for this selected period.",
     latestPeriodChange: "Latest period change",
     comparedSamePeriod: "Compared with same period last month",
     largestDriver: "Notable spending this period",
     topDriversLine: (first, second) => (second ? `Notable spending: ${first} · ${second}` : `Notable spending: ${first}`),
     noDriverYet: "No notable spending this period",
+    noPeriodDriverYet: "No notable spending this selected period",
+    topMonthlyDriversLine: (first, second) =>
+      second ? `Notable spending this month: ${first} · ${second}` : `Notable spending this month: ${first}`,
+    noMonthlyDriverYet: "No notable spending this month",
     nextAction: "Next action",
     nextActionUpdate: "Update this week",
     nextActionReview: (driver) => `Review ${driver}`,
@@ -645,6 +675,11 @@ function bindElements() {
     "entryMonthKpi",
     "entryPeriodSpendKpi",
     "entryMonthSpendKpi",
+    "entryPeriodComparison",
+    "entryPeriodComparisonTitle",
+    "entryPeriodComparisonCopy",
+    "entryPeriodDrivers",
+    "entryPeriodComparisonPill",
     "periodInput",
     "periodStartInput",
     "periodEndInput",
@@ -965,10 +1000,20 @@ function clearSensitiveUi() {
     els.entryMonthKpi,
     els.entryPeriodSpendKpi,
     els.entryMonthSpendKpi,
+    els.entryPeriodComparisonTitle,
+    els.entryPeriodComparisonCopy,
+    els.entryPeriodDrivers,
+    els.entryPeriodComparisonPill,
     els.overviewTitle,
   ].forEach((element) => {
     if (element) element.textContent = "-";
   });
+  if (els.entryPeriodComparison) {
+    els.entryPeriodComparison.className = "entry-period-comparison status-empty";
+  }
+  if (els.entryPeriodComparisonPill) {
+    els.entryPeriodComparisonPill.className = "status-pill status-empty";
+  }
 
   [
     els.monthSelect,
@@ -1102,21 +1147,21 @@ function renderOverviewDecision(month, rows) {
 
   if (!latest) {
     setOverviewStatus("empty", t("statusNoData"), t("statusNoDataCopy"));
-    setText(els.statusMetricsLine, t("spendingPace", formatPercent(0), formatMoney(0), t("samePeriodUnavailable")));
-    setText(els.overviewDriverLine, t("noDriverYet"));
+    setText(els.statusMetricsLine, t("spendingPace", formatPercent(0), formatMoney(0), t("sameProgressUnavailable")));
+    setText(els.overviewDriverLine, t("noMonthlyDriverYet"));
     setText(els.nextActionValue, t("nextActionUpdate"));
     return;
   }
 
   const latestIndex = rows.findIndex((row) => row.week.id === latest.week.id);
-  const samePeriodRow = samePeriodComparisonRow(month, latestIndex);
   const elapsedShare = Math.min(1, Math.max((latestIndex + 1) / Math.max(rows.length, 1), 0));
   const cumulative = numberOrZero(latest.cumulativeSpend);
   const usedShare = limit > 0 ? cumulative / limit : 0;
   const projected = elapsedShare > 0 ? cumulative / elapsedShare : cumulative;
   const paceRatio = elapsedShare > 0 && limit > 0 ? usedShare / elapsedShare : 0;
-  const comparison = samePeriodComparison(latest, samePeriodRow);
-  const drivers = topSpendingDrivers(latest, 2);
+  const monthComplete = latestIndex >= rows.length - 1;
+  const comparison = monthProgressComparison(month, rows, latestIndex, latest);
+  const drivers = topMonthlySpendingDrivers(completedRows, 2);
   const mainDriver = drivers[0];
 
   if (comparison?.ratio > 0.15 || (!comparison && projected > limit)) {
@@ -1130,10 +1175,10 @@ function renderOverviewDecision(month, rows) {
   const averagePerPeriod = cumulative / Math.max(latestIndex + 1, 1);
   setText(
     els.statusMetricsLine,
-    t("spendingPace", formatPercent(usedShare), formatMoney(averagePerPeriod), comparisonLabel(comparison)),
+    t("spendingPace", formatPercent(usedShare), formatMoney(averagePerPeriod), monthComparisonLabel(comparison, monthComplete)),
   );
 
-  setText(els.overviewDriverLine, drivers.length ? topDriversLine(drivers) : t("noDriverYet"));
+  setText(els.overviewDriverLine, drivers.length ? topMonthlyDriversLine(drivers) : t("noMonthlyDriverYet"));
 
   const action =
     mainDriver && (comparison?.ratio > 0 || paceRatio >= 0.9) ? t("nextActionReview", mainDriver.label) : t("nextActionUpdate");
@@ -1151,10 +1196,43 @@ function setOverviewStatus(kind, title, copy) {
   }
 }
 
-function samePeriodComparisonRow(month, weekIndex) {
+function previousMonthFor(month) {
   const months = Object.values(appState.months);
   const currentIndex = months.findIndex((item) => item.id === month.id);
-  const previousMonth = currentIndex > 0 ? months[currentIndex - 1] : null;
+  return currentIndex > 0 ? months[currentIndex - 1] : null;
+}
+
+function monthProgressComparison(month, rows, latestIndex, latest) {
+  const previousMonth = previousMonthFor(month);
+  if (!previousMonth) return null;
+  const previousRows = computedWeeks(previousMonth);
+  const monthComplete = latestIndex >= rows.length - 1;
+  const previousRow = monthComplete ? previousRows[previousRows.length - 1] : previousRows[latestIndex];
+  if (!previousRow || previousRow.week.cumulativeSpend === null) return null;
+
+  const currentAmount = numberOrZero(latest.cumulativeSpend);
+  const previousAmount = numberOrZero(previousRow.cumulativeSpend);
+  if (previousAmount <= 0) return null;
+  const change = currentAmount - previousAmount;
+  return {
+    amount: roundCurrency(change),
+    ratio: change / previousAmount,
+    scope: monthComplete ? "full" : "sameProgress",
+  };
+}
+
+function monthComparisonLabel(comparison, monthComplete) {
+  if (!comparison) return monthComplete ? t("lastMonthUnavailable") : t("sameProgressUnavailable");
+  const value = formatPercent(Math.abs(comparison.ratio));
+  const displayValue = comparison.amount < 0 ? `-${value}` : value;
+  if (comparison.scope === "full") {
+    return comparison.amount > 0 ? t("lastMonthHigher", value) : t("lastMonthLower", displayValue);
+  }
+  return comparison.amount > 0 ? t("sameProgressHigher", value) : t("sameProgressLower", displayValue);
+}
+
+function samePeriodComparisonRow(month, weekIndex) {
+  const previousMonth = previousMonthFor(month);
   if (!previousMonth) return null;
   return computedWeeks(previousMonth)[weekIndex] || null;
 }
@@ -1176,15 +1254,39 @@ function comparisonLabel(comparison) {
   return comparison.amount <= 0 ? t("samePeriodLower", `-${value}`) : t("samePeriodHigher", value);
 }
 
-function topSpendingDrivers(row, count) {
+function topPeriodSpendingDrivers(row, count) {
   const drivers = [
     { label: t("grocery"), amount: Math.max(0, numberOrZero(row.grocery)) },
-    { label: t("incidentals"), amount: Math.max(0, numberOrZero(row.incidentals)) },
+    ...categories.map((category) => ({
+      label: categoryLabel(category),
+      amount: Math.max(0, numberOrZero(row.week.categoryValues?.[category.key])),
+    })),
+  ];
+  return drivers
+    .filter((driver) => driver.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, count);
+}
+
+function topMonthlySpendingDrivers(rows, count) {
+  const categoryTotals = new Map(categories.map((category) => [category.key, 0]));
+  let groceryTotal = 0;
+  rows.forEach((row) => {
+    groceryTotal += Math.max(0, numberOrZero(row.grocery));
+    categories.forEach((category) => {
+      categoryTotals.set(
+        category.key,
+        numberOrZero(categoryTotals.get(category.key)) + Math.max(0, numberOrZero(row.week.categoryValues?.[category.key])),
+      );
+    });
+  });
+
+  const drivers = [
+    { label: t("grocery"), amount: roundCurrency(groceryTotal) },
     ...categories
-      .filter((category) => category.key !== "incidentals")
       .map((category) => ({
         label: categoryLabel(category),
-        amount: Math.max(0, numberOrZero(row.week.categoryValues?.[category.key])),
+        amount: roundCurrency(numberOrZero(categoryTotals.get(category.key))),
       })),
   ];
   return drivers
@@ -1193,7 +1295,13 @@ function topSpendingDrivers(row, count) {
     .slice(0, count);
 }
 
-function topDriversLine(drivers) {
+function topMonthlyDriversLine(drivers) {
+  const [first, second] = drivers.map((driver) => `${driver.label} ${formatMoney(driver.amount)}`);
+  return t("topMonthlyDriversLine", first, second);
+}
+
+function topPeriodDriversLine(drivers) {
+  if (!drivers.length) return t("noPeriodDriverYet");
   const [first, second] = drivers.map((driver) => `${driver.label} ${formatMoney(driver.amount)}`);
   return t("topDriversLine", first, second);
 }
@@ -1349,6 +1457,50 @@ function renderEntrySummary(monthName, weeklyTotal, cumulative) {
   if (els.entryMonthSpendKpi) els.entryMonthSpendKpi.textContent = cumulative === null ? "-" : formatMoney(cumulative);
 }
 
+function renderEntryPeriodComparison(month, week, weeklyTotal) {
+  if (!els.entryPeriodComparison) return;
+  const index = month.weeks.findIndex((item) => item.id === currentWeekId);
+  const periodLabel = week?.period || t("unnamedPeriod");
+  const samePeriodRow = samePeriodComparisonRow(month, index);
+  const comparison = samePeriodComparison({ weeklyTotal }, samePeriodRow);
+  const previewRow = {
+    week: {
+      categoryValues: week?.categoryValues || {},
+    },
+    grocery: week ? weeklyTotal - sumNonGrocery(week) - numberOrZero(week.categoryValues?.incidentals) : 0,
+  };
+  const drivers = topPeriodSpendingDrivers(previewRow, 2);
+  const driversLine = topPeriodDriversLine(drivers);
+  if (!comparison) {
+    setEntryPeriodComparison("empty", periodLabel, t("periodComparisonUnavailable"), driversLine, t("statusNoData"));
+    return;
+  }
+
+  const kind = comparison.ratio > 0.15 ? "over" : comparison.ratio > 0 ? "watch" : "good";
+  const pill = kind === "over" ? t("statusOver") : kind === "watch" ? t("statusWatch") : t("statusOnTrack");
+  const change = formatMoney(Math.abs(comparison.amount));
+  const copy =
+    comparison.amount > 0
+      ? t("periodComparisonHigher", change)
+      : comparison.amount < 0
+        ? t("periodComparisonLower", change)
+        : t("periodComparisonFlat");
+  setEntryPeriodComparison(kind, periodLabel, copy, driversLine, pill);
+}
+
+function setEntryPeriodComparison(kind, title, copy, drivers, pill) {
+  setText(els.entryPeriodComparisonTitle, title);
+  setText(els.entryPeriodComparisonCopy, copy);
+  setText(els.entryPeriodDrivers, drivers);
+  if (els.entryPeriodComparison) {
+    els.entryPeriodComparison.className = `entry-period-comparison status-${kind}`;
+  }
+  if (els.entryPeriodComparisonPill) {
+    els.entryPeriodComparisonPill.textContent = pill;
+    els.entryPeriodComparisonPill.className = `status-pill status-${kind}`;
+  }
+}
+
 function renderLiveWeeklyTotal() {
   const preview = previewWeekFromForm();
   const month = currentMonth();
@@ -1361,6 +1513,7 @@ function renderLiveWeeklyTotal() {
   els.cumulativeInput.value = cumulative === null ? "" : formatMoney(cumulative);
   els.weeklyTotalInput.value = formatMoney(weeklyTotal);
   renderEntrySummary(month.name, weeklyTotal, cumulative);
+  renderEntryPeriodComparison(month, preview, weeklyTotal);
   updateImportPeriodLabel();
   renderImportWarnings();
 }
