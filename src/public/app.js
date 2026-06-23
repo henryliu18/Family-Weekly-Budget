@@ -86,6 +86,45 @@ const i18n = {
     categoryAmounts: "分類金額",
     categoryAmountsSub: "保留完整明細分類；採買支出會依公式自動計算。",
     groceryExplainer: "採買會由本期總支出扣除明細非採買與意外支出後自動計算。",
+    transactionImportTitle: "匯入交易草稿",
+    transactionImportSub: "貼上銀行或信用卡交易，先審核草稿，再套用到目前週期。",
+    currentPeriod: "目前週期",
+    pasteTransactions: "貼上交易資料",
+    parseTransactions: "解析交易",
+    applyConfirmedRows: "套用已確認交易",
+    includedRows: "已納入",
+    needsReviewRows: "需審核",
+    excludedRows: "已排除",
+    importSummaryLine: (count, amount) => `${count} 筆 · ${amount}`,
+    merchantDescription: "店家 / 說明",
+    suggestedCategory: "建議分類",
+    confidence: "信心",
+    reason: "原因",
+    action: "操作",
+    includeTransaction: "納入",
+    noImportRows: "這個區塊目前沒有交易。",
+    importParseEmpty: "請先貼上交易資料。",
+    importApplied: (count) => `已套用 ${count} 筆交易到目前草稿。`,
+    importNeedsPeriod: "請先設定 Period start 和 Period end。",
+    importBalanceWarning: (importTotal, periodTotal) =>
+      `匯入交易合計為 ${importTotal}，但目前餘額推算的本期支出為 ${periodTotal}。請檢查待入帳交易、退款或日期界線。`,
+    importGroceryWarning: (importGrocery, residualGrocery) =>
+      `匯入採買合計為 ${importGrocery}，目前公式推算採買為 ${residualGrocery}。採買仍會依既有公式計算。`,
+    confidenceHigh: "高",
+    confidenceMedium: "中",
+    confidenceLow: "低",
+    reasonLabels: {
+      "outside selected period": "超出目前週期",
+      "month not created": "月份尚未建立",
+      "no matching existing period": "沒有符合的既有週期",
+      "invalid date": "日期無效",
+      "positive amount / payment / refund": "正數金額 / 繳款 / 退款",
+      "duplicate candidate": "可能重複",
+      "unsupported row format": "不支援的列格式",
+      "low confidence": "低信心，需要確認",
+      "incidentals require confirmation": "意外支出需要確認",
+      "user excluded": "使用者排除",
+    },
     otherDetails: "突發事件或少見意外支出備註",
     incidentalsDetailsTitle: "意外 / 少見事件備註",
     incidentalsDetailsSub: "只在少見、不可避免、突發事件時填寫。",
@@ -233,6 +272,45 @@ const i18n = {
     categoryAmounts: "Category amounts",
     categoryAmountsSub: "Keep the full detailed category list; grocery spend is calculated automatically.",
     groceryExplainer: "Grocery is auto-calculated from period total minus detailed non-grocery and incidentals.",
+    transactionImportTitle: "Import transactions",
+    transactionImportSub: "Paste bank or card rows, review the draft, then apply confirmed rows to this period only.",
+    currentPeriod: "Current period",
+    pasteTransactions: "Paste transactions",
+    parseTransactions: "Parse transactions",
+    applyConfirmedRows: "Apply confirmed rows",
+    includedRows: "Included",
+    needsReviewRows: "Needs review",
+    excludedRows: "Excluded",
+    importSummaryLine: (count, amount) => `${count} transactions · ${amount}`,
+    merchantDescription: "Merchant / description",
+    suggestedCategory: "Suggested category",
+    confidence: "Confidence",
+    reason: "Reason",
+    action: "Action",
+    includeTransaction: "Include",
+    noImportRows: "No transactions in this section.",
+    importParseEmpty: "Paste transaction rows first.",
+    importApplied: (count) => `Applied ${count} transactions to the current draft.`,
+    importNeedsPeriod: "Set Period start and Period end before importing.",
+    importBalanceWarning: (importTotal, periodTotal) =>
+      `Imported transaction total is ${importTotal}, but the current period spend from balances is ${periodTotal}. Check pending transactions, refunds, or date boundaries before saving.`,
+    importGroceryWarning: (importGrocery, residualGrocery) =>
+      `Imported grocery total is ${importGrocery}, while the current formula-derived grocery is ${residualGrocery}. Grocery will still use the existing formula.`,
+    confidenceHigh: "High",
+    confidenceMedium: "Medium",
+    confidenceLow: "Low",
+    reasonLabels: {
+      "outside selected period": "outside selected period",
+      "month not created": "month not created",
+      "no matching existing period": "no matching existing period",
+      "invalid date": "invalid date",
+      "positive amount / payment / refund": "positive amount / payment / refund",
+      "duplicate candidate": "duplicate candidate",
+      "unsupported row format": "unsupported row format",
+      "low confidence": "low confidence",
+      "incidentals require confirmation": "incidentals require confirmation",
+      "user excluded": "user excluded",
+    },
     otherDetails: "Rare-event or incidental notes",
     incidentalsDetailsTitle: "Incidentals / rare-event notes",
     incidentalsDetailsSub: "Use only for unusual, unavoidable events.",
@@ -315,6 +393,114 @@ let currentMonthId = appState.currentMonthId;
 let currentWeekId = appState.months[currentMonthId].weeks[0]?.id;
 let chartBars = [];
 let trendPoints = [];
+let importDraft = createEmptyImportDraft();
+
+const IMPORT_STATUSES = {
+  INCLUDED: "included",
+  REVIEW: "review",
+  EXCLUDED: "excluded",
+};
+
+const IMPORT_CONFIDENCE = {
+  HIGH: "high",
+  MEDIUM: "medium",
+  LOW: "low",
+};
+
+const MERCHANT_RULES = [
+  ...[
+    "COLES",
+    "WOOLWORTHS",
+    "ALDI",
+    "COLONIAL FRUIT",
+    "S & S PRODUCE",
+    "PACIFIC ASIAN MARKET",
+    "SQ *FOODNESS ASIAN",
+    "NO.1 CITY MART",
+    "KT MART",
+    "XIN HUA",
+    "SAO SANG GROCERIES",
+    "FISH PIER",
+    "TUNSTALL FRESH",
+    "SQ *DONCASTER",
+    "KFL CONVENIENCE",
+    "LECROIS BLACKBURN",
+    "FRANKS QUALITY FRUIT",
+  ].map((pattern) => ({ pattern, categoryKey: "grocery", confidence: IMPORT_CONFIDENCE.HIGH })),
+  ...[
+    "KFC",
+    "MCDONALD",
+    "HUNGRY JACKS",
+    "HJS",
+    "CAFE",
+    "RESTAURANT",
+    "CATERING",
+    "SUSHI",
+    "KEBAB",
+    "PHO THIN",
+    "SINO KITCHEN",
+    "WONGS GOURMET",
+    "MOLLY TEA",
+    "STARBUCKS",
+    "DAN MURPHYS",
+    "KMART",
+    "TARGET",
+    "BUNNINGS",
+    "IKEA",
+    "TEMU",
+    "TAOBAO",
+    "PETBARN",
+    "DAISO",
+    "THE REJECT SHOP",
+    "1382_WESTFIELD",
+    "CIRCUM WASH",
+    "NEW ELEMENT INVESTMENT",
+    "SUPER CHEAP",
+    "HONG HOT BREAD",
+    "MITCHAM BADMINTON",
+    "MEZE TABLE",
+    "ECCO FOOD GROUP",
+    "CORNWELL'S MITRE 10",
+    "CENTRE COM",
+  ].map((pattern) => ({ pattern, categoryKey: "shoppingDining", confidence: IMPORT_CONFIDENCE.HIGH })),
+  ...["CHEMIST WAREHOUSE", "PHARMACY", "DENTAL", "MEDICAL", "DR WING", "EDWARD WONG"].map((pattern) => ({
+    pattern,
+    categoryKey: "medical",
+    confidence: IMPORT_CONFIDENCE.HIGH,
+  })),
+  ...["BUPA", "MEDIBANK", "NIB", "HCF"].map((pattern) => ({
+    pattern,
+    categoryKey: "privateInsurance",
+    confidence: IMPORT_CONFIDENCE.HIGH,
+  })),
+  { pattern: "AAMI", categoryKey: "carInsurance", confidence: IMPORT_CONFIDENCE.HIGH },
+  { pattern: "HOLLARD", categoryKey: "homeInsurance", confidence: IMPORT_CONFIDENCE.HIGH },
+  { pattern: "CBA INSURANCE", categoryKey: "homeInsurance", confidence: IMPORT_CONFIDENCE.HIGH },
+  { pattern: "LUMO ENERGY", categoryKey: "electricity", confidence: IMPORT_CONFIDENCE.HIGH },
+  { pattern: "AGL SALES", categoryKey: "gas", confidence: IMPORT_CONFIDENCE.HIGH },
+  { pattern: "YARRA VALLEY WATER", categoryKey: "water", confidence: IMPORT_CONFIDENCE.HIGH },
+  ...["TPG", "MORE TELECOM", "IINET", "TELSTRA", "OPTUS", "VODAFONE", "NETFLIX", "SPOTIFY", "APPLE", "GOOGLE", "MICROSOFT", "OPENAI", "GODADDY", "MATHSPACE"].map((pattern) => ({
+    pattern,
+    categoryKey: "internetMobile",
+    confidence: IMPORT_CONFIDENCE.HIGH,
+  })),
+  ...["BP", "EG GROUP", "DGB PETRO", "SHELL", "CALTEX", "AMPOL", "EASTLINK", "MYKI", "DEPARTMENT OF TRANSPOR", "VOLVOCARS"].map((pattern) => ({
+    pattern,
+    categoryKey: "transport",
+    confidence: IMPORT_CONFIDENCE.HIGH,
+  })),
+  ...["VICROADS", "MANNINGHAM CITY"].map((pattern) => ({
+    pattern,
+    categoryKey: "government",
+    confidence: IMPORT_CONFIDENCE.HIGH,
+  })),
+  ...["KOENIGMACHINERY", "SNAZZI ALTERATIONS", "YARRA BOTANICA", "PSW KEW EAST"].map((pattern) => ({
+    pattern,
+    categoryKey: "incidentals",
+    confidence: IMPORT_CONFIDENCE.LOW,
+    requiresReview: true,
+  })),
+];
 
 const els = {};
 
@@ -464,6 +650,15 @@ function bindElements() {
     "cumulativeInput",
     "unpaidInput",
     "weeklyTotalInput",
+    "importPeriodLabel",
+    "transactionImportInput",
+    "parseImportBtn",
+    "applyImportBtn",
+    "importStatus",
+    "importSummary",
+    "importWarning",
+    "importReview",
+    "importRows",
     "categoryInputs",
     "notesInput",
     "saveWeekBtn",
@@ -512,6 +707,7 @@ function bindEvents() {
   els.monthSelect.addEventListener("change", () => {
     currentMonthId = els.monthSelect.value;
     currentWeekId = currentMonth().weeks[0]?.id;
+    importDraft = createEmptyImportDraft();
     saveState();
     renderAll();
   });
@@ -529,6 +725,7 @@ function bindEvents() {
 
   els.weekSelect.addEventListener("change", () => {
     currentWeekId = els.weekSelect.value;
+    importDraft = createEmptyImportDraft();
     renderEntryForm();
   });
 
@@ -544,6 +741,16 @@ function bindEvents() {
 
   els.categoryInputs.addEventListener("input", renderLiveWeeklyTotal);
   els.saveWeekBtn.addEventListener("click", saveWeekFromForm);
+  els.parseImportBtn?.addEventListener("click", parseTransactionImport);
+  els.applyImportBtn?.addEventListener("click", applyTransactionImport);
+  document.querySelectorAll(".import-tab").forEach((button) => {
+    button.addEventListener("click", () => {
+      importDraft.activeTab = button.dataset.importTab;
+      renderImportDraft();
+    });
+  });
+  els.importRows?.addEventListener("click", handleImportRowAction);
+  els.importRows?.addEventListener("change", handleImportCategoryChange);
 
   [
     els.historyMonthFilter,
@@ -642,6 +849,8 @@ function applyLanguage() {
     '[data-view="settings"]': "settings",
     "#saveWeekBtn": "saveWeek",
     "#overviewActionBtn": "openWeeklyEntry",
+    "#parseImportBtn": "parseTransactions",
+    "#applyImportBtn": "applyConfirmedRows",
     "#saveMonthSettingsBtn": "saveSettings",
     "#exportDataBtn": "exportJson",
     "#resetLocalDataBtn": "resetDefault",
@@ -677,9 +886,13 @@ function applyLanguage() {
 
   els.historySearchInput.placeholder = t("keywordPlaceholder");
   els.notesInput.placeholder = t("notesPlaceholder");
+  if (els.transactionImportInput) {
+    els.transactionImportInput.placeholder = '20/06/2026,"-36.35","COLES 7735 DONCASTER VIC",""';
+  }
   if (els.loginError?.dataset.key) {
     els.loginError.textContent = t(els.loginError.dataset.key);
   }
+  renderImportDraft();
 }
 
 function updateBuildVersion() {
@@ -764,6 +977,8 @@ function clearSensitiveUi() {
     els.historyTable,
     els.categoryTable,
     els.categoryInputs,
+    els.importSummary,
+    els.importRows,
   ].forEach((element) => {
     if (element) element.innerHTML = "";
   });
@@ -776,6 +991,7 @@ function clearSensitiveUi() {
     els.cumulativeInput,
     els.unpaidInput,
     els.weeklyTotalInput,
+    els.transactionImportInput,
     els.notesInput,
     els.historySearchInput,
     els.historyMinInput,
@@ -793,7 +1009,13 @@ function clearSensitiveUi() {
     els.weeklyChartEmpty,
     els.monthlyTrendEmpty,
     els.weeksTableEmpty,
+    els.importStatus,
+    els.importWarning,
+    els.importReview,
   ].forEach((element) => element?.classList.add("hidden"));
+  if (els.applyImportBtn) els.applyImportBtn.disabled = true;
+  if (els.importPeriodLabel) els.importPeriodLabel.textContent = "-";
+  importDraft = createEmptyImportDraft();
   clearCanvas(els.weeklyChart);
   clearCanvas(els.monthlyTrendChart);
 }
@@ -1137,6 +1359,491 @@ function renderLiveWeeklyTotal() {
   els.cumulativeInput.value = cumulative === null ? "" : formatMoney(cumulative);
   els.weeklyTotalInput.value = formatMoney(weeklyTotal);
   renderEntrySummary(month.name, weeklyTotal, cumulative);
+  updateImportPeriodLabel();
+  renderImportWarnings();
+}
+
+function createEmptyImportDraft() {
+  return {
+    rows: [],
+    activeTab: "included",
+    parsed: false,
+  };
+}
+
+function updateImportPeriodLabel() {
+  if (!els.importPeriodLabel) return;
+  const range = currentImportPeriodRange();
+  els.importPeriodLabel.textContent = range.start && range.end ? `${range.start} - ${range.end}` : "-";
+}
+
+function currentImportPeriodRange() {
+  return {
+    start: els.periodStartInput?.value || "",
+    end: els.periodEndInput?.value || "",
+  };
+}
+
+function parseTransactionImport() {
+  const source = els.transactionImportInput?.value || "";
+  const range = currentImportPeriodRange();
+  if (!source.trim()) {
+    showImportStatus(t("importParseEmpty"));
+    return;
+  }
+  if (!range.start || !range.end) {
+    showImportStatus(t("importNeedsPeriod"));
+    return;
+  }
+
+  importDraft = {
+    rows: buildImportRows(source, range),
+    activeTab: IMPORT_STATUSES.INCLUDED,
+    parsed: true,
+  };
+  renderImportDraft();
+}
+
+function buildImportRows(source, range) {
+  const parsedRows = parseTransactionRows(source);
+  const duplicateKeys = new Set();
+  return parsedRows.map((row, index) => {
+    const base = {
+      id: `import-${Date.now()}-${index}`,
+      sourceLine: row.sourceLine,
+      dateIso: row.dateIso,
+      displayDate: row.dateIso || row.rawDate || "-",
+      amount: row.amount,
+      expenseAmount: row.amount < 0 ? roundCurrency(Math.abs(row.amount)) : 0,
+      description: row.description || row.sourceLine,
+      normalizedMerchant: normalizeMerchant(row.description || row.sourceLine),
+      categoryKey: "",
+      confidence: IMPORT_CONFIDENCE.LOW,
+      reason: "",
+      status: IMPORT_STATUSES.EXCLUDED,
+    };
+
+    const exclusionReason = importExclusionReason(base, row, range);
+    if (exclusionReason) {
+      return { ...base, reason: exclusionReason };
+    }
+
+    const duplicateKey = `${base.dateIso}|${base.normalizedMerchant}|${base.expenseAmount}`;
+    const duplicateReason = duplicateKeys.has(duplicateKey) ? "duplicate candidate" : "";
+    duplicateKeys.add(duplicateKey);
+
+    const classification = classifyTransaction(base.normalizedMerchant);
+    const status =
+      classification.requiresReview || classification.confidence === IMPORT_CONFIDENCE.LOW
+        ? IMPORT_STATUSES.REVIEW
+        : IMPORT_STATUSES.INCLUDED;
+    const reason =
+      classification.requiresReview && classification.categoryKey === "incidentals"
+        ? "incidentals require confirmation"
+        : duplicateReason ||
+          (classification.confidence === IMPORT_CONFIDENCE.LOW
+            ? "low confidence"
+            : classification.reason);
+
+    return {
+      ...base,
+      categoryKey: classification.categoryKey,
+      confidence: classification.confidence,
+      reason,
+      status,
+    };
+  });
+}
+
+function parseTransactionRows(source) {
+  return source
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const columns = parseCsvLine(line);
+      if (columns.length < 3) {
+        return { sourceLine: line, error: "unsupported row format", rawDate: columns[0] || "", amount: 0, description: line };
+      }
+      const dateIso = parseImportDate(columns[0]);
+      const amount = parseImportAmount(columns[1]);
+      return {
+        sourceLine: line,
+        rawDate: columns[0],
+        dateIso,
+        amount,
+        description: columns[2] || columns[3] || line,
+        error: Number.isNaN(amount) ? "unsupported row format" : "",
+      };
+    });
+}
+
+function parseCsvLine(line) {
+  const columns = [];
+  let current = "";
+  let inQuotes = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    const next = line[index + 1];
+    if (character === '"' && next === '"' && inQuotes) {
+      current += '"';
+      index += 1;
+    } else if (character === '"') {
+      inQuotes = !inQuotes;
+    } else if (character === "," && !inQuotes) {
+      columns.push(current.trim());
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+  columns.push(current.trim());
+  return columns.map((value) => value.replace(/^"|"$/g, "").trim());
+}
+
+function parseImportDate(value) {
+  const trimmed = String(value || "").trim();
+  const dmy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy) return toIsoDate(Number(dmy[3]), Number(dmy[2]), Number(dmy[1]));
+  const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return toIsoDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  return "";
+}
+
+function toIsoDate(year, month, day) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function parseImportAmount(value) {
+  const cleaned = String(value || "").replace(/[$,\s"]/g, "");
+  if (!cleaned) return NaN;
+  const bracketed = cleaned.match(/^\((.+)\)$/);
+  return Number(bracketed ? `-${bracketed[1]}` : cleaned);
+}
+
+function importExclusionReason(base, row, range) {
+  if (row.error) return row.error;
+  if (!base.dateIso) return "invalid date";
+  if (!Number.isFinite(base.amount)) return "unsupported row format";
+  if (base.amount >= 0) return "positive amount / payment / refund";
+  if (!monthExistsForImportDate(base.dateIso, range)) return "month not created";
+  if (!currentWeek()) return "no matching existing period";
+  if (!range.start || !range.end) return "no matching existing period";
+  if (base.dateIso < range.start || base.dateIso > range.end) return "outside selected period";
+  return "";
+}
+
+function monthExistsForImportDate(dateIso, range) {
+  const yearMonth = dateIso.slice(0, 7);
+  const periodMonths = new Set([range.start?.slice(0, 7), range.end?.slice(0, 7)].filter(Boolean));
+  if (periodMonths.has(yearMonth)) return true;
+  return Object.values(appState.months).some((month) => monthDateRanges(month).some((item) => dateIso >= item.start && dateIso <= item.end));
+}
+
+function monthDateRanges(month) {
+  const ranges = [];
+  month.weeks.forEach((week) => {
+    const range = parseFlexiblePeriodRange(week.period, month.name);
+    if (range.start && range.end) ranges.push(range);
+  });
+  return ranges;
+}
+
+function parseFlexiblePeriodRange(period, monthName) {
+  const iso = parsePeriodRange(period);
+  if (iso.start && iso.end) return iso;
+  const match = String(period || "").match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s*(?:-|to|至)\s*(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/i);
+  if (!match) return { start: "", end: "" };
+  const fallbackYear = Number(String(monthName || "").match(/20\d{2}/)?.[0]) || new Date().getFullYear();
+  const startYear = normalizeYear(match[3], fallbackYear);
+  let endYear = normalizeYear(match[6], startYear);
+  if (!match[6] && Number(match[5]) < Number(match[2])) endYear += 1;
+  return {
+    start: toIsoDate(startYear, Number(match[2]), Number(match[1])),
+    end: toIsoDate(endYear, Number(match[5]), Number(match[4])),
+  };
+}
+
+function normalizeYear(value, fallback) {
+  if (!value) return fallback;
+  const year = Number(value);
+  return year < 100 ? 2000 + year : year;
+}
+
+function normalizeMerchant(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function classifyTransaction(normalizedMerchant) {
+  const rule = MERCHANT_RULES.find((item) => normalizedMerchant.includes(normalizeMerchant(item.pattern)));
+  if (!rule) {
+    return {
+      categoryKey: "shoppingDining",
+      confidence: IMPORT_CONFIDENCE.LOW,
+      reason: "low confidence",
+      requiresReview: true,
+    };
+  }
+  return {
+    categoryKey: rule.categoryKey,
+    confidence: rule.confidence,
+    reason: rule.pattern,
+    requiresReview: !!rule.requiresReview || rule.categoryKey === "incidentals",
+  };
+}
+
+function renderImportDraft() {
+  updateImportPeriodLabel();
+  renderImportTabs();
+  if (!els.importSummary || !els.importReview || !els.importRows) return;
+
+  els.importSummary.classList.toggle("hidden", !importDraft.parsed);
+  els.importReview.classList.toggle("hidden", !importDraft.parsed);
+  if (!importDraft.parsed) {
+    els.importRows.innerHTML = "";
+    renderImportWarnings();
+    return;
+  }
+
+  const summary = summarizeImportDraft(importDraft.rows);
+  els.importSummary.innerHTML = `
+    <article class="import-summary-item">
+      <span>${escapeHtml(t("includedRows"))}</span>
+      <strong>${escapeHtml(t("importSummaryLine", summary.included.count, formatMoney(summary.included.amount)))}</strong>
+    </article>
+    <article class="import-summary-item">
+      <span>${escapeHtml(t("needsReviewRows"))}</span>
+      <strong>${escapeHtml(t("importSummaryLine", summary.review.count, formatMoney(summary.review.amount)))}</strong>
+    </article>
+    <article class="import-summary-item">
+      <span>${escapeHtml(t("excludedRows"))}</span>
+      <strong>${escapeHtml(String(summary.excluded.count))}</strong>
+    </article>
+  `;
+
+  const rows = importDraft.rows.filter((row) => row.status === importDraft.activeTab);
+  els.importRows.innerHTML = rows.length
+    ? rows.map((row) => renderImportRow(row)).join("")
+    : `<div class="import-empty">${escapeHtml(t("noImportRows"))}</div>`;
+
+  if (els.applyImportBtn) {
+    els.applyImportBtn.disabled = summary.included.count === 0;
+  }
+  renderImportWarnings();
+}
+
+function renderImportTabs() {
+  document.querySelectorAll(".import-tab").forEach((button) => {
+    const key =
+      button.dataset.importTab === IMPORT_STATUSES.INCLUDED
+        ? "includedRows"
+        : button.dataset.importTab === IMPORT_STATUSES.REVIEW
+          ? "needsReviewRows"
+          : "excludedRows";
+    button.textContent = t(key);
+    button.classList.toggle("active", button.dataset.importTab === importDraft.activeTab);
+  });
+}
+
+function renderImportRow(row) {
+  const rowClass =
+    row.status === IMPORT_STATUSES.REVIEW
+      ? " import-row-review"
+      : row.status === IMPORT_STATUSES.EXCLUDED
+        ? " import-row-excluded"
+        : "";
+  return `
+    <article class="import-row-card${rowClass}" data-import-row-id="${escapeHtml(row.id)}">
+      <div class="import-cell">
+        <span>${escapeHtml(t("period"))}</span>
+        <strong>${escapeHtml(row.displayDate)}</strong>
+      </div>
+      <div class="import-cell">
+        <span>${escapeHtml(t("merchantDescription"))}</span>
+        <p>${escapeHtml(row.description)}</p>
+      </div>
+      <div class="import-cell">
+        <span>${escapeHtml(t("amount"))}</span>
+        <strong>${escapeHtml(formatMoney(row.expenseAmount || Math.abs(row.amount || 0)))}</strong>
+      </div>
+      <div class="import-cell">
+        <span>${escapeHtml(t("suggestedCategory"))}</span>
+        ${renderImportCategorySelect(row)}
+      </div>
+      <div class="import-cell">
+        <span>${escapeHtml(t("confidence"))}</span>
+        <p>${escapeHtml(confidenceLabel(row.confidence))}</p>
+        <span>${escapeHtml(t("reason"))}</span>
+        <p>${escapeHtml(reasonLabel(row.reason))}</p>
+        ${renderImportRowActions(row)}
+      </div>
+    </article>
+  `;
+}
+
+function renderImportCategorySelect(row) {
+  const disabled = row.status === IMPORT_STATUSES.EXCLUDED ? " disabled" : "";
+  const options = [
+    `<option value="grocery"${row.categoryKey === "grocery" ? " selected" : ""}>${escapeHtml(t("grocery"))}</option>`,
+    ...categories.map(
+      (category) =>
+        `<option value="${escapeHtml(category.key)}"${row.categoryKey === category.key ? " selected" : ""}>${escapeHtml(categoryLabel(category))}</option>`,
+    ),
+  ];
+  return `<select data-import-category${disabled}>${options.join("")}</select>`;
+}
+
+function renderImportRowActions(row) {
+  if (row.status === IMPORT_STATUSES.EXCLUDED) return "";
+  const includeButton =
+    row.status === IMPORT_STATUSES.REVIEW
+      ? `<button class="ghost-btn" type="button" data-import-action="include">${escapeHtml(t("includeTransaction"))}</button>`
+      : "";
+  return includeButton ? `<div class="import-row-actions">${includeButton}</div>` : "";
+}
+
+function confidenceLabel(value) {
+  if (value === IMPORT_CONFIDENCE.HIGH) return t("confidenceHigh");
+  if (value === IMPORT_CONFIDENCE.MEDIUM) return t("confidenceMedium");
+  return t("confidenceLow");
+}
+
+function reasonLabel(reason) {
+  if (!reason) return "-";
+  return t("reasonLabels")?.[reason] || reason;
+}
+
+function summarizeImportDraft(rows) {
+  return {
+    included: summarizeRows(rows.filter((row) => row.status === IMPORT_STATUSES.INCLUDED)),
+    review: summarizeRows(rows.filter((row) => row.status === IMPORT_STATUSES.REVIEW)),
+    excluded: summarizeRows(rows.filter((row) => row.status === IMPORT_STATUSES.EXCLUDED)),
+  };
+}
+
+function summarizeRows(rows) {
+  return {
+    count: rows.length,
+    amount: roundCurrency(rows.reduce((total, row) => total + numberOrZero(row.expenseAmount), 0)),
+  };
+}
+
+function handleImportRowAction(event) {
+  const button = event.target.closest("[data-import-action]");
+  if (!button) return;
+  const card = button.closest("[data-import-row-id]");
+  const row = importDraft.rows.find((item) => item.id === card?.dataset.importRowId);
+  if (!row) return;
+  if (button.dataset.importAction === "include") {
+    row.status = IMPORT_STATUSES.INCLUDED;
+    row.reason = row.reason === "low confidence" || row.reason === "incidentals require confirmation" ? "" : row.reason;
+  }
+  renderImportDraft();
+}
+
+function handleImportCategoryChange(event) {
+  const select = event.target.closest("[data-import-category]");
+  if (!select) return;
+  const card = select.closest("[data-import-row-id]");
+  const row = importDraft.rows.find((item) => item.id === card?.dataset.importRowId);
+  if (!row) return;
+  row.categoryKey = select.value;
+  if (row.status === IMPORT_STATUSES.REVIEW && row.confidence !== IMPORT_CONFIDENCE.LOW && row.categoryKey !== "incidentals") {
+    row.reason = "";
+  }
+  renderImportDraft();
+}
+
+function renderImportWarnings() {
+  if (!els.importWarning) return;
+  const warnings = importWarningMessages();
+  els.importWarning.classList.toggle("hidden", warnings.length === 0);
+  els.importWarning.innerHTML = warnings.map((warning) => `<p>${escapeHtml(warning)}</p>`).join("");
+}
+
+function importWarningMessages() {
+  if (!importDraft.parsed) return [];
+  const included = importDraft.rows.filter((row) => row.status === IMPORT_STATUSES.INCLUDED);
+  if (!included.length) return [];
+  const totals = aggregateImportRows(included);
+  const periodTotal = currentWeeklyTotalFromForm();
+  const warnings = [];
+  if (Math.abs(totals.importedTotal - periodTotal) >= 0.01) {
+    warnings.push(t("importBalanceWarning", formatMoney(totals.importedTotal), formatMoney(periodTotal)));
+  }
+  const residualGrocery = roundCurrency(periodTotal - totals.nonGroceryTotal - totals.incidentalsTotal);
+  if (Math.abs(totals.groceryTotal - residualGrocery) >= 0.01) {
+    warnings.push(t("importGroceryWarning", formatMoney(totals.groceryTotal), formatMoney(residualGrocery)));
+  }
+  return warnings;
+}
+
+function aggregateImportRows(rows) {
+  return rows.reduce(
+    (totals, row) => {
+      const amount = numberOrZero(row.expenseAmount);
+      totals.importedTotal = roundCurrency(totals.importedTotal + amount);
+      if (row.categoryKey === "grocery") {
+        totals.groceryTotal = roundCurrency(totals.groceryTotal + amount);
+      } else if (row.categoryKey === "incidentals") {
+        totals.incidentalsTotal = roundCurrency(totals.incidentalsTotal + amount);
+        totals.categoryValues.incidentals = roundCurrency(numberOrZero(totals.categoryValues.incidentals) + amount);
+        totals.incidentalNotes.push(`${row.displayDate} ${row.description} ${formatMoney(amount)}`);
+      } else if (categories.some((category) => category.key === row.categoryKey)) {
+        totals.nonGroceryTotal = roundCurrency(totals.nonGroceryTotal + amount);
+        totals.categoryValues[row.categoryKey] = roundCurrency(numberOrZero(totals.categoryValues[row.categoryKey]) + amount);
+      }
+      return totals;
+    },
+    { importedTotal: 0, groceryTotal: 0, nonGroceryTotal: 0, incidentalsTotal: 0, categoryValues: {}, incidentalNotes: [] },
+  );
+}
+
+function currentWeeklyTotalFromForm() {
+  const month = currentMonth();
+  const index = month.weeks.findIndex((week) => week.id === currentWeekId);
+  const previous = month.weeks[index - 1];
+  const previousCumulative = numberOrZero(previous?.cumulativeSpend);
+  const cumulative = computeCumulativeFromAvailable(
+    {
+      availableBalance: numberOrNull(els.availableInput.value),
+      unpaidPrevious: numberOrNull(els.unpaidInput.value),
+    },
+    month,
+  );
+  return cumulative === null ? 0 : roundCurrency(index <= 0 ? cumulative : cumulative - previousCumulative);
+}
+
+function applyTransactionImport() {
+  const included = importDraft.rows.filter((row) => row.status === IMPORT_STATUSES.INCLUDED);
+  if (!included.length) return;
+  const totals = aggregateImportRows(included);
+  els.categoryInputs.querySelectorAll("input[data-category]").forEach((input) => {
+    input.value = valueForInput(totals.categoryValues[input.dataset.category] || 0);
+  });
+  if (totals.incidentalNotes.length) {
+    const currentNotes = els.notesInput.value.trim();
+    const importNotes = totals.incidentalNotes.join("\n");
+    els.notesInput.value = currentNotes ? `${currentNotes}\n${importNotes}` : importNotes;
+    if (els.incidentalsDetails) els.incidentalsDetails.open = true;
+  }
+  renderLiveWeeklyTotal();
+  showImportStatus(t("importApplied", included.length));
+}
+
+function showImportStatus(message) {
+  if (!els.importStatus) return;
+  els.importStatus.textContent = message;
+  els.importStatus.classList.remove("hidden");
+  clearTimeout(showImportStatus.timeoutId);
+  showImportStatus.timeoutId = setTimeout(() => {
+    els.importStatus?.classList.add("hidden");
+  }, 2600);
 }
 
 function previewWeekFromForm() {
