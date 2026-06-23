@@ -861,6 +861,78 @@ tr:hover td {
   font-weight: 750;
 }
 
+/* Transaction Import Panel */
+.import-panel {
+  margin-top: 18px;
+  border-color: #b8cee0;
+  background: #f6fafd;
+  box-shadow: 0 14px 34px rgba(47, 94, 158, 0.07);
+}
+.import-panel summary {
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--accent-2);
+  font-weight: 800;
+}
+.import-panel summary small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+.import-summary-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.import-icon { font-size: 20px; line-height: 1; }
+.import-body { margin-top: 14px; }
+.import-results { margin-top: 14px; }
+.import-summary {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 650;
+  margin-bottom: 10px;
+}
+.import-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+.import-tab {
+  padding: 6px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--muted);
+  cursor: pointer;
+}
+.import-tab:hover { color: var(--ink); }
+.import-tab.active { color: var(--accent-2); border-bottom-color: var(--accent-2); }
+.import-table-wrap { max-width: 100%; overflow-x: auto; }
+.import-table-wrap table { min-width: 100%; }
+.import-table-wrap th,
+.import-table-wrap td {
+  padding: 6px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+#importTable .amount { text-align: right; }
+.import-cat-select {
+  font-size: 12px;
+  padding: 2px 4px;
+  max-width: 160px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+}
+
 .pill {
   display: inline-flex;
   align-items: center;

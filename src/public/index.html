@@ -284,6 +284,36 @@
                 <textarea id="notesInput" rows="3" placeholder="e.g. emergency repair $amount&#10;unexpected fee $amount"></textarea>
               </label>
             </details>
+
+            <details id="importSection" class="panel import-panel">
+              <summary>
+                <span class="import-summary-title">
+                  <span class="import-icon" aria-hidden="true">📥</span>
+                  <span data-i18n="importTransactions">Import transactions</span>
+                </span>
+                <small id="importPeriodLabel" class="import-period-label">Current period: -</small>
+              </summary>
+              <div class="import-body">
+                <label class="field">
+                  <span data-i18n="pasteCsvHint">Paste bank transaction text or CSV</span>
+                  <textarea id="importInput" rows="4" placeholder="DD/MM/YYYY,amount,merchant,note&#10;20/06/2026,-36.35,COLES DONCASTER VIC,"></textarea>
+                </label>
+                <button id="parseImportBtn" class="secondary-btn" type="button">Parse transactions</button>
+
+                <div id="importResults" class="import-results hidden">
+                  <div id="importSummary" class="import-summary"></div>
+                  <div class="import-tabs">
+                    <button class="import-tab active" type="button" data-import-tab="included">Included</button>
+                    <button class="import-tab" type="button" data-import-tab="review">Needs review</button>
+                    <button class="import-tab" type="button" data-import-tab="excluded">Excluded</button>
+                  </div>
+                  <div class="import-table-wrap">
+                    <table id="importTable"></table>
+                  </div>
+                  <button id="applyImportBtn" class="primary-btn hidden" type="button">Apply to current period</button>
+                </div>
+              </div>
+            </details>
           </div>
         </section>
 

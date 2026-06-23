@@ -151,6 +151,8 @@ const i18n = {
     login: "登入",
     logout: "登出",
     loginFailed: "密碼不正確，請再試一次。",
+    importTransactions: "匯入交易明細",
+    pasteCsvHint: "貼上銀行交易文字或 CSV",
   },
   en: {
     language: "Language",
@@ -298,6 +300,8 @@ const i18n = {
     login: "Log in",
     logout: "Log out",
     loginFailed: "Incorrect password. Please try again.",
+    importTransactions: "Import transactions",
+    pasteCsvHint: "Paste bank transaction text or CSV",
   },
 };
 let currentLanguage = localStorage.getItem(LANGUAGE_KEY) || DEFAULT_LANGUAGE;
@@ -470,6 +474,12 @@ function bindElements() {
     "saveStatus",
     "saveToast",
     "incidentalsDetails",
+    "importSection",
+    "importInput",
+    "importResults",
+    "importSummary",
+    "parseImportBtn",
+    "importTable",
     "historyMonthFilter",
     "historyCategoryFilter",
     "historySearchInput",
@@ -558,6 +568,18 @@ function bindEvents() {
   els.resetLocalDataBtn.addEventListener("click", resetLocalData);
   els.loginForm?.addEventListener("submit", handleLogin);
   els.logoutBtn?.addEventListener("click", logout);
+
+  // Import transaction bindings
+  els.parseImportBtn?.addEventListener("click", function() {
+    var ps = parseDate(els.periodStartInput.value);
+    var pe = parseDate(els.periodEndInput.value);
+    processImport(els.importInput.value, ps, pe);
+  });
+  document.querySelectorAll(".import-tab").forEach(function(b) {
+    b.addEventListener("click", function() { switchImportTab(b.dataset.importTab); });
+  });
+  var applyBtn = document.getElementById("applyImportBtn");
+  if (applyBtn) applyBtn.addEventListener("click", applyImport);
 
   els.weeklyChart.addEventListener("mousemove", showChartTooltip);
   els.weeklyChart.addEventListener("mouseleave", () => els.chartTooltip.classList.add("hidden"));
@@ -1067,6 +1089,9 @@ function renderEntryForm() {
   els.periodStartInput.value = periodRange.start;
   els.periodEndInput.value = periodRange.end;
   els.periodInput.value = formatPeriodFromDates() || week?.period || "";
+  // Update import section period label
+  var impLabel = document.getElementById("importPeriodLabel");
+  if (impLabel) impLabel.textContent = "Current period: " + formatPeriodFromDates();
   renderEntryEditBanner(week);
   renderEntrySummary(month.name, 0, computeCumulativeFromAvailable(week, month));
   els.availableInput.value = valueForInput(week?.availableBalance);
@@ -1323,6 +1348,284 @@ function importData(event) {
     }
   };
   reader.readAsText(file);
+}
+
+// ── Transaction Import (Phase 4) ──
+
+var MERCHANT_RULES = [
+  { p: "COLES", c: "shoppingDining", f: "high" },
+  { p: "WOOLWORTHS", c: "shoppingDining", f: "high" },
+  { p: "ALDI", c: "shoppingDining", f: "high" },
+  { p: "COLONIAL FRUIT", c: "shoppingDining", f: "high" },
+  { p: "KFC", c: "shoppingDining", f: "high" },
+  { p: "MCDONALD", c: "shoppingDining", f: "high" },
+  { p: "HUNGRY JACKS", c: "shoppingDining", f: "high" },
+  { p: "CAFE", c: "shoppingDining", f: "high" },
+  { p: "RESTAURANT", c: "shoppingDining", f: "high" },
+  { p: "SUSHI", c: "shoppingDining", f: "high" },
+  { p: "PHO THIN", c: "shoppingDining", f: "high" },
+  { p: "STARBUCKS", c: "shoppingDining", f: "high" },
+  { p: "DAN MURPHYS", c: "shoppingDining", f: "high" },
+  { p: "KMART", c: "shoppingDining", f: "high" },
+  { p: "TARGET", c: "shoppingDining", f: "high" },
+  { p: "BUNNINGS", c: "shoppingDining", f: "high" },
+  { p: "IKEA", c: "shoppingDining", f: "high" },
+  { p: "TEMU", c: "shoppingDining", f: "high" },
+  { p: "TAOBAO", c: "shoppingDining", f: "high" },
+  { p: "PETBARN", c: "shoppingDining", f: "high" },
+  { p: "DAISO", c: "shoppingDining", f: "high" },
+  { p: "SUPER CHEAP", c: "shoppingDining", f: "high" },
+  { p: "CENTRE COM", c: "shoppingDining", f: "high" },
+  { p: "CORNWELL MITRE", c: "shoppingDining", f: "high" },
+  { p: "ECCO FOOD", c: "shoppingDining", f: "medium" },
+  { p: "MITCHAM BADMINTON", c: "shoppingDining", f: "low" },
+  { p: "HONG HOT BREAD", c: "shoppingDining", f: "high" },
+  { p: "MEZE TABLE", c: "shoppingDining", f: "high" },
+  { p: "CIRCUM WASH", c: "shoppingDining", f: "medium" },
+  { p: "NEW ELEMENT", c: "shoppingDining", f: "low" },
+  { p: "SINO KITCHEN", c: "shoppingDining", f: "high" },
+  { p: "WONGS GOURMET", c: "shoppingDining", f: "high" },
+  { p: "MOLLY TEA", c: "shoppingDining", f: "high" },
+  { p: "NO.1 CITY MART", c: "shoppingDining", f: "high" },
+  { p: "FISH PIER", c: "shoppingDining", f: "high" },
+  { p: "PACIFIC ASIAN", c: "shoppingDining", f: "high" },
+  { p: "SAO SANG", c: "shoppingDining", f: "high" },
+  { p: "XIN HUA", c: "shoppingDining", f: "high" },
+  { p: "FRANKS QUALITY", c: "shoppingDining", f: "high" },
+  { p: "LECROIS", c: "shoppingDining", f: "high" },
+  { p: "KFL CONVENIENCE", c: "shoppingDining", f: "high" },
+  { p: "S & S PRODUCE", c: "shoppingDining", f: "high" },
+  { p: "TUNSTALL FRESH", c: "shoppingDining", f: "high" },
+  { p: "SQ *FOODNESS", c: "shoppingDining", f: "high" },
+  { p: "SQ *DONCASTER", c: "shoppingDining", f: "high" },
+  { p: "1382_WESTFIELD", c: "shoppingDining", f: "medium" },
+  { p: "CHEMIST WAREHOUSE", c: "medical", f: "high" },
+  { p: "PHARMACY", c: "medical", f: "high" },
+  { p: "DENTAL", c: "medical", f: "high" },
+  { p: "DR WING", c: "medical", f: "high" },
+  { p: "EDWARD WONG", c: "medical", f: "high" },
+  { p: "BUPA", c: "privateInsurance", f: "high" },
+  { p: "MEDIBANK", c: "privateInsurance", f: "high" },
+  { p: "NIB", c: "privateInsurance", f: "high" },
+  { p: "HCF", c: "privateInsurance", f: "high" },
+  { p: "AAMI", c: "carInsurance", f: "high" },
+  { p: "HOLLARD", c: "homeInsurance", f: "high" },
+  { p: "CBA INSURANCE", c: "homeInsurance", f: "high" },
+  { p: "LUMO ENERGY", c: "electricity", f: "high" },
+  { p: "AGL SALES", c: "gas", f: "high" },
+  { p: "YARRA VALLEY WATER", c: "water", f: "high" },
+  { p: "TPG", c: "internetMobile", f: "high" },
+  { p: "MORE TELECOM", c: "internetMobile", f: "high" },
+  { p: "IINET", c: "internetMobile", f: "high" },
+  { p: "TELSTRA", c: "internetMobile", f: "high" },
+  { p: "OPTUS", c: "internetMobile", f: "high" },
+  { p: "VODAFONE", c: "internetMobile", f: "high" },
+  { p: "NETFLIX", c: "internetMobile", f: "high" },
+  { p: "SPOTIFY", c: "internetMobile", f: "high" },
+  { p: "OPENAI", c: "internetMobile", f: "high" },
+  { p: "GODADDY", c: "internetMobile", f: "high" },
+  { p: "MATHSPACE", c: "internetMobile", f: "high" },
+  { p: "APPLE", c: "internetMobile", f: "medium" },
+  { p: "GOOGLE", c: "internetMobile", f: "medium" },
+  { p: "MICROSOFT", c: "internetMobile", f: "medium" },
+  { p: "BP", c: "transport", f: "high" }, { p: "EG GROUP", c: "transport", f: "high" },
+  { p: "DGB PETRO", c: "transport", f: "high" }, { p: "SHELL", c: "transport", f: "high" },
+  { p: "CALTEX", c: "transport", f: "high" }, { p: "AMPOL", c: "transport", f: "high" },
+  { p: "EASTLINK", c: "transport", f: "high" }, { p: "MYKI", c: "transport", f: "high" },
+  { p: "DEPARTMENT OF TRANSPOR", c: "transport", f: "high" },
+  { p: "VOLVOCARS", c: "transport", f: "high" },
+  { p: "VICROADS", c: "government", f: "high" },
+  { p: "MANNINGHAM CITY", c: "government", f: "high" },
+  { p: "KOENIGMACHINERY", c: "incidentals", f: "medium" },
+  { p: "SNAZZI ALTERATIONS", c: "incidentals", f: "medium" },
+  { p: "YARRA BOTANICA", c: "incidentals", f: "medium" },
+  { p: "PSW KEW EAST", c: "incidentals", f: "medium" },
+];
+
+var USER_MERCHANT_RULES = [];
+
+function normalizeMerchant(text) {
+  return (text || "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function classifyTransaction(merchant) {
+  var norm = normalizeMerchant(merchant);
+  for (var i = 0; i < USER_MERCHANT_RULES.length; i++) {
+    if (norm.indexOf(USER_MERCHANT_RULES[i].p) >= 0)
+      return { key: USER_MERCHANT_RULES[i].c, conf: "high" };
+  }
+  for (var i = 0; i < MERCHANT_RULES.length; i++) {
+    if (norm.indexOf(MERCHANT_RULES[i].p) >= 0)
+      return { key: MERCHANT_RULES[i].c, conf: MERCHANT_RULES[i].f };
+  }
+  return { key: null, conf: "low" };
+}
+
+function parseDate(text) {
+  var m = text.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+  m = text.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+  return null;
+}
+
+function parseCSV(text) {
+  var lines = text.trim().split("\n");
+  var result = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (!line) continue;
+    var parts = [], cur = "", q = false;
+    for (var c = 0; c < line.length; c++) {
+      var ch = line[c];
+      if (ch === '"') { q = !q; continue; }
+      if (ch === "," && !q) { parts.push(cur); cur = ""; continue; }
+      cur += ch;
+    }
+    parts.push(cur);
+    if (parts.length < 2) { result.push({ e: true, r: "unsupported row format" }); continue; }
+    var ds = parts[0].trim(), am = parts[1].trim(), me = (parts[2] || "").trim(), no = (parts[3] || "").trim();
+    var d = parseDate(ds);
+    if (!d) { result.push({ e: true, r: "invalid date" }); continue; }
+    var a = parseFloat(am.replace(/,/g, ""));
+    if (isNaN(a)) { result.push({ e: true, r: "unsupported row format" }); continue; }
+    result.push({ d: d, a: Math.abs(a), exp: a < 0, m: me, n: no, cls: null });
+  }
+  return result;
+}
+
+function dateOnly(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function processImport(text, periodStart, periodEnd) {
+  var parsed = parseCSV(text);
+  var inc = [], rev = [], exc = [];
+  for (var i = 0; i < parsed.length; i++) {
+    var tx = parsed[i];
+    if (tx.e) { exc.push({ tx: tx, reason: tx.r }); continue; }
+    var txDate = dateOnly(tx.d), s = dateOnly(periodStart), e = dateOnly(periodEnd);
+    if (!periodStart || !periodEnd || txDate < s || txDate > e) {
+      exc.push({ tx: tx, reason: !periodStart ? "no matching existing period" : "outside selected period" });
+      continue;
+    }
+    if (!tx.exp) { exc.push({ tx: tx, reason: "positive amount / payment / refund" }); continue; }
+    var cls = classifyTransaction(tx.m);
+    tx.cls = cls;
+    if (cls.conf === "low" || cls.key === "incidentals") rev.push(tx);
+    else inc.push(tx);
+  }
+  renderImportResult(inc, rev, exc);
+}
+
+function renderImportResult(inc, rev, exc) {
+  if (!els.importSummary) return;
+  var incTotal = 0, revTotal = 0;
+  inc.forEach(function(t) { incTotal += t.a; });
+  rev.forEach(function(t) { revTotal += t.a; });
+  els.importSummary.textContent = "Included: " + inc.length + " · $" + incTotal.toFixed(2) +
+    (rev.length ? " | Needs review: " + rev.length + " · $" + revTotal.toFixed(2) : "") +
+    " | Excluded: " + exc.length;
+  els.importResults.classList.remove("hidden");
+  els.importResults.dataset.inc = JSON.stringify(inc.map(function(t) { return { d: t.d.getTime(), a: t.a, m: t.m, n: t.n, k: t.cls ? t.cls.key : "" }; }));
+  els.importResults.dataset.rev = JSON.stringify(rev.map(function(t) { return { d: t.d.getTime(), a: t.a, m: t.m, n: t.n, k: t.cls ? t.cls.key : "" }; }));
+  renderImportTable("included");
+  var btn = document.getElementById("applyImportBtn");
+  if (btn) btn.classList.toggle("hidden", inc.length + rev.length === 0);
+}
+
+function renderImportTable(tab) {
+  var raw = els.importResults.dataset[tab === "included" ? "inc" : tab === "review" ? "rev" : ""];
+  var rows = raw ? JSON.parse(raw) : [];
+  var isExc = tab === "excluded";
+  var tbody;
+  if (rows.length === 0) {
+    tbody = "<tr><td colspan=\"5\">No transactions</td></tr>";
+  } else if (isExc) {
+    tbody = rows.map(function(tx) {
+      var d = new Date(tx.d);
+      return "<tr><td>" + escapeHtml(d.getDate() + "/" + (d.getMonth()+1) + "/" + d.getFullYear()) + "</td><td>" + escapeHtml(tx.m || "-") + "</td><td class=\"amount\">$" + (tx.a||0).toFixed(2) + "</td><td>" + escapeHtml(tx.k || "?") + "</td><td>Excluded</td></tr>";
+    }).join("");
+  } else {
+    // Build category option HTML
+    var catOpts = categories.map(function(c) {
+      return '<option value="' + c.key + '">' + escapeHtml(categoryLabel(c)) + '</option>';
+    }).join("");
+    tbody = rows.map(function(tx, idx) {
+      var d = new Date(tx.d);
+      var dateStr = d.getDate() + "/" + (d.getMonth()+1) + "/" + d.getFullYear();
+      var amt = "$" + (tx.a||0).toFixed(2);
+      var selected = tx.k || "";
+      return "<tr>" +
+        "<td>" + escapeHtml(dateStr) + "</td>" +
+        "<td>" + escapeHtml(tx.m || "-") + "</td>" +
+        "<td class=\"amount\">" + amt + "</td>" +
+        '<td><select class="import-cat-select" data-idx="' + idx + '" data-tab="' + tab + '">' +
+          '<option value="">— Select category —</option>' + catOpts +
+        "</select></td>" +
+        '<td>' + (tx.co === "low" ? "🔍 Needs review" : "✅ Auto") + "</td>" +
+        "</tr>";
+    }).join("");
+    // After setting HTML, select the current values
+    setTimeout(function() {
+      document.querySelectorAll(".import-cat-select").forEach(function(sel) {
+        var idx = parseInt(sel.dataset.idx);
+        var tabName = sel.dataset.tab;
+        var data = JSON.parse(els.importResults.dataset[tabName === "included" ? "inc" : "rev"]);
+        if (data[idx] && data[idx].k) sel.value = data[idx].k;
+      });
+    }, 0);
+  }
+  var header = "<thead><tr><th>Date</th><th>Merchant</th><th class=\"amount\">Amount</th><th>Category</th><th>Status</th></tr></thead>";
+  els.importTable.innerHTML = header + "<tbody>" + tbody + "</tbody>";
+}
+
+function applyImport() {
+  // Read user category selections from dropdowns
+  var selections = {};
+  document.querySelectorAll(".import-cat-select").forEach(function(sel) {
+    var idx = sel.dataset.idx;
+    var tab = sel.dataset.tab;
+    var key = tab + "_" + idx;
+    selections[key] = sel.value;
+  });
+  var inc = JSON.parse(els.importResults.dataset.inc || "[]");
+  var rev = JSON.parse(els.importResults.dataset.rev || "[]");
+  // Apply user selections
+  inc.forEach(function(tx, i) { var s = selections["included_" + i]; if (s) tx.k = s; });
+  rev.forEach(function(tx, i) { var s = selections["review_" + i]; if (s) tx.k = s; });
+  var all = inc.concat(rev);
+  // Filter out rows where user didn't pick a category
+  var valid = all.filter(function(tx) { return tx.k && tx.k !== ""; });
+  if (valid.length === 0) return;
+  var sums = {}, notes = [];
+  valid.forEach(function(tx) {
+    var k = tx.k || "shoppingDining";
+    sums[k] = (sums[k] || 0) + (tx.a || 0);
+    if (k === "incidentals" && tx.n) notes.push(tx.n);
+  });
+  var month = currentMonth();
+  // Find the week matching the period currently selected in the form
+  var weekId = els.weekSelect ? els.weekSelect.value : currentWeekId;
+  var week = month.weeks.find(function(w) { return w.id === weekId; }) || currentWeek();
+  if (!week) return;
+  // Sync currentWeekId so renderEntryForm reads from the same week
+  currentWeekId = week.id;
+  categories.forEach(function(cat) {
+    if (sums[cat.key] !== undefined) {
+      week.categoryValues[cat.key] = roundCurrency((week.categoryValues[cat.key] || 0) + sums[cat.key]);
+    }
+  });
+  if (notes.length > 0) week.notes = (week.notes ? week.notes + "; " : "") + notes.join("; ");
+  renderEntryForm();
+  var total = 0; for (var k in sums) total += sums[k];
+  showSaveFeedback("Imported " + valid.length + " tx · $" + total.toFixed(2));
+  els.importInput.value = "";
+  els.importResults.classList.add("hidden");
+  els.importResults.dataset.inc = "";
+  els.importResults.dataset.rev = "";
+  var btn = document.getElementById("applyImportBtn");
+  if (btn) btn.classList.add("hidden");
 }
 
 async function resetLocalData() {
