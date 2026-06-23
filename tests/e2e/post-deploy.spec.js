@@ -262,6 +262,86 @@ test("transaction import draft filters, reviews, and applies rows", async ({ pag
   await expect(page.locator("#overviewTitle")).not.toHaveText(monthName);
 });
 
+test("transaction import accepts copied online banking text", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  await page.locator("#languageSelect").selectOption("en");
+
+  const monthName = `Open Text Import ${Date.now()}`;
+  await page.locator("#addMonthBtn").click();
+  await expect(page.locator("#monthDialog")).toBeVisible();
+  await page.locator("#newMonthName").fill(monthName);
+  await page.locator("#confirmMonthBtn").click();
+  await expect(page.locator("#monthDialog")).toBeHidden();
+  await page.locator('.nav-tab[data-view="entry"]').click();
+  await expect(page.locator("#entryView")).toHaveClass(/active/);
+
+  await page.locator("#periodStartInput").fill("2026-06-22");
+  await page.locator("#periodEndInput").fill("2026-06-23");
+  await page.locator("#availableInput").fill("14800");
+  await page.locator("#unpaidInput").fill("0");
+
+  const copiedRows = [
+    "Available",
+    "+$10,956.21",
+    "",
+    "Total owing$3,687.95",
+    "23 Jun 2026",
+    "Open transaction detailsPENDING - Department of Transpor Melbourne AUS",
+    "-$20.00",
+    "23 Jun 2026",
+    "Open transaction detailsPENDING - Public Transport Victo Melbourne AUS",
+    "",
+    "23 Jun 2026",
+    "Open transaction detailsPENDING - SQ *DONCASTER Doncaster Eas AUS",
+    "-$26.50",
+    "23 Jun 2026",
+    "Open transaction detailsPENDING - ALDI STORES THE PINES AUS",
+    "-$42.55",
+    "22 Jun 2026",
+    "Open transaction detailsPENDING - POINT PARKING Dandenong Rd AUS",
+    "-$4.06",
+    "22 Jun 2026",
+    "Open transaction detailsPENDING - Daiso (Chadstone SC) Chadstone AUS",
+    "-$3.30",
+  ].join("\n");
+
+  await page.locator("#transactionImportInput").fill(copiedRows);
+  await page.locator("#parseImportBtn").click();
+  await expect(page.locator("#importSummary")).toContainText("Included");
+  await expect(page.locator("#importSummary")).toContainText("5 transactions");
+  await expect(page.locator("#importSummary")).toContainText("Excluded");
+  await expect(page.locator("#importSummary")).toContainText("1");
+  await expect(page.locator("#availableInput")).toHaveValue("10956.21");
+  await expect(page.locator("#unpaidInput")).toHaveValue("3687.95");
+  await expect(page.locator("#importRows")).toContainText("Department of Transpor");
+  await expect(page.locator("#importRows")).toContainText("Transport");
+  await expect(page.locator("#importRows")).toContainText("SQ *DONCASTER");
+  await expect(page.locator("#importRows")).toContainText("Grocery");
+  await expect(page.locator("#importRows")).toContainText("ALDI STORES");
+  await expect(page.locator("#importRows")).toContainText("POINT PARKING");
+  await expect(page.locator("#importRows")).toContainText("Daiso");
+  await expect(page.locator("#importRows")).toContainText("Shopping and dining");
+
+  await page.locator('[data-import-tab="excluded"]').click();
+  await expect(page.locator("#importRows")).toContainText("Public Transport Victo");
+  await expect(page.locator("#importRows")).toContainText("unsupported row format");
+
+  await page.locator("#applyImportBtn").click();
+  await expect(page.locator("#importStatus")).toContainText("Applied 5 transactions");
+  await expect(page.locator('input[data-category="transport"]')).toHaveValue("24.06");
+  await expect(page.locator('input[data-category="shoppingDining"]')).toHaveValue("3.3");
+
+  page.on("dialog", async (dialog) => {
+    expect(dialog.type()).toBe("confirm");
+    await dialog.accept();
+  });
+  await page.locator('.nav-tab[data-view="overview"]').click();
+  await page.locator("#deleteMonthBtn").click();
+  await expect(page.locator("#overviewTitle")).not.toHaveText(monthName);
+});
+
 test("mobile overview stays within the viewport", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
