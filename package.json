@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test:e2e": "playwright test tests/e2e/post-deploy.spec.js"
+    "test:e2e": "playwright test tests/e2e/"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0"

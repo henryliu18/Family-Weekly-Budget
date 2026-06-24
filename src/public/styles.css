@@ -550,6 +550,41 @@ textarea:focus {
   border-color: #d8e4dc;
 }
 
+/* Settings tabs */
+.settings-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.settings-tab {
+  padding: 8px 18px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.settings-tab:hover { color: var(--ink); }
+.settings-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.settings-panel { display: none; }
+.settings-panel.active { display: block; }
+.advanced-footer {
+  margin-top: 24px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+}
+
 .import-period-line {
   display: inline-flex;
   flex-wrap: wrap;

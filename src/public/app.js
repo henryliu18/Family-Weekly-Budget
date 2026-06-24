@@ -715,7 +715,7 @@ function bindElements() {
     "importDataInput",
     "resetLocalDataBtn",
     "monthDialog",
-    "newMonthName",
+    "newMonthPicker",
     "cancelMonthBtn",
     "confirmMonthBtn",
     "buildVersionValue",
@@ -914,7 +914,7 @@ function applyLanguage() {
     historyMinInput: "minAmount",
     monthNameInput: "monthName",
     creditLimitInput: "creditLimit",
-    newMonthName: "monthName",
+    newMonthPicker: "monthName",
   };
   Object.entries(spans).forEach(([id, key]) => {
     const label = document.getElementById(id)?.closest("label")?.querySelector("span");
@@ -1044,7 +1044,7 @@ function clearSensitiveUi() {
     els.historyMinInput,
     els.monthNameInput,
     els.creditLimitInput,
-    els.newMonthName,
+    els.newMonthPicker,
   ].forEach((element) => {
     if (element) element.value = "";
   });
@@ -1089,6 +1089,19 @@ function clearLoginError() {
 
 function renderMonthOptions() {
   const months = Object.values(appState.months);
+  // Sort chronologically: extract year/month from id for new format, fallback for old
+  months.sort(function(a, b) {
+    // Try new format: "2026-04" or old format: "2026-3-4-uuid"
+    var ma = a.id.match(/^(\d{4})-(\d{1,2})/);
+    var mb = b.id.match(/^(\d{4})-(\d{1,2})/);
+    if (ma && mb) {
+      var va = parseInt(ma[1]) * 12 + parseInt(ma[2]);
+      var vb = parseInt(mb[1]) * 12 + parseInt(mb[2]);
+      return va - vb;
+    }
+    // Fallback: sort by name
+    return a.name.localeCompare(b.name);
+  });
   els.monthSelect.innerHTML = months
     .map((month) => `<option value="${month.id}">${escapeHtml(month.name)}</option>`)
     .join("");
@@ -1396,6 +1409,19 @@ function renderEntryForm() {
   if (week) els.weekSelect.value = week.id;
 
   const periodRange = parsePeriodRange(week?.period || "");
+  // For empty periods, default dates to the month context
+  if (!periodRange.start && !periodRange.end) {
+    var m = month.id.match(/^(\d{4})-(\d{2})/);
+    if (m) {
+      var y = parseInt(m[1]), mo = parseInt(m[2]) - 1;
+      var weekIdx = month.weeks.indexOf(week);
+      var startDay = 1 + weekIdx * 7;
+      var startDate = new Date(y, mo, startDay);
+      var endDate = new Date(y, mo, startDay + 6);
+      periodRange.start = startDate.getFullYear() + "-" + ((startDate.getMonth()+1) < 10 ? "0" : "") + (startDate.getMonth()+1) + "-" + (startDate.getDate() < 10 ? "0" : "") + startDate.getDate();
+      periodRange.end = endDate.getFullYear() + "-" + ((endDate.getMonth()+1) < 10 ? "0" : "") + (endDate.getMonth()+1) + "-" + (endDate.getDate() < 10 ? "0" : "") + endDate.getDate();
+    }
+  }
   els.periodStartInput.value = periodRange.start;
   els.periodEndInput.value = periodRange.end;
   els.periodInput.value = formatPeriodFromDates() || week?.period || "";
@@ -2214,6 +2240,11 @@ function supportsModalDialog(dialog) {
 
 function openMonthDialog() {
   if (!els.monthDialog) return;
+  // Set month picker to current date
+  var now = new Date();
+  var y = now.getFullYear();
+  var m = (now.getMonth() + 1 < 10 ? "0" : "") + (now.getMonth() + 1);
+  if (els.newMonthPicker) els.newMonthPicker.value = y + "-" + m;
   if (supportsModalDialog(els.monthDialog)) {
     try {
       els.monthDialog.showModal();
@@ -2243,21 +2274,26 @@ function closeMonthDialog() {
 }
 
 function addMonth() {
-  const name = els.newMonthName.value.trim();
-  if (!name) return;
-  const id = slugify(name);
-  if (appState.months[id]) return;
+  var mVal = els.newMonthPicker.value;
+  if (!mVal) return;
+  var parts = mVal.split("-");
+  var year = parts[0], monthNum = parseInt(parts[1]);
+  var MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var name = year + " " + MONTH_NAMES[monthNum - 1];
+  var id = year + "-" + (monthNum < 10 ? "0" : "") + monthNum;
+  // If ID already exists, append a suffix
+  if (appState.months[id]) { var suffix = 2; while (appState.months[id + "-" + suffix]) suffix++; id = id + "-" + suffix; }
   appState.months[id] = {
-    id,
-    name,
+    id: id,
+    name: name,
     creditLimit: CREDIT_LIMIT,
-    weeks: [t("firstPeriod"), t("secondPeriod"), t("thirdPeriod"), t("fourthPeriod")].map((period) =>
-      createWeek({ period, availableBalance: CREDIT_LIMIT, unpaidPrevious: null }),
-    ),
+    weeks: ["Period 1", "Period 2", "Period 3", "Period 4"].map(function(p) {
+      return createWeek({ period: p, availableBalance: CREDIT_LIMIT, unpaidPrevious: null });
+    }),
   };
   currentMonthId = id;
   currentWeekId = appState.months[id].weeks[0].id;
-  els.newMonthName.value = "";
+  els.newMonthPicker.value = "";
   closeMonthDialog();
   renderAll();
 }
@@ -2471,7 +2507,16 @@ function drawLegend(ctx, width, colors) {
 }
 
 function monthlyTrendRows() {
-  return Object.values(appState.months).map((month) => {
+  // Sort months chronologically for correct time axis
+  var sorted = Object.values(appState.months).sort(function(a, b) {
+    var ma = a.id.match(/^(\d{4})-(\d{1,2})/);
+    var mb = b.id.match(/^(\d{4})-(\d{1,2})/);
+    if (ma && mb) {
+      return (parseInt(ma[1]) * 12 + parseInt(ma[2])) - (parseInt(mb[1]) * 12 + parseInt(mb[2]));
+    }
+    return a.name.localeCompare(b.name);
+  });
+  return sorted.map(function(month) {
     const rows = computedWeeks(month);
     const nonGrocery = rows.reduce((sum, row) => sum + numberOrZero(row.nonGrocery), 0);
     const grocery = rows.reduce((sum, row) => sum + Math.max(0, numberOrZero(row.grocery)), 0);
