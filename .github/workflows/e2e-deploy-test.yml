@@ -1,15 +1,17 @@
 name: Deploy E2E Test
 
 on:
-  workflow_run:
-    workflows: ["Docker Image CI"]
-    types: [completed]
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   e2e:
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
       (
         github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push' &&
@@ -38,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           E2E_APP_PATH='${{ vars.VM_APP_PATH }}/e2e'
-          IMAGE_TAG='${{ github.event_name == 'workflow_dispatch' && 'latest' || format('sha-{0}', github.event.workflow_run.head_sha) }}'
+          IMAGE_TAG='${{ github.event_name == 'workflow_dispatch' && 'latest' || github.event_name == 'pull_request' && format('pr-{0}', github.sha) || format('sha-{0}', github.event.workflow_run.head_sha) }}'
           E2E_PASSWORD="$(openssl rand -hex 16)"
           echo "::add-mask::$E2E_PASSWORD"
           {

@@ -205,6 +205,7 @@ const i18n = {
     password: "密碼",
     login: "登入",
     logout: "登出",
+    cancel: "取消",
     loginFailed: "密碼不正確，請再試一次。",
   },
   en: {
@@ -407,6 +408,7 @@ const i18n = {
     password: "Password",
     login: "Log in",
     logout: "Log out",
+    cancel: "Cancel",
     loginFailed: "Incorrect password. Please try again.",
   },
 };
@@ -892,6 +894,7 @@ function applyLanguage() {
     "#exportDataBtn": "exportJson",
     "#resetLocalDataBtn": "resetDefault",
     "#confirmMonthBtn": "addMonth",
+    "#cancelMonthBtn": "cancel",
     "#loginBtn": "login",
     "#logoutBtn": "logout",
   };
