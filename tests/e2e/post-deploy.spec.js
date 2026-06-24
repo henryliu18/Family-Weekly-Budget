@@ -37,6 +37,18 @@ async function expectTableHasRows(page, selector) {
     .toBeGreaterThan(0);
 }
 
+async function addMonth(page, monthValue) {
+  await page.locator("#addMonthBtn").click();
+  await expect(page.locator("#monthDialog")).toBeVisible();
+  await page.locator("#newMonthPicker").evaluate((input, value) => {
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, monthValue);
+  await page.locator("#confirmMonthBtn").click();
+  await expect(page.locator("#monthDialog")).toBeHidden();
+}
+
 test("HTTP redirects to HTTPS", async ({ request }) => {
   const response = await request.get(httpUrl, { maxRedirects: 0 });
   expect(response.status()).toBe(308);
@@ -145,14 +157,18 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await expect(page.locator("#periodInput")).toHaveValue("2026-06-01 - 2026-06-07");
   await expect(page.locator("#notesInput")).toHaveValue(note);
 
-  const monthName = `E2E Test ${Date.now()}`;
   await page.locator("#addMonthBtn").click();
   await expect(page.locator("#monthDialog")).toBeVisible();
-  await page.locator("#newMonthName").fill(monthName);
-  await page.locator("#confirmMonthBtn").click();
+  await expect(page.locator("#cancelMonthBtn")).toHaveText("Cancel");
+  await page.locator("#cancelMonthBtn").click();
   await expect(page.locator("#monthDialog")).toBeHidden();
-  await expect(page.locator("#monthSelect option:checked")).toHaveText(monthName);
-  await expect(page.locator("#overviewTitle")).toHaveText(monthName);
+
+  await addMonth(page, "2026-08");
+  await expect(page.locator("#monthSelect option:checked")).toHaveText("2026 August");
+  await expect(page.locator("#overviewTitle")).toHaveText("2026 August");
+  await expect(page.locator("#weekSelect option").nth(0)).toHaveText("Period 1");
+  await expect(page.locator("#periodStartInput")).toHaveValue("2026-08-01");
+  await expect(page.locator("#periodEndInput")).toHaveValue("2026-08-07");
   await page.locator('.nav-tab[data-view="overview"]').click();
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await expect(page.locator("#overviewOnboarding")).toBeVisible();
@@ -165,7 +181,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
     await dialog.accept();
   });
   await page.locator("#deleteMonthBtn").click();
-  await expect(page.locator("#overviewTitle")).not.toHaveText(monthName);
+  await expect(page.locator("#overviewTitle")).not.toHaveText("2026 August");
 
   await page.locator("#logoutBtn").click();
   await expect(page.locator("#authOverlay")).toBeVisible();
@@ -177,12 +193,7 @@ test("transaction import draft filters, reviews, and applies rows", async ({ pag
   await login(page);
   await page.locator("#languageSelect").selectOption("en");
 
-  const monthName = `Import Draft ${Date.now()}`;
-  await page.locator("#addMonthBtn").click();
-  await expect(page.locator("#monthDialog")).toBeVisible();
-  await page.locator("#newMonthName").fill(monthName);
-  await page.locator("#confirmMonthBtn").click();
-  await expect(page.locator("#monthDialog")).toBeHidden();
+  await addMonth(page, "2026-06");
   await page.locator('.nav-tab[data-view="entry"]').click();
   await expect(page.locator("#entryView")).toHaveClass(/active/);
 
@@ -279,7 +290,7 @@ test("transaction import draft filters, reviews, and applies rows", async ({ pag
   });
   await page.locator('.nav-tab[data-view="overview"]').click();
   await page.locator("#deleteMonthBtn").click();
-  await expect(page.locator("#overviewTitle")).not.toHaveText(monthName);
+  await expect(page.locator("#overviewTitle")).not.toHaveText("2026 June");
 });
 
 test("transaction import accepts copied online banking text", async ({ page }) => {
@@ -288,12 +299,7 @@ test("transaction import accepts copied online banking text", async ({ page }) =
   await login(page);
   await page.locator("#languageSelect").selectOption("en");
 
-  const monthName = `Open Text Import ${Date.now()}`;
-  await page.locator("#addMonthBtn").click();
-  await expect(page.locator("#monthDialog")).toBeVisible();
-  await page.locator("#newMonthName").fill(monthName);
-  await page.locator("#confirmMonthBtn").click();
-  await expect(page.locator("#monthDialog")).toBeHidden();
+  await addMonth(page, "2026-09");
   await page.locator('.nav-tab[data-view="entry"]').click();
   await expect(page.locator("#entryView")).toHaveClass(/active/);
 
@@ -359,7 +365,7 @@ test("transaction import accepts copied online banking text", async ({ page }) =
   });
   await page.locator('.nav-tab[data-view="overview"]').click();
   await page.locator("#deleteMonthBtn").click();
-  await expect(page.locator("#overviewTitle")).not.toHaveText(monthName);
+  await expect(page.locator("#overviewTitle")).not.toHaveText("2026 September");
 });
 
 test("mobile overview stays within the viewport", async ({ page }) => {

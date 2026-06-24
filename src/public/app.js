@@ -4,12 +4,15 @@ const categories = DATA_CONFIG.categories;
 const LANGUAGE_KEY = "family-budget-language";
 const DEFAULT_LANGUAGE = "en";
 const META_FALLBACK = { buildVersion: "", buildTime: "", authEnabled: false };
+const MONTH_NAMES_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DEFAULT_PERIOD_LABELS = ["Period 1", "Period 2", "Period 3", "Period 4"];
 const i18n = {
   zh: {
     language: "語言",
     appTitle: "家庭週預算",
     appSubtitle: "Weekly budget tracker",
     month: "月份",
+    selectMonth: "選擇月份",
     addMonth: "新增月份",
     deleteMonth: "移除目前月份",
     overview: "總覽",
@@ -190,10 +193,10 @@ const i18n = {
     deleteOnlyMonth: "至少需要保留一個月份。",
     deleteConfirm: (name) => `確定要移除「${name}」嗎？這會刪除該月份的所有週紀錄。`,
     importFailed: "匯入失敗，請確認 JSON 格式正確。",
-    firstPeriod: "第一週",
-    secondPeriod: "第二週",
-    thirdPeriod: "第三週",
-    fourthPeriod: "第四週",
+    firstPeriod: "Period 1",
+    secondPeriod: "Period 2",
+    thirdPeriod: "Period 3",
+    fourthPeriod: "Period 4",
     buildVersion: "Build version",
     editingPeriod: (period) => `正在編輯：${period}`,
     editingExistingPeriod: "正在編輯既有週期；儲存後會覆蓋目前數值。",
@@ -205,6 +208,7 @@ const i18n = {
     password: "密碼",
     login: "登入",
     logout: "登出",
+    cancel: "取消",
     loginFailed: "密碼不正確，請再試一次。",
   },
   en: {
@@ -212,6 +216,7 @@ const i18n = {
     appTitle: "Family Weekly Budget",
     appSubtitle: "Weekly budget tracker",
     month: "Month",
+    selectMonth: "Select month",
     addMonth: "Add month",
     deleteMonth: "Delete current month",
     overview: "Overview",
@@ -407,6 +412,7 @@ const i18n = {
     password: "Password",
     login: "Log in",
     logout: "Log out",
+    cancel: "Cancel",
     loginFailed: "Incorrect password. Please try again.",
   },
 };
@@ -594,16 +600,19 @@ function normalizeState(state) {
   const fallback = structuredClone(DATA_CONFIG.initialState);
   const next = state && state.months ? state : fallback;
   Object.values(next.months).forEach((month) => {
+    ensureMonthMetadata(month);
     month.creditLimit = numberOrZero(month.creditLimit) || CREDIT_LIMIT;
-    month.weeks = Array.isArray(month.weeks) ? month.weeks.map((week) => createWeek(week)) : [];
+    month.weeks = Array.isArray(month.weeks)
+      ? month.weeks.map((week, index) => createWeek({ ...week, period: normalizePeriodLabel(week.period, index) }))
+      : [];
     if (month.weeks.length === 0) {
-      month.weeks = ["第一週", "第二週", "第三週", "第四週"].map((period) =>
+      month.weeks = DEFAULT_PERIOD_LABELS.map((period) =>
         createWeek({ period, availableBalance: month.creditLimit }),
       );
     }
   });
   if (!next.currentMonthId || !next.months[next.currentMonthId]) {
-    next.currentMonthId = Object.keys(next.months)[0];
+    next.currentMonthId = Object.values(next.months).sort(compareMonths)[0]?.id;
   }
   return next;
 }
@@ -715,7 +724,7 @@ function bindElements() {
     "importDataInput",
     "resetLocalDataBtn",
     "monthDialog",
-    "newMonthName",
+    "newMonthPicker",
     "cancelMonthBtn",
     "confirmMonthBtn",
     "buildVersionValue",
@@ -835,6 +844,142 @@ function currentWeek() {
   return currentMonth().weeks.find((week) => week.id === currentWeekId) || currentMonth().weeks[0];
 }
 
+function validMonthSortKey(value) {
+  return /^\d{4}-\d{2}$/.test(String(value || ""));
+}
+
+function formatMonthSortKey(year, month) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return "";
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function monthTokenToNumber(token) {
+  const text = String(token || "").trim();
+  if (!text) return 0;
+  if (/^\d{1,2}$/.test(text)) {
+    const value = Number(text);
+    return value >= 1 && value <= 12 ? value : 0;
+  }
+  const short = text.slice(0, 3).toLowerCase();
+  return {
+    jan: 1,
+    feb: 2,
+    mar: 3,
+    apr: 4,
+    may: 5,
+    jun: 6,
+    jul: 7,
+    aug: 8,
+    sep: 9,
+    oct: 10,
+    nov: 11,
+    dec: 12,
+  }[short] || 0;
+}
+
+function formatMonthDisplay(sortKey) {
+  if (!validMonthSortKey(sortKey)) return "";
+  const [yearText, monthText] = sortKey.split("-");
+  return `${yearText} ${MONTH_NAMES_EN[Number(monthText) - 1]}`;
+}
+
+function isLegacyGeneratedMonthName(value) {
+  const text = String(value || "").trim();
+  return (
+    /^\d{4}\s+\d{1,2}(?:-\d{1,2})?$/.test(text) ||
+    /^\d{4}\s+[A-Za-z]+(?:-[A-Za-z]+)?$/.test(text)
+  );
+}
+
+function inferMonthSortKey(month) {
+  if (validMonthSortKey(month?.sortKey)) return month.sortKey;
+  if (validMonthSortKey(month?.displayName)) return month.displayName;
+
+  const label = String(month?.displayName || month?.name || "").trim();
+  let match = label.match(/^(\d{4})\s+([A-Za-z]+)(?:\s*-\s*([A-Za-z]+))?$/);
+  if (match) {
+    const year = Number(match[1]);
+    const monthNumber = monthTokenToNumber(match[3] || match[2]);
+    return formatMonthSortKey(year, monthNumber);
+  }
+  match = label.match(/^(\d{4})\s+(\d{1,2})(?:-(\d{1,2}))?$/);
+  if (match) {
+    const year = Number(match[1]);
+    const monthNumber = Number(match[3] || match[2]);
+    return formatMonthSortKey(year, monthNumber);
+  }
+
+  const idText = String(month?.id || "");
+  match = idText.match(/^(\d{4})-(\d{2})$/);
+  if (match) return formatMonthSortKey(Number(match[1]), Number(match[2]));
+  match = idText.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:-|$)/);
+  if (match) return formatMonthSortKey(Number(match[1]), Number(match[3]));
+
+  const ranges = monthDateRanges(month);
+  const latestRange = ranges[ranges.length - 1];
+  if (latestRange?.end) return latestRange.end.slice(0, 7);
+
+  const today = new Date();
+  return formatMonthSortKey(today.getFullYear(), today.getMonth() + 1);
+}
+
+function ensureMonthMetadata(month) {
+  month.sortKey = inferMonthSortKey(month);
+  month.displayName = month.displayName?.trim() || formatMonthDisplay(month.sortKey);
+  if (!month.name || isLegacyGeneratedMonthName(month.name)) {
+    month.name = month.displayName;
+  }
+}
+
+function monthDisplayName(month) {
+  return month?.displayName?.trim() || month?.name?.trim() || formatMonthDisplay(inferMonthSortKey(month)) || "";
+}
+
+function compareMonths(a, b) {
+  const aKey = inferMonthSortKey(a);
+  const bKey = inferMonthSortKey(b);
+  if (aKey !== bKey) return aKey.localeCompare(bKey);
+  return monthDisplayName(a).localeCompare(monthDisplayName(b));
+}
+
+function orderedMonths() {
+  return Object.values(appState.months).sort(compareMonths);
+}
+
+function monthIdForSortKey(sortKey) {
+  return orderedMonths().find((month) => inferMonthSortKey(month) === sortKey)?.id || "";
+}
+
+function normalizePeriodLabel(period, index) {
+  const text = String(period || "").trim();
+  if (!text) return DEFAULT_PERIOD_LABELS[index] || "";
+  if (/^(week|period)\s*\d+$/i.test(text) || /^第[一二三四1234]週$/.test(text)) {
+    return DEFAULT_PERIOD_LABELS[index] || text;
+  }
+  return text;
+}
+
+function defaultPeriodRangeForMonth(month, weekIndex, totalWeeks) {
+  const sortKey = inferMonthSortKey(month);
+  if (!validMonthSortKey(sortKey)) return { start: "", end: "" };
+  const [yearText, monthText] = sortKey.split("-");
+  const year = Number(yearText);
+  const monthNumber = Number(monthText);
+  const lastDay = new Date(year, monthNumber, 0).getDate();
+  const startDay = Math.min(lastDay, weekIndex * 7 + 1);
+  const endDay = weekIndex >= totalWeeks - 1 ? lastDay : Math.min(lastDay, startDay + 6);
+  return {
+    start: toIsoDate(year, monthNumber, startDay),
+    end: toIsoDate(year, monthNumber, endDay),
+  };
+}
+
+function editingRangeForWeek(month, week, weekIndex) {
+  const parsed = parseFlexiblePeriodRange(week?.period || "", monthDisplayName(month));
+  if (parsed.start || parsed.end) return parsed;
+  return defaultPeriodRangeForMonth(month, weekIndex, month.weeks.length);
+}
+
 function renderAll() {
   applyLanguage();
   updateBuildVersion();
@@ -892,6 +1037,7 @@ function applyLanguage() {
     "#exportDataBtn": "exportJson",
     "#resetLocalDataBtn": "resetDefault",
     "#confirmMonthBtn": "addMonth",
+    "#cancelMonthBtn": "cancel",
     "#loginBtn": "login",
     "#logoutBtn": "logout",
   };
@@ -914,7 +1060,7 @@ function applyLanguage() {
     historyMinInput: "minAmount",
     monthNameInput: "monthName",
     creditLimitInput: "creditLimit",
-    newMonthName: "monthName",
+    newMonthPicker: "selectMonth",
   };
   Object.entries(spans).forEach(([id, key]) => {
     const label = document.getElementById(id)?.closest("label")?.querySelector("span");
@@ -1044,7 +1190,7 @@ function clearSensitiveUi() {
     els.historyMinInput,
     els.monthNameInput,
     els.creditLimitInput,
-    els.newMonthName,
+    els.newMonthPicker,
   ].forEach((element) => {
     if (element) element.value = "";
   });
@@ -1088,16 +1234,18 @@ function clearLoginError() {
 }
 
 function renderMonthOptions() {
-  const months = Object.values(appState.months);
+  const months = orderedMonths();
+  const selectedHistoryMonth = els.historyMonthFilter.value || "all";
   els.monthSelect.innerHTML = months
-    .map((month) => `<option value="${month.id}">${escapeHtml(month.name)}</option>`)
+    .map((month) => `<option value="${month.id}">${escapeHtml(monthDisplayName(month))}</option>`)
     .join("");
   els.monthSelect.value = currentMonthId;
 
   els.historyMonthFilter.innerHTML = [
     `<option value="all">${escapeHtml(t("allMonths"))}</option>`,
-    ...months.map((month) => `<option value="${month.id}">${escapeHtml(month.name)}</option>`),
+    ...months.map((month) => `<option value="${month.id}">${escapeHtml(monthDisplayName(month))}</option>`),
   ].join("");
+  els.historyMonthFilter.value = appState.months[selectedHistoryMonth] ? selectedHistoryMonth : "all";
 }
 
 function renderOverview() {
@@ -1107,7 +1255,7 @@ function renderOverview() {
   const hasCompletedWeeks = completedRows.length > 0;
   const latest = completedRows[completedRows.length - 1] || rows[0];
 
-  els.overviewTitle.textContent = month.name;
+  els.overviewTitle.textContent = monthDisplayName(month);
   els.limitKpi.textContent = formatMoney(month.creditLimit);
   els.monthSpendKpi.textContent = formatMoney(latest?.cumulativeSpend || 0);
   els.availableKpi.textContent = formatMoney(latest?.week.availableBalance || month.creditLimit);
@@ -1197,7 +1345,7 @@ function setOverviewStatus(kind, title, copy) {
 }
 
 function previousMonthFor(month) {
-  const months = Object.values(appState.months);
+  const months = orderedMonths();
   const currentIndex = months.findIndex((item) => item.id === month.id);
   return currentIndex > 0 ? months[currentIndex - 1] : null;
 }
@@ -1388,6 +1536,10 @@ function renderEntryForm() {
   const month = currentMonth();
   if (!currentWeekId && month.weeks.length) currentWeekId = month.weeks[0].id;
   const week = currentWeek();
+  const weekIndex = Math.max(
+    0,
+    month.weeks.findIndex((item) => item.id === week?.id),
+  );
   const incidentalsWasOpen = !!els.incidentalsDetails?.open;
 
   els.weekSelect.innerHTML = month.weeks
@@ -1395,12 +1547,12 @@ function renderEntryForm() {
     .join("");
   if (week) els.weekSelect.value = week.id;
 
-  const periodRange = parsePeriodRange(week?.period || "");
+  const periodRange = editingRangeForWeek(month, week, weekIndex);
   els.periodStartInput.value = periodRange.start;
   els.periodEndInput.value = periodRange.end;
   els.periodInput.value = formatPeriodFromDates() || week?.period || "";
   renderEntryEditBanner(week);
-  renderEntrySummary(month.name, 0, computeCumulativeFromAvailable(week, month));
+  renderEntrySummary(monthDisplayName(month), 0, computeCumulativeFromAvailable(week, month));
   els.availableInput.value = valueForInput(week?.availableBalance);
   els.cumulativeInput.value = formatMoney(computeCumulativeFromAvailable(week, currentMonth()));
   els.unpaidInput.value = valueForInput(week?.unpaidPrevious);
@@ -1512,7 +1664,7 @@ function renderLiveWeeklyTotal() {
     cumulative === null ? 0 : index <= 0 ? cumulative : cumulative - previousCumulative;
   els.cumulativeInput.value = cumulative === null ? "" : formatMoney(cumulative);
   els.weeklyTotalInput.value = formatMoney(weeklyTotal);
-  renderEntrySummary(month.name, weeklyTotal, cumulative);
+  renderEntrySummary(monthDisplayName(month), weeklyTotal, cumulative);
   renderEntryPeriodComparison(month, preview, weeklyTotal);
   updateImportPeriodLabel();
   renderImportWarnings();
@@ -1845,7 +1997,7 @@ function monthExistsForImportDate(dateIso, range) {
 function monthDateRanges(month) {
   const ranges = [];
   month.weeks.forEach((week) => {
-    const range = parseFlexiblePeriodRange(week.period, month.name);
+    const range = parseFlexiblePeriodRange(week.period, monthDisplayName(month));
     if (range.start && range.end) ranges.push(range);
   });
   return ranges;
@@ -2214,6 +2366,13 @@ function supportsModalDialog(dialog) {
 
 function openMonthDialog() {
   if (!els.monthDialog) return;
+  const selectedSortKey = inferMonthSortKey(currentMonth());
+  if (els.newMonthPicker) {
+    const today = new Date();
+    els.newMonthPicker.value = validMonthSortKey(selectedSortKey)
+      ? selectedSortKey
+      : formatMonthSortKey(today.getFullYear(), today.getMonth() + 1);
+  }
   if (supportsModalDialog(els.monthDialog)) {
     try {
       els.monthDialog.showModal();
@@ -2243,39 +2402,51 @@ function closeMonthDialog() {
 }
 
 function addMonth() {
-  const name = els.newMonthName.value.trim();
-  if (!name) return;
-  const id = slugify(name);
-  if (appState.months[id]) return;
+  const sortKey = String(els.newMonthPicker?.value || "").trim();
+  if (!validMonthSortKey(sortKey)) return;
+  const existingId = monthIdForSortKey(sortKey);
+  if (existingId) {
+    currentMonthId = existingId;
+    appState.currentMonthId = currentMonthId;
+    currentWeekId = currentMonth().weeks[0]?.id;
+    closeMonthDialog();
+    renderAll();
+    return;
+  }
+  const displayName = formatMonthDisplay(sortKey);
+  const id = sortKey;
   appState.months[id] = {
     id,
-    name,
+    sortKey,
+    displayName,
+    name: displayName,
     creditLimit: CREDIT_LIMIT,
-    weeks: [t("firstPeriod"), t("secondPeriod"), t("thirdPeriod"), t("fourthPeriod")].map((period) =>
+    weeks: DEFAULT_PERIOD_LABELS.map((period) =>
       createWeek({ period, availableBalance: CREDIT_LIMIT, unpaidPrevious: null }),
     ),
   };
   currentMonthId = id;
+  appState.currentMonthId = currentMonthId;
   currentWeekId = appState.months[id].weeks[0].id;
-  els.newMonthName.value = "";
+  if (els.newMonthPicker) els.newMonthPicker.value = "";
   closeMonthDialog();
   renderAll();
 }
 
 function deleteCurrentMonth() {
-  const monthIds = Object.keys(appState.months);
+  const monthIds = orderedMonths().map((month) => month.id);
   if (monthIds.length <= 1) {
     alert(t("deleteOnlyMonth"));
     return;
   }
 
   const month = currentMonth();
-  const ok = confirm(t("deleteConfirm", month.name));
+  const ok = confirm(t("deleteConfirm", monthDisplayName(month)));
   if (!ok) return;
 
   const currentIndex = monthIds.indexOf(currentMonthId);
   delete appState.months[currentMonthId];
-  const remainingIds = Object.keys(appState.months);
+  const remainingIds = orderedMonths().map((item) => item.id);
   currentMonthId = remainingIds[Math.max(0, Math.min(currentIndex, remainingIds.length - 1))];
   appState.currentMonthId = currentMonthId;
   currentWeekId = currentMonth().weeks[0]?.id;
@@ -2284,7 +2455,7 @@ function deleteCurrentMonth() {
 
 function renderMonthSettings() {
   const month = currentMonth();
-  els.monthNameInput.value = month.name;
+  els.monthNameInput.value = monthDisplayName(month);
   els.creditLimitInput.value = valueForInput(month.creditLimit);
 }
 
@@ -2292,7 +2463,13 @@ function saveMonthSettings() {
   const month = currentMonth();
   const nextName = els.monthNameInput.value.trim();
   const nextLimit = numberOrNull(els.creditLimitInput.value);
-  if (nextName) month.name = nextName;
+  if (nextName) {
+    month.displayName = nextName;
+    month.name = nextName;
+  } else {
+    month.displayName = formatMonthDisplay(inferMonthSortKey(month));
+    month.name = month.displayName;
+  }
   if (nextLimit !== null && nextLimit > 0) month.creditLimit = nextLimit;
   month.weeks = month.weeks.map((week) => ({
     ...week,
@@ -2471,14 +2648,14 @@ function drawLegend(ctx, width, colors) {
 }
 
 function monthlyTrendRows() {
-  return Object.values(appState.months).map((month) => {
+  return orderedMonths().map((month) => {
     const rows = computedWeeks(month);
     const nonGrocery = rows.reduce((sum, row) => sum + numberOrZero(row.nonGrocery), 0);
     const grocery = rows.reduce((sum, row) => sum + Math.max(0, numberOrZero(row.grocery)), 0);
     const incidentals = rows.reduce((sum, row) => sum + numberOrZero(row.incidentals), 0);
     return {
       id: month.id,
-      name: month.name,
+      name: monthDisplayName(month),
       nonGrocery: roundCurrency(nonGrocery),
       grocery: roundCurrency(grocery),
       incidentals: roundCurrency(incidentals),
@@ -2702,14 +2879,14 @@ function renderHistory() {
   };
 
   const rows = [];
-  Object.values(appState.months).forEach((month) => {
+  orderedMonths().forEach((month) => {
     if (monthFilter !== "all" && month.id !== monthFilter) return;
     computedWeeks(month).forEach((row) => {
       const values = historyValues(row);
       Object.entries(values).forEach(([key, item]) => {
         if (categoryFilter !== "all" && key !== categoryFilter) return;
         if (Math.abs(item.amount) < minAmount) return;
-        const haystack = `${month.name} ${row.week.period} ${item.label} ${row.week.notes}`.toLowerCase();
+        const haystack = `${monthDisplayName(month)} ${row.week.period} ${item.label} ${row.week.notes}`.toLowerCase();
         if (search && !haystack.includes(search)) return;
         rows.push({ month, row, label: item.label, amount: item.amount });
       });
@@ -2733,7 +2910,7 @@ function renderHistory() {
               .map(
                 (item) => `
                   <tr>
-                    <td data-label="${labels.month}">${escapeHtml(item.month.name)}</td>
+                    <td data-label="${labels.month}">${escapeHtml(monthDisplayName(item.month))}</td>
                     <td data-label="${labels.period}">${escapeHtml(item.row.week.period || "")}</td>
                     <td data-label="${labels.category}">${escapeHtml(item.label)}</td>
                     <td class="amount" data-label="${labels.amount}">${formatMoney(item.amount)}</td>
