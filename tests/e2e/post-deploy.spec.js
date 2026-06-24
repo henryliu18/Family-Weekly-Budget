@@ -162,12 +162,12 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await page.locator("#cancelMonthBtn").click();
   await expect(page.locator("#monthDialog")).toBeHidden();
 
-  await addMonth(page, "2026-08");
-  await expect(page.locator("#monthSelect option:checked")).toHaveText("2026 August");
-  await expect(page.locator("#overviewTitle")).toHaveText("2026 August");
+  await addMonth(page, "2030-01");
+  await expect(page.locator("#monthSelect option:checked")).toHaveText("2030 January");
+  await expect(page.locator("#overviewTitle")).toHaveText("2030 January");
   await expect(page.locator("#weekSelect option").nth(0)).toHaveText("Period 1");
-  await expect(page.locator("#periodStartInput")).toHaveValue("2026-08-01");
-  await expect(page.locator("#periodEndInput")).toHaveValue("2026-08-07");
+  await expect(page.locator("#periodStartInput")).toHaveValue("2030-01-01");
+  await expect(page.locator("#periodEndInput")).toHaveValue("2030-01-07");
   await page.locator('.nav-tab[data-view="overview"]').click();
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await expect(page.locator("#overviewOnboarding")).toBeVisible();
@@ -180,7 +180,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
     await dialog.accept();
   });
   await page.locator("#deleteMonthBtn").click();
-  await expect(page.locator("#overviewTitle")).not.toHaveText("2026 August");
+  await expect(page.locator("#overviewTitle")).not.toHaveText("2030 January");
 
   await page.locator("#logoutBtn").click();
   await expect(page.locator("#authOverlay")).toBeVisible();

@@ -80,24 +80,32 @@ jobs:
           set -euo pipefail
           ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
             "set -euxo pipefail && \
-            cd '${{ steps.e2e.outputs.app_path }}' && \
             TLS_NAME='localhost' && \
             openssl req -x509 -newkey rsa:4096 -sha256 -days 7 -nodes \
-              -keyout certs/server.key \
-              -out certs/server.crt \
+              -keyout '${{ steps.e2e.outputs.app_path }}/certs/server.key' \
+              -out '${{ steps.e2e.outputs.app_path }}/certs/server.crt' \
               -subj \"/CN=\$TLS_NAME\" \
               -addext \"subjectAltName=DNS:localhost,IP:127.0.0.1\" && \
-            sudo -n docker compose -p family-budget-e2e down --remove-orphans || true && \
+            sudo -n docker compose \
+              -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' \
+              --project-directory '${{ steps.e2e.outputs.app_path }}' \
+              -p family-budget-e2e down --remove-orphans || true && \
             APP_PASSWORD='${{ steps.e2e.outputs.password }}' \
             APP_IMAGE_TAG='${{ steps.e2e.outputs.image_tag }}' \
             APP_BUILD_VERSION='e2e-${{ github.sha }}' \
             APP_BUILD_TIME='$(date -u +%Y-%m-%dT%H:%M:%SZ)' \
-            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME docker compose -p family-budget-e2e pull && \
+            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME docker compose \
+              -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' \
+              --project-directory '${{ steps.e2e.outputs.app_path }}' \
+              -p family-budget-e2e pull && \
             APP_PASSWORD='${{ steps.e2e.outputs.password }}' \
             APP_IMAGE_TAG='${{ steps.e2e.outputs.image_tag }}' \
             APP_BUILD_VERSION='e2e-${{ github.sha }}' \
             APP_BUILD_TIME='$(date -u +%Y-%m-%dT%H:%M:%SZ)' \
-            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME docker compose -p family-budget-e2e up -d"
+            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME docker compose \
+              -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' \
+              --project-directory '${{ steps.e2e.outputs.app_path }}' \
+              -p family-budget-e2e up -d"
 
       - name: Wait for E2E health
         run: |
@@ -137,4 +145,4 @@ jobs:
         if: always()
         run: |
           ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
-            "cd '${{ steps.e2e.outputs.app_path }}' && sudo -n docker compose -p family-budget-e2e down --remove-orphans || true; sudo -n rm -rf '${{ steps.e2e.outputs.app_path }}'"
+            "if [ -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' ]; then sudo -n docker compose -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' --project-directory '${{ steps.e2e.outputs.app_path }}' -p family-budget-e2e down --remove-orphans || true; fi; sudo -n rm -rf '${{ steps.e2e.outputs.app_path }}'"
