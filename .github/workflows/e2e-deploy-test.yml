@@ -3,8 +3,9 @@ name: Deploy E2E Test
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["Docker Image CI"]
+    types: [completed]
   workflow_dispatch:
 
 jobs:
@@ -18,7 +19,7 @@ jobs:
         github.event.workflow_run.head_branch == 'main'
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -40,7 +41,11 @@ jobs:
         run: |
           set -euo pipefail
           E2E_APP_PATH='${{ vars.VM_APP_PATH }}/e2e'
-          IMAGE_TAG='${{ github.event_name == 'workflow_dispatch' && 'latest' || github.event_name == 'pull_request' && format('pr-{0}', github.sha) || format('sha-{0}', github.event.workflow_run.head_sha) }}'
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            IMAGE_TAG="pr-${{ github.event.pull_request.head.sha }}"
+          else
+            IMAGE_TAG='${{ github.event_name == 'workflow_dispatch' && 'latest' || format('sha-{0}', github.event.workflow_run.head_sha) }}'
+          fi
           E2E_PASSWORD="$(openssl rand -hex 16)"
           echo "::add-mask::$E2E_PASSWORD"
           {
@@ -48,6 +53,13 @@ jobs:
             echo "image_tag=$IMAGE_TAG"
             echo "password=$E2E_PASSWORD"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image archive (pull_request)
+        if: github.event_name == 'pull_request'
+        run: |
+          docker build -t docker.io/henryhhl18/family-budget-app:pr-${{ github.event.pull_request.head.sha }} \
+            -f deploy/Dockerfile .
+          docker save docker.io/henryhhl18/family-budget-app:pr-${{ github.event.pull_request.head.sha }} | gzip > family-budget-e2e-image.tar.gz
 
       - name: Sync E2E files
         run: |
@@ -60,6 +72,10 @@ jobs:
             "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ steps.e2e.outputs.app_path }}/docker-compose.yml"
           scp -o BatchMode=yes data/budget-store.example.json \
             "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ steps.e2e.outputs.app_path }}/budget-store.json"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            scp -o BatchMode=yes family-budget-e2e-image.tar.gz \
+              "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ steps.e2e.outputs.app_path }}/family-budget-e2e-image.tar.gz"
+          fi
 
       - name: Start E2E deployment
         run: |
@@ -74,11 +90,12 @@ jobs:
               -subj \"/CN=\$TLS_NAME\" \
               -addext \"subjectAltName=DNS:localhost,IP:127.0.0.1\" && \
             sudo -n docker compose -p family-budget-e2e down --remove-orphans || true && \
-            APP_PASSWORD='${{ steps.e2e.outputs.password }}' \
-            APP_IMAGE_TAG='${{ steps.e2e.outputs.image_tag }}' \
-            APP_BUILD_VERSION='e2e-${{ github.sha }}' \
-            APP_BUILD_TIME='$(date -u +%Y-%m-%dT%H:%M:%SZ)' \
-            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME docker compose -p family-budget-e2e pull && \
+            if [ '${{ github.event_name }}' = 'pull_request' ]; then \
+              gunzip -c family-budget-e2e-image.tar.gz | sudo -n docker load; \
+            else \
+              APP_IMAGE_TAG='${{ steps.e2e.outputs.image_tag }}' && \
+              sudo -n --preserve-env=APP_IMAGE_TAG docker compose -p family-budget-e2e pull; \
+            fi && \
             APP_PASSWORD='${{ steps.e2e.outputs.password }}' \
             APP_IMAGE_TAG='${{ steps.e2e.outputs.image_tag }}' \
             APP_BUILD_VERSION='e2e-${{ github.sha }}' \

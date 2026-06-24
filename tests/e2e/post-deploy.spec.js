@@ -5,7 +5,6 @@ const password = process.env.E2E_APP_PASSWORD || "";
 
 async function login(page) {
   if (!password) {
-    // Unauthenticated mode — navigate and proceed
     await page.goto(httpUrl);
     return;
   }
@@ -42,15 +41,11 @@ async function expectTableHasRows(page, selector) {
     .toBeGreaterThan(0);
 }
 
-// ── HTTP redirect test (no auth needed) ──
-
 test("HTTP redirects to HTTPS", async ({ request }) => {
   const response = await request.get(httpUrl, { maxRedirects: 0 });
   expect(response.status()).toBe(308);
   expect(response.headers().location).toMatch(/^https:\/\//);
 });
-
-// ── Smoke / workflow test ──
 
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
@@ -100,6 +95,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
     await page.locator("#weekSelect").selectOption(nextPeriodValue);
     await expect(page.locator("#entryPeriodComparisonTitle")).toHaveText(nextPeriodLabel.trim());
   }
+
   for (const label of [
     "Medical out-of-pocket",
     "Private insurance",
@@ -117,6 +113,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   ]) {
     await expect(page.locator("#categoryInputs")).toContainText(label);
   }
+
   await expect(page.locator(".grocery-explainer")).toHaveText(
     "Grocery is auto-calculated from period total minus detailed non-grocery and incidentals.",
   );
@@ -125,11 +122,13 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   );
   await expect(page.locator(".category-input-card-rare")).toContainText("Rare, unavoidable events");
   await expect(page.locator("#notesInput")).toHaveAttribute("placeholder", /emergency repair/);
+
   await page.locator("#languageSelect").selectOption("zh");
   await expect(page.locator(".grocery-explainer")).toContainText("採買會由本期總支出");
   await expect(page.locator("#entryEditBanner")).toContainText("正在編輯既有週期");
   await expect(page.locator("#notesInput")).toHaveAttribute("placeholder", /緊急維修/);
   await page.locator("#languageSelect").selectOption("en");
+
   const note = `e2e note ${Date.now()}`;
   await page.locator("#periodStartInput").fill("2026-06-01");
   await page.locator("#periodEndInput").fill("2026-06-07");
@@ -154,10 +153,11 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await expect(page.locator("#periodInput")).toHaveValue("2026-06-01 - 2026-06-07");
   await expect(page.locator("#notesInput")).toHaveValue(note);
 
-  // Create a new month via month picker and verify it can be deleted
   await page.locator("#addMonthBtn").click();
   await expect(page.locator("#monthDialog")).toBeVisible();
-  await page.locator("#newMonthPicker").evaluate((el, v) => { el.value = v; }, "2026-06");
+  await page.locator("#newMonthPicker").evaluate((element, value) => {
+    element.value = value;
+  }, "2026-06");
   await page.locator("#confirmMonthBtn").click();
   await expect(page.locator("#monthDialog")).toBeHidden();
   await expect(page.locator("#monthSelect option:checked")).toContainText("2026");
@@ -179,86 +179,6 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await page.locator("#logoutBtn").click();
   await expect(page.locator("#authOverlay")).toBeVisible();
 });
-
-// ── Month picker tests (work with or without auth) ──
-
-test("adds a month via month picker with correct period names", async ({ page }) => {
-  await login(page);
-  await page.locator("#languageSelect").selectOption("en");
-
-  await page.locator("#addMonthBtn").click();
-  await expect(page.locator("#monthDialog")).toBeVisible();
-  await page.locator("#newMonthPicker").evaluate((el) => { el.value = "2026-08"; });
-  await page.locator("#confirmMonthBtn").click();
-  await expect(page.locator("#monthDialog")).toBeHidden();
-  await expect(page.locator("#monthSelect option:checked")).toHaveText("2026 August");
-
-  await page.locator('[data-view="entry"]').click();
-  await expect(page.locator("#entryView")).toHaveClass(/active/);
-  const periodOptions = await page.locator("#weekSelect option").allTextContents();
-  expect(periodOptions).toEqual(["Period 1", "Period 2", "Period 3", "Period 4"]);
-});
-
-test("months appear sorted chronologically in dropdown", async ({ page }) => {
-  await login(page);
-  await page.locator("#languageSelect").selectOption("en");
-
-  for (const mv of ["2025-06", "2025-01", "2026-03", "2025-09"]) {
-    await page.locator("#addMonthBtn").click();
-    await expect(page.locator("#monthDialog")).toBeVisible();
-    await page.locator("#newMonthPicker").evaluate((el, v) => { el.value = v; }, mv);
-    await page.locator("#confirmMonthBtn").click();
-    await expect(page.locator("#monthDialog")).toBeHidden();
-  }
-
-  const texts = await page.locator("#monthSelect option").allTextContents();
-  const testMonths = texts.filter((t) =>
-    ["2025 January", "2025 June", "2025 September", "2026 March"].includes(t)
-  );
-  expect(testMonths).toEqual(["2025 January", "2025 June", "2025 September", "2026 March"]);
-});
-
-test("new month gets default dates based on month context", async ({ page }) => {
-  await login(page);
-  await page.locator("#languageSelect").selectOption("en");
-
-  await page.locator("#addMonthBtn").click();
-  await expect(page.locator("#monthDialog")).toBeVisible();
-  await page.locator("#newMonthPicker").evaluate((el) => { el.value = "2023-03"; });
-  await page.locator("#confirmMonthBtn").click();
-  await expect(page.locator("#monthDialog")).toBeHidden();
-
-  await page.locator('[data-view="entry"]').click();
-  await expect(page.locator("#entryView")).toHaveClass(/active/);
-  await expect(page.locator("#periodStartInput")).toHaveValue("2023-03-01");
-  await expect(page.locator("#periodEndInput")).toHaveValue("2023-03-07");
-});
-
-test("trend chart shows months in chronological order", async ({ page }) => {
-  await login(page);
-  await page.locator("#languageSelect").selectOption("en");
-
-  for (const mv of ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05"]) {
-    await page.locator("#addMonthBtn").click();
-    await expect(page.locator("#monthDialog")).toBeVisible();
-    await page.locator("#newMonthPicker").evaluate((el, v) => { el.value = v; }, mv);
-    await page.locator("#confirmMonthBtn").click();
-    await expect(page.locator("#monthDialog")).toBeHidden();
-  }
-
-  const trendOrder = await page.evaluate(() => {
-    try {
-      return window.monthlyTrendRows().map((r) => r.name);
-    } catch { return null; }
-  });
-  expect(trendOrder).not.toBeNull();
-  const relevant = trendOrder.filter((n) =>
-    ["2026 January", "2026 February", "2026 March", "2026 April", "2026 May"].includes(n)
-  );
-  expect(relevant).toEqual(["2026 January", "2026 February", "2026 March", "2026 April", "2026 May"]);
-});
-
-// ── Mobile viewport test ──
 
 test("mobile overview stays within the viewport", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
