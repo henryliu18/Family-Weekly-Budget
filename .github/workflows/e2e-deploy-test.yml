@@ -1,33 +1,18 @@
 name: Deploy E2E Test
 
 on:
-  workflow_run:
-    workflows: ["Docker Image CI"]
-    types: [completed]
   workflow_dispatch:
 
 jobs:
   e2e:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event.workflow_run.conclusion == 'success' &&
-        (
-          github.event.workflow_run.event == 'pull_request' ||
-          (
-            github.event.workflow_run.event == 'push' &&
-            github.event.workflow_run.head_branch == 'main'
-          )
-        )
-      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: family-budget-e2e-vm
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
 
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.1
@@ -44,19 +29,12 @@ jobs:
         id: e2e
         run: |
           set -euo pipefail
-          E2E_APP_PATH='${{ vars.VM_APP_PATH }}/e2e'
-          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
-            IMAGE_TAG='latest'
-          elif [ '${{ github.event.workflow_run.event }}' = 'pull_request' ]; then
-            IMAGE_TAG='pr-${{ github.event.workflow_run.head_sha }}'
-          else
-            IMAGE_TAG='sha-${{ github.event.workflow_run.head_sha }}'
-          fi
+          E2E_APP_PATH='${{ vars.VM_APP_PATH }}/e2e-manual-${{ github.run_id }}'
           E2E_PASSWORD="$(openssl rand -hex 16)"
           echo "::add-mask::$E2E_PASSWORD"
           {
             echo "app_path=$E2E_APP_PATH"
-            echo "image_tag=$IMAGE_TAG"
+            echo "image_tag=latest"
             echo "password=$E2E_PASSWORD"
           } >> "$GITHUB_OUTPUT"
 

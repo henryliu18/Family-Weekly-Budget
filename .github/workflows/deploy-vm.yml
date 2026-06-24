@@ -2,7 +2,7 @@ name: Deploy To VM
 
 on:
   workflow_run:
-    workflows: ["Deploy E2E Test"]
+    workflows: ["Docker Image CI"]
     types: [completed]
     branches: [ "main" ]
   workflow_dispatch:
