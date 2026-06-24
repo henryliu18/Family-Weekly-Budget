@@ -10,10 +10,26 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.image.outputs.tag }}
+      image_sha: ${{ steps.image.outputs.sha }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+
+      - name: Choose E2E image tag
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ '${{ github.event_name }}' = 'pull_request' ]; then
+            echo "tag=pr-${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=sha-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Login to Docker Hub
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -35,7 +51,7 @@ jobs:
           context: .
           file: deploy/Dockerfile
           push: true
-          tags: henryhhl18/family-budget-app:pr-${{ github.event.pull_request.head.sha }}
+          tags: henryhhl18/family-budget-app:${{ steps.image.outputs.tag }}
 
       - name: Build and push main images
         if: github.event_name != 'pull_request'
@@ -46,5 +62,138 @@ jobs:
           push: true
           tags: |
             henryhhl18/family-budget-app:latest
-            henryhhl18/family-budget-app:sha-${{ github.sha }}
+            henryhhl18/family-budget-app:${{ steps.image.outputs.tag }}
+
+  e2e:
+    needs: build
+    if: >-
+      needs.build.result == 'success' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        ) ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: family-budget-e2e-vm
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+
+      - name: Configure known hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Prepare E2E settings
+        id: e2e
+        run: |
+          set -euo pipefail
+          E2E_APP_PATH='${{ vars.VM_APP_PATH }}/e2e-${{ github.run_id }}'
+          E2E_PASSWORD="$(openssl rand -hex 16)"
+          echo "::add-mask::$E2E_PASSWORD"
+          {
+            echo "app_path=$E2E_APP_PATH"
+            echo "image_tag=${{ needs.build.outputs.image_tag }}"
+            echo "image_sha=${{ needs.build.outputs.image_sha }}"
+            echo "password=$E2E_PASSWORD"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Sync E2E files
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
+            "sudo -n rm -rf '${{ steps.e2e.outputs.app_path }}' && \
+            sudo -n mkdir -p '${{ steps.e2e.outputs.app_path }}/certs' && \
+            sudo -n chown -R '${{ vars.VM_SSH_USER }}':'${{ vars.VM_SSH_USER }}' '${{ steps.e2e.outputs.app_path }}'"
+          scp -o BatchMode=yes deploy/docker-compose.e2e.yml \
+            "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ steps.e2e.outputs.app_path }}/docker-compose.yml"
+          scp -o BatchMode=yes data/budget-store.example.json \
+            "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ steps.e2e.outputs.app_path }}/budget-store.json"
+
+      - name: Start E2E deployment
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
+            "set -euxo pipefail && \
+            TLS_NAME='localhost' && \
+            openssl req -x509 -newkey rsa:4096 -sha256 -days 7 -nodes \
+              -keyout '${{ steps.e2e.outputs.app_path }}/certs/server.key' \
+              -out '${{ steps.e2e.outputs.app_path }}/certs/server.crt' \
+              -subj \"/CN=\$TLS_NAME\" \
+              -addext \"subjectAltName=DNS:localhost,IP:127.0.0.1\" && \
+            sudo -n docker compose \
+              -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' \
+              --project-directory '${{ steps.e2e.outputs.app_path }}' \
+              -p family-budget-e2e down --remove-orphans || true && \
+            APP_PASSWORD='${{ steps.e2e.outputs.password }}' \
+            APP_IMAGE_TAG='${{ steps.e2e.outputs.image_tag }}' \
+            APP_BUILD_VERSION='e2e-${{ steps.e2e.outputs.image_sha }}' \
+            APP_BUILD_TIME='$(date -u +%Y-%m-%dT%H:%M:%SZ)' \
+            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME docker compose \
+              -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' \
+              --project-directory '${{ steps.e2e.outputs.app_path }}' \
+              -p family-budget-e2e pull && \
+            APP_PASSWORD='${{ steps.e2e.outputs.password }}' \
+            APP_IMAGE_TAG='${{ steps.e2e.outputs.image_tag }}' \
+            APP_BUILD_VERSION='e2e-${{ steps.e2e.outputs.image_sha }}' \
+            APP_BUILD_TIME='$(date -u +%Y-%m-%dT%H:%M:%SZ)' \
+            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME docker compose \
+              -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' \
+              --project-directory '${{ steps.e2e.outputs.app_path }}' \
+              -p family-budget-e2e up -d"
+
+      - name: Wait for E2E health
+        run: |
+          set -euo pipefail
+          ssh -f -N -o BatchMode=yes \
+            -L 18080:127.0.0.1:18080 \
+            -L 18443:127.0.0.1:18443 \
+            "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}"
+          for attempt in $(seq 1 30); do
+            if curl -ksf "https://127.0.0.1:18443/api/health" >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          curl -k "https://127.0.0.1:18443/api/health" || true
+          exit 1
+
+      - name: Install Playwright
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E checks
+        env:
+          E2E_BASE_URL: https://127.0.0.1:18443
+          E2E_HTTP_URL: http://127.0.0.1:18080
+          E2E_APP_PASSWORD: ${{ steps.e2e.outputs.password }}
+        run: npm run test:e2e -- --project=chromium
+
+      - name: Show E2E container logs
+        if: failure()
+        run: |
+          ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
+            "sudo -n docker logs family-budget-e2e --tail 200 || true"
+
+      - name: Cleanup E2E deployment
+        if: always()
+        run: |
+          ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
+            "if [ -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' ]; then sudo -n docker compose -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' --project-directory '${{ steps.e2e.outputs.app_path }}' -p family-budget-e2e down --remove-orphans || true; fi; sudo -n rm -rf '${{ steps.e2e.outputs.app_path }}'"
 
