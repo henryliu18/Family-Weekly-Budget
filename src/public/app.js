@@ -2720,6 +2720,25 @@ function drawMonthlyTrendChart() {
 
   const xForIndex = (index) => left + (chartWidth / Math.max(rows.length - 1, 1)) * index;
   const yForValue = (value) => top + chartHeight - (value / maxValue) * chartHeight;
+
+  // Highlight current month with yellow highlighter band
+  var currentMonthTrendIndex = rows.findIndex(function(r) { return r.id === currentMonthId; });
+  if (currentMonthTrendIndex >= 0) {
+    var highlightX, highlightW;
+    if (rows.length === 1) {
+      highlightX = left;
+      highlightW = chartWidth;
+    } else {
+      var spacing = chartWidth / (rows.length - 1);
+      highlightX = xForIndex(currentMonthTrendIndex) - spacing / 2;
+      highlightW = spacing;
+    }
+    ctx.save();
+    ctx.fillStyle = "rgba(255, 240, 100, 0.25)"; // yellow highlighter
+    ctx.fillRect(highlightX, top, highlightW, chartHeight);
+    ctx.restore();
+  }
+
   trendPoints = rows.map((row, index) => ({
     row,
     x: xForIndex(index),
