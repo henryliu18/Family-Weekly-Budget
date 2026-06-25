@@ -150,7 +150,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await page.reload();
   await expect(page.locator("#logoutBtn")).toBeVisible();
   await page.locator('.nav-tab[data-view="entry"]').click();
-  await page.locator("#weekSelect").selectOption({ label: "2026-06-01 - 2026-06-07" });
+  await page.locator("#weekSelect").selectOption({ index: 0 });
   await expect(page.locator("#periodStartInput")).toHaveValue("2026-06-01");
   await expect(page.locator("#periodEndInput")).toHaveValue("2026-06-07");
   await expect(page.locator("#periodInput")).toHaveValue("2026-06-01 - 2026-06-07");
