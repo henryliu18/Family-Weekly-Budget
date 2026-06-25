@@ -100,7 +100,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   if (entryPeriodOptions > 1) {
     const nextPeriodValue = await page.locator("#weekSelect option").nth(1).getAttribute("value");
     await page.locator("#weekSelect").selectOption(nextPeriodValue);
-    await expect(page.locator("#entryPeriodComparisonTitle")).toHaveText(await page.locator("#periodInput").inputValue());
+    await expect(page.locator("#entryPeriodComparisonTitle")).toHaveText("Period 2");
   }
   for (const label of [
     "Medical out-of-pocket",
