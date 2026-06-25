@@ -2336,7 +2336,7 @@ function saveWeekFromForm() {
   currentWeekId = next.id;
   const savedRow = computedWeeks(month).find((row) => row.week.id === next.id);
   const feedback = {
-    period: next.period || t("unnamedPeriod"),
+    period: index >= 0 ? "Period " + (index + 1) : (next.period || t("unnamedPeriod")),
     total: formatMoney(savedRow?.weeklyTotal || 0),
     grocery: formatMoney(savedRow?.grocery || 0),
   };
