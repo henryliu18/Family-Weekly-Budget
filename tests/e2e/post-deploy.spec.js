@@ -367,6 +367,20 @@ test("transaction import accepts copied online banking text", async ({ page }) =
   await expect(page.locator("#overviewTitle")).not.toHaveText("2026 September");
 });
 
+test("brand home link navigates to overview", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  // Start in overview
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  // Navigate to entry
+  await page.locator('.nav-tab[data-view="entry"]').click();
+  await expect(page.locator("#entryView")).toHaveClass(/active/);
+  // Click brand
+  await page.locator("#brandHome").click();
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+});
+
 test("mobile overview stays within the viewport", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 

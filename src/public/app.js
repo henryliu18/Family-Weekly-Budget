@@ -727,6 +727,7 @@ function bindElements() {
     "newMonthPicker",
     "cancelMonthBtn",
     "confirmMonthBtn",
+    "brandHome",
     "buildVersionValue",
     "authOverlay",
     "loginForm",
@@ -768,6 +769,7 @@ function bindEvents() {
   els.monthDialog?.addEventListener("click", (event) => {
     if (event.target === els.monthDialog) closeMonthDialog();
   });
+  els.brandHome?.addEventListener("click", () => switchView("overview"));
 
   els.weekSelect.addEventListener("change", () => {
     currentWeekId = els.weekSelect.value;
