@@ -1543,7 +1543,11 @@ function renderEntryForm() {
   const incidentalsWasOpen = !!els.incidentalsDetails?.open;
 
   els.weekSelect.innerHTML = month.weeks
-    .map((item) => `<option value="${item.id}">${escapeHtml(item.period || t("unnamedPeriod"))}</option>`)
+    .map((item) => {
+      var idx = month.weeks.findIndex(function(w) { return w.id === item.id; });
+      var label = idx >= 0 ? "Period " + (idx + 1) : (item.period || t("unnamedPeriod"));
+      return '<option value="' + item.id + '">' + escapeHtml(label) + "</option>";
+    })
     .join("");
   if (week) els.weekSelect.value = week.id;
 
@@ -1611,9 +1615,9 @@ function renderEntrySummary(monthName, weeklyTotal, cumulative) {
 
 function renderEntryPeriodComparison(month, week, weeklyTotal) {
   if (!els.entryPeriodComparison) return;
-  const index = month.weeks.findIndex((item) => item.id === currentWeekId);
-  const periodLabel = week?.period || t("unnamedPeriod");
-  const samePeriodRow = samePeriodComparisonRow(month, index);
+  const periodIndex = month.weeks.findIndex((item) => item.id === currentWeekId);
+  const periodLabel = periodIndex >= 0 ? "Period " + (periodIndex + 1) : (week?.period || t("unnamedPeriod"));
+  const samePeriodRow = samePeriodComparisonRow(month, periodIndex);
   const comparison = samePeriodComparison({ weeklyTotal }, samePeriodRow);
   const previewRow = {
     week: {
