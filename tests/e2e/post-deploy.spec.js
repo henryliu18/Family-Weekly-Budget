@@ -100,7 +100,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   if (entryPeriodOptions > 1) {
     const nextPeriodValue = await page.locator("#weekSelect option").nth(1).getAttribute("value");
     await page.locator("#weekSelect").selectOption(nextPeriodValue);
-    await expect(page.locator("#entryPeriodComparisonTitle")).toHaveText(await page.locator("#periodInput").inputValue());
+    await expect(page.locator("#entryPeriodComparisonTitle")).toHaveText("Period 2");
   }
   for (const label of [
     "Medical out-of-pocket",
@@ -143,14 +143,14 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   }
   await page.locator("#notesInput").fill(note);
   await page.locator("#saveWeekBtn").click();
-  await expect(page.locator("#saveToast")).toContainText("Saved 2026-06-01 - 2026-06-07:");
+  await expect(page.locator("#saveToast")).toContainText("Saved Period 2:");
   await expect(page.locator("#saveToast")).toContainText("period total");
   await expect(page.locator("#saveToast")).toContainText("grocery");
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await page.reload();
   await expect(page.locator("#logoutBtn")).toBeVisible();
   await page.locator('.nav-tab[data-view="entry"]').click();
-  await page.locator("#weekSelect").selectOption({ label: "2026-06-01 - 2026-06-07" });
+  await page.locator("#weekSelect").selectOption({ index: 1 });
   await expect(page.locator("#periodStartInput")).toHaveValue("2026-06-01");
   await expect(page.locator("#periodEndInput")).toHaveValue("2026-06-07");
   await expect(page.locator("#periodInput")).toHaveValue("2026-06-01 - 2026-06-07");
