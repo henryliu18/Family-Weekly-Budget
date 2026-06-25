@@ -819,6 +819,7 @@ function bindEvents() {
   els.weeklyChart.addEventListener("click", selectWeekFromChart);
   els.monthlyTrendChart.addEventListener("mousemove", showTrendTooltip);
   els.monthlyTrendChart.addEventListener("mouseleave", () => els.trendTooltip.classList.add("hidden"));
+  els.monthlyTrendChart.addEventListener("click", selectMonthFromTrend);
   window.addEventListener("resize", () => {
     drawChart();
     drawMonthlyTrendChart();
@@ -2809,6 +2810,31 @@ function drawTrendLegend(ctx, width, colors) {
     ctx.fillText(label, x + 18, 16);
     x += 92;
   });
+}
+
+function selectMonthFromTrend(event) {
+  if (!trendPoints.length) return;
+  const rect = els.monthlyTrendChart.getBoundingClientRect();
+  const clickX = event.clientX - rect.left;
+  // Find nearest point within half-spacing distance
+  const spacing = trendPoints.length > 1
+    ? (trendPoints[trendPoints.length - 1].x - trendPoints[0].x) / (trendPoints.length - 1)
+    : 0;
+  const maxDist = spacing > 0 ? spacing / 2 : 36;
+  var nearest = null;
+  var nearestDist = Infinity;
+  trendPoints.forEach(function(item) {
+    var d = Math.abs(item.x - clickX);
+    if (d < nearestDist) { nearest = item; nearestDist = d; }
+  });
+  if (!nearest || nearestDist > maxDist) return;
+  var monthId = nearest.row.id;
+  if (monthId && monthId !== currentMonthId) {
+    currentMonthId = monthId;
+    appState.currentMonthId = monthId;
+    currentWeekId = currentMonth().weeks[0]?.id;
+    renderAll();
+  }
 }
 
 function showTrendTooltip(event) {
