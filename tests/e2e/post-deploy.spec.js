@@ -405,6 +405,23 @@ test("click trend chart switches to selected month", async ({ page }) => {
   expect(newMonth).toBe(targetInfo.id);
 });
 
+test("import textarea clears when leaving entry view", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  // Go to entry view
+  await page.locator('.nav-tab[data-view="entry"]').click();
+  await expect(page.locator("#entryView")).toHaveClass(/active/);
+  // Type into import textarea
+  await page.locator("#transactionImportInput").fill("test data to clear");
+  await expect(page.locator("#transactionImportInput")).toHaveValue("test data to clear");
+  // Switch to overview
+  await page.locator('.nav-tab[data-view="overview"]').click();
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  // Verify textarea is cleared
+  await expect(page.locator("#transactionImportInput")).toHaveValue("");
+});
+
 test("mobile overview stays within the viewport", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
