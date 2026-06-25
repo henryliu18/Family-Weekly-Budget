@@ -143,7 +143,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   }
   await page.locator("#notesInput").fill(note);
   await page.locator("#saveWeekBtn").click();
-  await expect(page.locator("#saveToast")).toContainText("Saved 2026-06-01 - 2026-06-07:");
+  await expect(page.locator("#saveToast")).toContainText("Saved Period 2:");
   await expect(page.locator("#saveToast")).toContainText("period total");
   await expect(page.locator("#saveToast")).toContainText("grocery");
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
