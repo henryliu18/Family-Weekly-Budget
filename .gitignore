@@ -3,3 +3,5 @@ accounting.xlsx
 .env
 certs/
 .vscode/
+internal-documentation
+android-app
