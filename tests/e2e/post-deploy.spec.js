@@ -381,6 +381,30 @@ test("brand home link navigates to overview", async ({ page }) => {
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
 });
 
+test("click trend chart switches to selected month", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  // Ensure we're in overview with trend chart visible
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  await expectCanvasReady(page, "#monthlyTrendChart");
+  // Get current month and a target month from trendPoints
+  const firstMonth = await page.evaluate(() => currentMonthId);
+  const targetInfo = await page.evaluate(() => {
+    // Need at least 2 trend points with different months
+    if (trendPoints.length < 2) return null;
+    const otherIdx = trendPoints.findIndex(p => p.row.id !== currentMonthId);
+    if (otherIdx < 0) return null;
+    return { idx: otherIdx, id: trendPoints[otherIdx].row.id, x: Math.round(trendPoints[otherIdx].x) };
+  });
+  test.skip(!targetInfo, "Need at least 2 months in trend chart");
+  // Click trend chart at the target month's position (y=center of chart)
+  await page.locator("#monthlyTrendChart").click({ position: { x: targetInfo.x, y: 150 } });
+  // Verify month switched
+  const newMonth = await page.evaluate(() => currentMonthId);
+  expect(newMonth).toBe(targetInfo.id);
+});
+
 test("mobile overview stays within the viewport", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 

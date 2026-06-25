@@ -517,6 +517,7 @@ textarea:focus {
   display: block;
   width: 100%;
   max-width: 100%;
+  cursor: pointer;
   height: 360px;
 }
 
