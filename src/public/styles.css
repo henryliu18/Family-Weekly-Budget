@@ -60,6 +60,8 @@ button {
 .brand {
   display: flex;
   align-items: center;
+  cursor: pointer;
+  user-select: none;
   gap: 12px;
   margin-bottom: 10px;
 }
