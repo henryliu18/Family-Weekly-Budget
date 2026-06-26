@@ -29,20 +29,29 @@ jobs:
         with:
           terraform_version: 1.15.6
 
-      - name: Write OCI private key
+      - name: Write OCI credentials
         run: |
           mkdir -p ~/.oci
           echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
 
+      - name: Generate backend.hcl with auth
+        run: |
+          cat > infra/backend.hcl << 'EOF'
+          bucket               = "family-budget-tfstate"
+          namespace            = "sd4qtykmlhzs"
+          region               = "ap-sydney-1"
+          key                  = "infra/terraform.tfstate"
+          workspace_key_prefix = "tf-state-env"
+          tenancy_ocid         = "${{ secrets.OCI_TENANCY_OCID }}"
+          user_ocid            = "${{ secrets.OCI_USER_OCID }}"
+          fingerprint          = "${{ secrets.OCI_FINGERPRINT }}"
+          private_key_path     = "~/.oci/oci_api_key.pem"
+          EOF
+
       - name: Terraform Init
         working-directory: infra
         run: terraform init -backend-config=backend.hcl -reconfigure
-        env:
-          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
-          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
-          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
-          OCI_PRIVATE_KEY_PATH: ~/.oci/oci_api_key.pem
 
       - name: Terraform Plan
         id: plan
@@ -95,7 +104,7 @@ jobs:
         with:
           terraform_version: 1.15.6
 
-      - name: Write OCI private key
+      - name: Write OCI credentials
         run: |
           mkdir -p ~/.oci
           echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
@@ -107,14 +116,23 @@ jobs:
           name: tfplan
           path: infra/
 
+      - name: Generate backend.hcl with auth
+        run: |
+          cat > infra/backend.hcl << 'EOF'
+          bucket               = "family-budget-tfstate"
+          namespace            = "sd4qtykmlhzs"
+          region               = "ap-sydney-1"
+          key                  = "infra/terraform.tfstate"
+          workspace_key_prefix = "tf-state-env"
+          tenancy_ocid         = "${{ secrets.OCI_TENANCY_OCID }}"
+          user_ocid            = "${{ secrets.OCI_USER_OCID }}"
+          fingerprint          = "${{ secrets.OCI_FINGERPRINT }}"
+          private_key_path     = "~/.oci/oci_api_key.pem"
+          EOF
+
       - name: Terraform Init
         working-directory: infra
         run: terraform init -backend-config=backend.hcl -reconfigure
-        env:
-          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
-          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
-          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
-          OCI_PRIVATE_KEY_PATH: ~/.oci/oci_api_key.pem
 
       - name: Terraform Apply
         working-directory: infra
