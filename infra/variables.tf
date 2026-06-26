@@ -74,8 +74,14 @@ variable "image_ocid" {
   type        = string
 }
 
+variable "ssh_public_key" {
+  description = "SSH public key content string (for GHA / non-file usage). If set, takes precedence over ssh_public_key_path."
+  type        = string
+  default     = ""
+}
+
 variable "ssh_public_key_path" {
-  description = "Path to the SSH public key file for VM access (absolute path, no ~)"
+  description = "Path to the SSH public key file for VM access (absolute path, no ~). Only used when ssh_public_key is empty."
   type        = string
   default     = "C:/Users/user/.ssh/id_rsa.pub"
 }
