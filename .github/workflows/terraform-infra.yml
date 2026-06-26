@@ -78,12 +78,23 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const plan = fs.readFileSync('infra/plan.txt', 'utf8');
+            const prNumber = context.issue.number || context.payload.pull_request?.number;
+            if (!prNumber) {
+              core.warning('No PR number found — skipping comment');
+              return;
+            }
+            const planPath = `${process.env.GITHUB_WORKSPACE}/infra/plan.txt`;
+            if (!fs.existsSync(planPath)) {
+              core.warning('plan.txt not found — skipping comment');
+              return;
+            }
+            const plan = fs.readFileSync(planPath, 'utf8');
             const snippet = plan.length > 60000 ? plan.slice(0, 60000) + '\n... (truncated)' : plan;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            await github.rest.issues.createComment({
+              issue_number: prNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: '## Terraform Plan\n```\n' + snippet + '\n```'
