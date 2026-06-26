@@ -64,14 +64,14 @@ jobs:
             fi && \
             APP_IMAGE_TAG='${{ github.event_name == 'workflow_dispatch' && 'latest' || format('sha-{0}', github.event.workflow_run.head_sha) }}' && \
             touch .env && \
-            awk '!($0 ~ /^(APP_IMAGE_TAG|APP_BUILD_VERSION|APP_BUILD_TIME)=/)' .env > .env.tmp && \
-            printf 'APP_IMAGE_TAG=%s\n' \"\$APP_IMAGE_TAG\" >> .env.tmp && \
+            grep -Ev '^(APP_IMAGE_TAG|APP_BUILD_VERSION|APP_BUILD_TIME)=' .env > .env.tmp || true && \
+            printf 'APP_IMAGE_TAG=%s\n' "\$APP_IMAGE_TAG" >> .env.tmp && \
             mv .env.tmp .env && \
             sudo -n docker compose pull && \
             APP_BUILD_VERSION=\$(sudo -n docker image inspect docker.io/henryhhl18/family-budget-app:\$APP_IMAGE_TAG --format '{{index .RepoDigests 0}}' | sed 's|^docker.io/henryhhl18/family-budget-app@||') && \
             APP_BUILD_TIME=\$(date -u +%Y-%m-%dT%H:%M:%SZ) && \
-            awk '!($0 ~ /^(APP_BUILD_VERSION|APP_BUILD_TIME)=/)' .env > .env.tmp && \
+            grep -Ev '^(APP_BUILD_VERSION|APP_BUILD_TIME)=' .env > .env.tmp || true && \
             mv .env.tmp .env && \
-            printf 'APP_BUILD_VERSION=%s\nAPP_BUILD_TIME=%s\n' \"\$APP_BUILD_VERSION\" \"\$APP_BUILD_TIME\" >> .env && \
+            printf 'APP_BUILD_VERSION=%s\nAPP_BUILD_TIME=%s\n' "\$APP_BUILD_VERSION" "\$APP_BUILD_TIME" >> .env && \
             sudo -n docker compose -p family-budget down && \
-            sudo -n docker compose -p family-budget up -d"
+            sudo -n docker compose -p family-budget up -d
