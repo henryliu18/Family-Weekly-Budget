@@ -2695,6 +2695,13 @@ function drawChart() {
     incidentals: "#c36b2d",
   };
 
+  // Brighter label colors for value indicators
+  const labelColors = {
+    nonGrocery: "#1d9e76",
+    grocery: "#3b82f6",
+    incidentals: "#e8893a",
+  };
+
   rows.forEach((row, index) => {
     const x = left + gap + index * (barWidth + gap);
     let yBase = top + chartHeight;
@@ -2817,6 +2824,13 @@ function drawMonthlyTrendChart() {
     incidentals: "#c36b2d",
   };
 
+  // Brighter label colors for value indicators
+  const labelColors = {
+    nonGrocery: "#1d9e76",
+    grocery: "#3b82f6",
+    incidentals: "#e8893a",
+  };
+
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
@@ -2885,46 +2899,6 @@ function drawMonthlyTrendChart() {
   drawTrendLine(ctx, trendPoints, "groceryY", colors.grocery);
   drawTrendLine(ctx, trendPoints, "incidentalsY", colors.incidentals);
 
-  // ── Value indicators for selected month ──
-  if (currentMonthTrendIndex >= 0 && trendPoints[currentMonthTrendIndex]) {
-    const pt = trendPoints[currentMonthTrendIndex];
-    const categories = [
-      { y: pt.nonGroceryY, value: rows[currentMonthTrendIndex]?.nonGrocery, color: colors.nonGrocery },
-      { y: pt.groceryY, value: rows[currentMonthTrendIndex]?.grocery, color: colors.grocery },
-      { y: pt.incidentalsY, value: rows[currentMonthTrendIndex]?.incidentals, color: colors.incidentals },
-    ];
-    categories.forEach((cat) => {
-      if (!cat.value || cat.value <= 0) return;
-      ctx.save();
-      ctx.font = "bold 10px Microsoft JhengHei, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
-      const label = formatCompactMoney(cat.value);
-      const txtX = pt.x;
-      const txtY = cat.y - 8;
-      const metrics = ctx.measureText(label);
-      const pad = 4;
-      const bw = metrics.width + pad * 2;
-      const bh = 16;
-      const bx = txtX - bw / 2;
-      const by = txtY - bh;
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.beginPath();
-      ctx.roundRect(bx, by, bw, bh, 3);
-      ctx.fill();
-      ctx.fillStyle = cat.color;
-      ctx.fillText(label, txtX, txtY);
-      ctx.restore();
-    });
-  }
-
-  ctx.fillStyle = "#17201b";
-  ctx.font = "12px Microsoft JhengHei, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  rows.forEach((row, index) => {
-    const x = xForIndex(index);
-  
   // ── Monthly total bar ──
   const statusBarColors = {
     good: "rgba(36, 113, 93, 0.18)",
@@ -2950,7 +2924,46 @@ function drawMonthlyTrendChart() {
     ctx.restore();
   });
 
-  ctx.fillText(shortMonthName(row.name), x, top + chartHeight + 12);
+  // ── Value indicators for selected month ──
+  if (currentMonthTrendIndex >= 0 && trendPoints[currentMonthTrendIndex]) {
+    const pt = trendPoints[currentMonthTrendIndex];
+    const categories = [
+      { y: pt.nonGroceryY, value: rows[currentMonthTrendIndex]?.nonGrocery, color: colors.nonGrocery, key: "nonGrocery" },
+      { y: pt.groceryY, value: rows[currentMonthTrendIndex]?.grocery, color: colors.grocery, key: "grocery" },
+      { y: pt.incidentalsY, value: rows[currentMonthTrendIndex]?.incidentals, color: colors.incidentals, key: "incidentals" },
+    ];
+    categories.forEach((cat) => {
+      if (!cat.value || cat.value <= 0) return;
+      ctx.save();
+      ctx.font = "bold 11px Microsoft JhengHei, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      const label = formatCompactMoney(cat.value);
+      const txtX = pt.x;
+      const txtY = cat.y - 8;
+      const metrics = ctx.measureText(label);
+      const pad = 4;
+      const bw = metrics.width + pad * 2;
+      const bh = 16;
+      const bx = txtX - bw / 2;
+      const by = txtY - bh;
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, bh, 3);
+      ctx.fill();
+      ctx.fillStyle = labelColors[cat.key];
+      ctx.fillText(label, txtX, txtY);
+      ctx.restore();
+    });
+  }
+
+
+  ctx.fillStyle = "#17201b";
+  ctx.font = "12px Microsoft JhengHei, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  rows.forEach((row, index) => {
+    ctx.fillText(shortMonthName(row.name), xForIndex(index), top + chartHeight + 12);
   });
 
   drawTrendLegend(ctx, width, colors);
