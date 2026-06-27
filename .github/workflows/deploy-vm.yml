@@ -48,27 +48,20 @@ jobs:
           sudo -n docker compose version
 
           mkdir -p certs
-          if [ ! -f certs/server.crt ] || [ ! -f certs/server.key ]; then
-            TLS_NAME='${{ vars.VM_DOMAIN }}'
-            if [ -z "$TLS_NAME" ]; then
-              TLS_NAME='${{ vars.VM_SSH_HOST }}'
-            fi
-            if printf '%s' "$TLS_NAME" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then
-              TLS_SAN="IP:$TLS_NAME"
-            else
-              TLS_SAN="DNS:$TLS_NAME,IP:${{ vars.VM_SSH_HOST }}"
-            fi
-            openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
-              -keyout certs/server.key \
-              -out certs/server.crt \
-              -subj "/CN=$TLS_NAME" \
-              -addext "subjectAltName=$TLS_SAN"
-          fi
+          cat > certs/server.crt <<'CERTEOF'
+          ${{ secrets.SSL_CERT }}
+          CERTEOF
+          cat > certs/server.key <<'KEYEOF'
+          ${{ secrets.SSL_KEY }}
+          KEYEOF
+          chmod 644 certs/server.crt
+          chmod 600 certs/server.key
 
           APP_IMAGE_TAG='${{ github.event_name == 'workflow_dispatch' && 'latest' || format('sha-{0}', github.event.workflow_run.head_sha) }}'
           touch .env
-          grep -Ev '^(APP_IMAGE_TAG|APP_BUILD_VERSION|APP_BUILD_TIME)=' .env > .env.tmp || true
+          grep -Ev '^(APP_IMAGE_TAG|APP_PASSWORD|APP_BUILD_VERSION|APP_BUILD_TIME)=' .env > .env.tmp || true
           printf 'APP_IMAGE_TAG=%s\n' "$APP_IMAGE_TAG" >> .env.tmp
+          printf 'APP_PASSWORD=%s\n' '${{ secrets.APP_PASSWORD }}' >> .env.tmp
           mv .env.tmp .env
 
           sudo -n docker compose pull
