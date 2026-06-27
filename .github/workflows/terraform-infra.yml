@@ -141,11 +141,12 @@ jobs:
           TF_VAR_image_ocid: ${{ secrets.TF_VAR_IMAGE_OCID }}
           TF_VAR_ssh_public_key: ${{ secrets.VM_SSH_PUBLIC_KEY }}
 
-  destroy:
-    name: Destroy
+  destroy-plan:
+    name: Destroy Plan
     if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
     runs-on: ubuntu-latest
-    environment: prod-deploy
+    outputs:
+      plan_has_destroy: ${{ steps.plan-destroy.outputs.has_destroy }}
 
     steps:
       - uses: actions/checkout@v4
@@ -183,7 +184,8 @@ jobs:
         id: plan-destroy
         working-directory: infra
         run: |
-          terraform plan -destroy -no-color 2>&1 | tee destroy-plan.txt
+          terraform plan -destroy -no-color -out=tfplan-destroy 2>&1 | tee destroy-plan.txt
+          echo "has_destroy=$(grep -c 'Plan:.*to destroy' destroy-plan.txt || true)" >> $GITHUB_OUTPUT
         env:
           TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
           TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
@@ -192,9 +194,61 @@ jobs:
           TF_VAR_image_ocid: ${{ secrets.TF_VAR_IMAGE_OCID }}
           TF_VAR_ssh_public_key: ${{ secrets.VM_SSH_PUBLIC_KEY }}
 
+      - name: Upload Destroy Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-destroy
+          path: infra/tfplan-destroy
+          retention-days: 1
+
+  destroy-apply:
+    name: Destroy Apply
+    needs: destroy-plan
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    environment: prod-deploy
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.6
+
+      - name: Write OCI credentials
+        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+
+      - name: Download Destroy Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-destroy
+          path: infra/
+
+      - name: Generate backend.hcl with auth
+        run: |
+          cat > infra/backend.hcl << 'EOF'
+          bucket               = "family-budget-tfstate"
+          namespace            = "sd4qtykmlhzs"
+          region               = "ap-sydney-1"
+          key                  = "infra/terraform.tfstate"
+          workspace_key_prefix = "tf-state-env"
+          tenancy_ocid         = "${{ secrets.OCI_TENANCY_OCID }}"
+          user_ocid            = "${{ secrets.OCI_USER_OCID }}"
+          fingerprint          = "${{ secrets.OCI_FINGERPRINT }}"
+          private_key_path     = "~/.oci/oci_api_key.pem"
+          EOF
+
+      - name: Terraform Init
+        working-directory: infra
+        run: terraform init -backend-config=backend.hcl -reconfigure
+
       - name: Terraform Destroy
         working-directory: infra
-        run: terraform destroy -auto-approve
+        run: terraform apply tfplan-destroy
         env:
           TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
           TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
