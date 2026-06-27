@@ -497,6 +497,6 @@ test("trend chart renders status bars with correct colors", async ({ page }) => 
     expect(m.total).toBeGreaterThan(0);
     expect(["good", "watch", "over", "empty"]).toContain(m.kind);
     expect(m.ratio).toBeGreaterThan(0);
-    expect(m.ratio).toBeLessThanOrEqual(2);
+    expect(m.ratio).toBeLessThanOrEqual(1.5);
   });
 });

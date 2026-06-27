@@ -2785,8 +2785,8 @@ function monthlyStatusKind(row) {
   const limit = numberOrZero(row.creditLimit);
   if (!limit || row.total === 0) return "empty";
   const ratio = row.total / limit;
-  if (ratio >= 1) return "over";
-  if (ratio >= 0.85) return "watch";
+  if (ratio >= 0.9) return "over";
+  if (ratio >= 0.7) return "watch";
   return "good";
 }
 
