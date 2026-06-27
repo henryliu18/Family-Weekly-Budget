@@ -2784,16 +2784,17 @@ function monthlyTrendRows() {
 function monthlyStatusKind(month) {
   const limit = numberOrZero(month.creditLimit);
   if (!limit) return "empty";
-  const rows = computedWeeks(month).filter((r) => r.week.cumulativeSpend !== null);
-  if (rows.length === 0) return "empty";
-  const latest = rows[rows.length - 1];
-  const elapsedShare = Math.min(1, (rows.length) / Math.max(month.weeks.length, 1));
+  const completedRows = computedWeeks(month).filter((r) => r.week.cumulativeSpend !== null);
+  if (completedRows.length === 0) return "empty";
+  const latest = completedRows[completedRows.length - 1];
+  const totalWeeks = month.weeks.length;
+  const latestIndex = month.weeks.findIndex((w) => w.id === latest.week.id);
+  const elapsedShare = Math.min(1, Math.max((latestIndex + 1) / Math.max(totalWeeks, 1), 0));
   const cumulative = numberOrZero(latest.cumulativeSpend);
-  const usedShare = cumulative / limit;
   const projected = elapsedShare > 0 ? cumulative / elapsedShare : cumulative;
+  const usedShare = limit > 0 ? cumulative / limit : 0;
   if (projected > limit) return "over";
-  const paceRatio = elapsedShare > 0 ? usedShare / elapsedShare : 0;
-  if (paceRatio >= 0.9 || usedShare >= 0.85) return "watch";
+  if (usedShare >= 0.5 || projected / limit >= 0.85) return "watch";
   return "good";
 }
 
