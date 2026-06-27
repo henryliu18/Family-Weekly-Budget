@@ -3047,7 +3047,7 @@ function renderHistory() {
         if (Math.abs(item.amount) < minAmount) return;
         const haystack = `${monthDisplayName(month)} ${row.week.period} ${item.label} ${row.week.notes}`.toLowerCase();
         if (search && !haystack.includes(search)) return;
-        rows.push({ month, row, label: item.label, amount: item.amount });
+        rows.push({ month, row, label: item.label, amount: item.amount, categoryKey: key });
       });
     });
   });
@@ -3073,7 +3073,7 @@ function renderHistory() {
                     <td data-label="${labels.period}">${escapeHtml(item.row.week.period || "")}</td>
                     <td data-label="${labels.category}">${escapeHtml(item.label)}</td>
                     <td class="amount" data-label="${labels.amount}">${formatMoney(item.amount)}</td>
-                    <td data-label="${labels.notes}">${escapeHtml(item.row.week.notes || "")}</td>
+                    <td data-label="${labels.notes}">${item.categoryKey === "incidentals" ? escapeHtml(item.row.week.notes || "") : ""}</td>
                   </tr>
                 `,
               )
