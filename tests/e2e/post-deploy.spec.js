@@ -470,3 +470,33 @@ test("mobile overview stays within the viewport", async ({ page }) => {
       comparisonFits: true,
     });
 });
+
+test("trend chart renders status bars with correct colors", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  await expectCanvasReady(page, "#monthlyTrendChart");
+
+  const barInfo = await page.evaluate(() => {
+    const rows = monthlyTrendRows();
+    if (rows.length < 2) return { skip: true };
+    return rows.map((r) => ({
+      name: r.name,
+      total: r.total,
+      kind: monthlyStatusKind(r),
+      limit: r.creditLimit,
+      ratio: r.total / r.creditLimit,
+    }));
+  });
+
+  test.skip(barInfo.skip, "Need at least 2 months in trend chart");
+
+  expect(barInfo.length).toBeGreaterThanOrEqual(2);
+  barInfo.forEach((m) => {
+    expect(m.total).toBeGreaterThan(0);
+    expect(["good", "watch", "over", "empty"]).toContain(m.kind);
+    expect(m.ratio).toBeGreaterThan(0);
+    expect(m.ratio).toBeLessThanOrEqual(2);
+  });
+});

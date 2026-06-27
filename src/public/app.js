@@ -2775,8 +2775,19 @@ function monthlyTrendRows() {
       grocery: roundCurrency(grocery),
       incidentals: roundCurrency(incidentals),
       total: roundCurrency(nonGrocery + grocery + incidentals),
+      creditLimit: month.creditLimit || CREDIT_LIMIT,
     };
   });
+}
+
+
+function monthlyStatusKind(row) {
+  const limit = numberOrZero(row.creditLimit);
+  if (!limit || row.total === 0) return "empty";
+  const ratio = row.total / limit;
+  if (ratio >= 1) return "over";
+  if (ratio >= 0.85) return "watch";
+  return "good";
 }
 
 function drawMonthlyTrendChart() {
@@ -2815,7 +2826,7 @@ function drawMonthlyTrendChart() {
 
   const maxValue = Math.max(
     100,
-    ...rows.flatMap((row) => [row.nonGrocery, row.grocery, row.incidentals]),
+    ...rows.flatMap((row) => [row.nonGrocery, row.grocery, row.incidentals, row.total]),
   );
 
   ctx.strokeStyle = "#d8e0d8";
@@ -2866,13 +2877,72 @@ function drawMonthlyTrendChart() {
   drawTrendLine(ctx, trendPoints, "groceryY", colors.grocery);
   drawTrendLine(ctx, trendPoints, "incidentalsY", colors.incidentals);
 
+  // ── Value indicators for selected month ──
+  if (currentMonthTrendIndex >= 0 && trendPoints[currentMonthTrendIndex]) {
+    const pt = trendPoints[currentMonthTrendIndex];
+    const categories = [
+      { y: pt.nonGroceryY, value: rows[currentMonthTrendIndex]?.nonGrocery, color: colors.nonGrocery },
+      { y: pt.groceryY, value: rows[currentMonthTrendIndex]?.grocery, color: colors.grocery },
+      { y: pt.incidentalsY, value: rows[currentMonthTrendIndex]?.incidentals, color: colors.incidentals },
+    ];
+    categories.forEach((cat) => {
+      if (!cat.value || cat.value <= 0) return;
+      ctx.save();
+      ctx.font = "bold 10px Microsoft JhengHei, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      const label = formatCompactMoney(cat.value);
+      const txtX = pt.x;
+      const txtY = cat.y - 8;
+      const metrics = ctx.measureText(label);
+      const pad = 4;
+      const bw = metrics.width + pad * 2;
+      const bh = 16;
+      const bx = txtX - bw / 2;
+      const by = txtY - bh;
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, bh, 3);
+      ctx.fill();
+      ctx.fillStyle = cat.color;
+      ctx.fillText(label, txtX, txtY);
+      ctx.restore();
+    });
+  }
+
   ctx.fillStyle = "#17201b";
   ctx.font = "12px Microsoft JhengHei, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   rows.forEach((row, index) => {
     const x = xForIndex(index);
-    ctx.fillText(shortMonthName(row.name), x, top + chartHeight + 12);
+  
+  // ── Monthly total bar ──
+  const statusBarColors = {
+    good: "rgba(36, 113, 93, 0.18)",
+    watch: "rgba(195, 107, 45, 0.18)",
+    over: "rgba(185, 65, 61, 0.18)",
+    empty: "rgba(102, 115, 107, 0.10)",
+  };
+
+  rows.forEach((row, index) => {
+    const kind = monthlyStatusKind(row);
+    const barColor = statusBarColors[kind] || statusBarColors.empty;
+    const barValue = row.total;
+    const barTop = yForValue(barValue);
+    const barBottom = top + chartHeight;
+    const barWidth = rows.length > 1 ? chartWidth / (rows.length - 1) * 0.45 : chartWidth * 0.35;
+    const barX = xForIndex(index) - barWidth / 2;
+
+    ctx.save();
+    ctx.fillStyle = barColor;
+    ctx.beginPath();
+    ctx.roundRect(barX, barTop, barWidth, barBottom - barTop, 4);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  ctx.fillText(shortMonthName(row.name), x, top + chartHeight + 12);
   });
 
   drawTrendLegend(ctx, width, colors);
