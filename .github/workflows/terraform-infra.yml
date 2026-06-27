@@ -79,7 +79,7 @@ jobs:
     needs: plan
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment: production
+    environment: prod-deploy
 
     steps:
       - uses: actions/checkout@v4
