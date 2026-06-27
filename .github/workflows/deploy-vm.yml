@@ -54,8 +54,11 @@ jobs:
             "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ vars.VM_APP_PATH }}/docker-compose.yml"
 
       - name: Deploy with Docker Compose
+        env:
+          APP_PASSWORD_SECRET: ${{ secrets.APP_PASSWORD }}
         run: |
-          ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" 'bash -seuo pipefail' <<'REMOTE'
+          APP_PASSWORD_B64="$(printf '%s' "$APP_PASSWORD_SECRET" | base64 -w0)"
+          ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" "APP_PASSWORD_B64=$APP_PASSWORD_B64 bash -seuo pipefail" <<'REMOTE'
           cd '${{ vars.VM_APP_PATH }}'
           sudo -n docker --version
           sudo -n docker compose version
@@ -64,7 +67,7 @@ jobs:
           touch .env
           grep -Ev '^(APP_IMAGE_TAG|APP_PASSWORD|APP_BUILD_VERSION|APP_BUILD_TIME)=' .env > .env.tmp || true
           printf 'APP_IMAGE_TAG=%s\n' "$APP_IMAGE_TAG" >> .env.tmp
-          printf 'APP_PASSWORD=*** '${{ secrets.APP_PASSWORD }}' >> .env.tmp
+          printf 'APP_PASSWORD=%s\n' "$(printf '%s' "$APP_PASSWORD_B64" | base64 -d)" >> .env.tmp
           mv .env.tmp .env
 
           sudo -n docker compose pull
