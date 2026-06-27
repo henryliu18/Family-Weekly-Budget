@@ -2,13 +2,10 @@ name: Deploy To VM
 
 on:
   workflow_run:
-    workflows: ["Terraform Infra"]
+    workflows: ["Docker Image CI"]
     types: [completed]
-    branches: [main]
+    branches: [ "main" ]
   workflow_dispatch:
-
-env:
-  APP_PATH: /opt/family-budget
 
 jobs:
   deploy:
@@ -35,15 +32,15 @@ jobs:
       - name: Sync source code to VM
         run: |
           ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" \
-            "mkdir -p '${{ env.APP_PATH }}'"
+            "mkdir -p '${{ vars.VM_APP_PATH }}'"
           rsync -az --delete --exclude='.git' --exclude='infra' --exclude='node_modules' \
             -e "ssh -o BatchMode=yes" \
-            ./ "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ env.APP_PATH }}"
+            ./ "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}:${{ vars.VM_APP_PATH }}"
 
       - name: Deploy with Docker Compose (build from metal)
         run: |
           ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" 'bash -seuo pipefail' <<'REMOTE'
-          cd '${{ env.APP_PATH }}'
+          cd '${{ vars.VM_APP_PATH }}'
 
           # ── SSL certs from secrets ──
           mkdir -p certs
