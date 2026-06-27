@@ -67,8 +67,9 @@ jobs:
 
           APP_IMAGE_TAG='${{ github.event_name == 'workflow_dispatch' && 'latest' || format('sha-{0}', github.event.workflow_run.head_sha) }}'
           touch .env
-          grep -Ev '^(APP_IMAGE_TAG|APP_BUILD_VERSION|APP_BUILD_TIME)=' .env > .env.tmp || true
+          grep -Ev '^(APP_IMAGE_TAG|APP_PASSWORD|APP_BUILD_VERSION|APP_BUILD_TIME)=' .env > .env.tmp || true
           printf 'APP_IMAGE_TAG=%s\n' "$APP_IMAGE_TAG" >> .env.tmp
+          printf 'APP_PASSWORD=%s\n' '${{ secrets.APP_PASSWORD }}' >> .env.tmp
           mv .env.tmp .env
 
           sudo -n docker compose pull
