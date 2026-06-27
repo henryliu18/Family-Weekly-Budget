@@ -484,7 +484,7 @@ test("trend chart renders status bars with correct colors", async ({ page }) => 
     return rows.map((r) => ({
       name: r.name,
       total: r.total,
-      kind: monthlyStatusKind(r),
+      kind: monthlyStatusKind(appState.months[r.id]),
       limit: r.creditLimit,
       ratio: r.total / r.creditLimit,
     }));

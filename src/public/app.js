@@ -2781,12 +2781,19 @@ function monthlyTrendRows() {
 }
 
 
-function monthlyStatusKind(row) {
-  const limit = numberOrZero(row.creditLimit);
-  if (!limit || row.total === 0) return "empty";
-  const ratio = row.total / limit;
-  if (ratio >= 0.9) return "over";
-  if (ratio >= 0.7) return "watch";
+function monthlyStatusKind(month) {
+  const limit = numberOrZero(month.creditLimit);
+  if (!limit) return "empty";
+  const rows = computedWeeks(month).filter((r) => r.week.cumulativeSpend !== null);
+  if (rows.length === 0) return "empty";
+  const latest = rows[rows.length - 1];
+  const elapsedShare = Math.min(1, (rows.length) / Math.max(month.weeks.length, 1));
+  const cumulative = numberOrZero(latest.cumulativeSpend);
+  const usedShare = cumulative / limit;
+  const projected = elapsedShare > 0 ? cumulative / elapsedShare : cumulative;
+  if (projected > limit) return "over";
+  const paceRatio = elapsedShare > 0 ? usedShare / elapsedShare : 0;
+  if (paceRatio >= 0.9 || usedShare >= 0.85) return "watch";
   return "good";
 }
 
@@ -2926,7 +2933,7 @@ function drawMonthlyTrendChart() {
   };
 
   rows.forEach((row, index) => {
-    const kind = monthlyStatusKind(row);
+    const kind = monthlyStatusKind(appState.months[row.id]);
     const barColor = statusBarColors[kind] || statusBarColors.empty;
     const barValue = row.total;
     const barTop = yForValue(barValue);
