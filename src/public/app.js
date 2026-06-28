@@ -2142,6 +2142,8 @@ function normalizeYear(value, fallback) {
 function normalizeMerchant(value) {
   return String(value || "")
     .toUpperCase()
+    .replace(/^PAYPAL \*+/, "")
+    .replace(/##.*$/, "")
     .replace(/\s+/g, " ")
     .trim();
 }
