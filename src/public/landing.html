@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Family Weekly Budget</title>
+    <base href="/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="auth-overlay" aria-live="polite">
+      <div class="auth-scene">
+        <div class="auth-marketing">
+          <div class="landing-brand">
+            <div class="brand-mark landing-brand-mark">家</div>
+            <div>
+              <p class="eyebrow landing-eyebrow">Private trial release</p>
+              <h2>Family Weekly Budget</h2>
+            </div>
+          </div>
+
+          <div class="landing-hero">
+            <div class="landing-copy-block">
+              <p class="landing-headline">Weekly budgeting, clearly presented.</p>
+              <p class="landing-copy">
+                A simple private workspace for monthly oversight, weekly entry, and transaction review.
+              </p>
+
+              <div class="landing-actions">
+                <a class="primary-btn" href="#trialAccessCard">Start trial access</a>
+                <a class="ghost-btn" href="#contactUs">Contact us</a>
+              </div>
+
+              <div class="landing-pill-row" aria-label="Product highlights">
+                <span class="landing-pill">Monthly statement</span>
+                <span class="landing-pill">Trend graph</span>
+                <span class="landing-pill">Transaction review</span>
+              </div>
+            </div>
+
+            <div class="landing-visual-stage" aria-label="Real product screenshots">
+              <div class="visual-story-badge visual-story-badge-top">Monthly statement</div>
+              <figure class="product-shot product-shot-main">
+                <img src="assets/landing-statement-card.png" alt="Family Weekly Budget monthly statement highlight" />
+              </figure>
+              <div class="visual-motion-line visual-motion-line-1" aria-hidden="true"></div>
+              <div class="visual-motion-line visual-motion-line-2" aria-hidden="true"></div>
+              <div class="visual-glow visual-glow-main" aria-hidden="true"></div>
+              <div class="visual-story-badge visual-story-badge-bottom">Trend graph</div>
+              <figure class="product-shot product-shot-detail">
+                <img src="assets/landing-trend-graph-card.png" alt="Family Weekly Budget monthly spending trend graph highlight" />
+              </figure>
+            </div>
+          </div>
+
+          <div class="landing-panel-grid">
+            <section id="trialSteps" class="trial-card">
+              <p class="eyebrow">Trial access</p>
+              <h3>Start in three steps</h3>
+              <ol class="trial-list">
+                <li>
+                  <span class="trial-step-number">1</span>
+                  <div>
+                    <strong>Request a password</strong>
+                    <p>Ask the service owner or demo host for temporary access.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="trial-step-number">2</span>
+                  <div>
+                    <strong>Sign in</strong>
+                    <p>Use the shared password to open the workspace.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="trial-step-number">3</span>
+                  <div>
+                    <strong>Review the workflow</strong>
+                    <p>See overview, entry, and transaction import in a single flow.</p>
+                  </div>
+                </li>
+              </ol>
+            </section>
+
+            <section id="contactUs" class="contact-card">
+              <p class="eyebrow">Contact us</p>
+              <h3>Trial access and onboarding</h3>
+              <p>
+                Trial access is currently provided by invitation. If you are reviewing the product with a team,
+                contact your service owner or demo host to arrange access and onboarding.
+              </p>
+              <div class="contact-actions">
+                <a class="ghost-btn" href="#trialAccessCard">Request trial access</a>
+              </div>
+            </section>
+
+            <section id="trialAccessCard" class="auth-card auth-card--landing">
+              <div>
+                <p class="eyebrow">Login required</p>
+                <h2>Enter password</h2>
+                <p id="landingAuthCopy" class="auth-copy">
+                  Use the temporary password to open the private trial workspace.
+                </p>
+              </div>
+              <form id="landingLoginForm" class="auth-form">
+                <label class="field">
+                  <span>Password</span>
+                  <input id="landingPasswordInput" type="password" autocomplete="current-password" />
+                </label>
+                <p id="landingLoginError" class="auth-error hidden"></p>
+                <button id="landingLoginBtn" class="primary-btn auth-submit" type="submit">Log in</button>
+              </form>
+              <a id="enterWorkspaceLink" class="primary-btn auth-submit hidden" href="/app">Enter workspace</a>
+              <p id="landingAuthFootnote" class="auth-footnote">
+                Need a trial password? Ask the budget owner to share one with you.
+              </p>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="/landing.js"></script>
+  </body>
+</html>

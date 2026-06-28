@@ -838,6 +838,7 @@ function bindElements() {
     "passwordInput",
     "loginError",
     "loginBtn",
+    "enterWorkspaceBtn",
     "logoutBtn",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
@@ -1200,12 +1201,14 @@ function updateAuthUi() {
   const shouldShowOverlay = isAuthLocked();
   els.authOverlay?.classList.toggle("hidden", !shouldShowOverlay);
   els.logoutBtn?.classList.toggle("hidden", !authState.authEnabled || !authState.authenticated);
+  document.body.classList.toggle("landing-open", shouldShowOverlay);
+  document.body.classList.toggle("auth-locked", isAuthLocked());
   if (shouldShowOverlay) {
-    document.body.classList.add("auth-locked");
     clearSensitiveUi();
-    setTimeout(() => els.passwordInput?.focus(), 0);
+    if (isAuthLocked()) {
+      setTimeout(() => els.passwordInput?.focus(), 0);
+    }
   } else {
-    document.body.classList.remove("auth-locked");
     clearLoginError();
   }
 }
