@@ -238,7 +238,9 @@ async function serveStatic(req, res, pathname) {
     return;
   }
 
-  const requested = pathname === "/" ? "/index.html" : pathname;
+  let requested = pathname;
+  if (pathname === "/") requested = "/landing.html";
+  else if (pathname === "/app" || pathname === "/app/") requested = "/index.html";
   const resolved = path.normalize(path.join(PUBLIC_ROOT, requested));
 
   if (path.relative(PUBLIC_ROOT, resolved).startsWith("..")) {

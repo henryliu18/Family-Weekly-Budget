@@ -2,9 +2,10 @@ const { expect, test } = require("@playwright/test");
 
 const httpUrl = process.env.E2E_HTTP_URL || "http://127.0.0.1:18080";
 const password = process.env.E2E_APP_PASSWORD || "";
+const appUrl = "/app";
 
 async function login(page) {
-  await page.goto("/");
+  await page.goto(appUrl);
   await expect(page.locator("#authOverlay")).toBeVisible();
   await expect(page.locator(".auth-copy")).toHaveText(
     "This family budget is password-protected. Ask the household budget owner for access.",
@@ -49,10 +50,81 @@ async function addMonth(page, monthValue) {
   await expect(page.locator("#monthDialog")).toBeHidden();
 }
 
+async function seedTrendMonths(page) {
+  const base = await page.evaluate(() => structuredClone(appState));
+  const limit = 15000;
+  const months = [
+    {
+      id: "2098-01",
+      sortKey: "2098-01",
+      name: "2026 January",
+      cumulativeSpend: 3600,
+      categoryValues: { medical: 400, transport: 220, shoppingDining: 420, incidentals: 0 },
+    },
+    {
+      id: "2098-02",
+      sortKey: "2098-02",
+      name: "2026 February",
+      cumulativeSpend: 6800,
+      categoryValues: { privateInsurance: 511.44, electricity: 180, government: 540, incidentals: 320 },
+    },
+    {
+      id: "2098-03",
+      sortKey: "2098-03",
+      name: "2026 March",
+      cumulativeSpend: 9300,
+      categoryValues: { school: 620, carInsurance: 420, shoppingDining: 380, incidentals: 520 },
+    },
+  ];
+
+  months.forEach((month) => {
+    base.months[month.id] = {
+      id: month.id,
+      sortKey: month.sortKey,
+      name: month.name,
+      displayName: month.name,
+      creditLimit: limit,
+      weeks: [
+        {
+          id: `${month.id}-w1`,
+          period: "Period 1",
+          availableBalance: limit - month.cumulativeSpend,
+          unpaidPrevious: null,
+          cumulativeSpend: month.cumulativeSpend,
+          categoryValues: month.categoryValues,
+          notes: "E2E trend seed",
+        },
+      ],
+    };
+  });
+  base.currentMonthId = months[0].id;
+
+  const response = await page.request.post("/api/state", { data: base });
+  expect(response.ok()).toBe(true);
+  await page.goto(appUrl);
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  await expectCanvasReady(page, "#monthlyTrendChart");
+
+  const seededMonthIds = months.map((month) => month.id);
+  await expect
+    .poll(async () => page.evaluate((ids) => monthlyTrendRows().filter((row) => ids.includes(row.id)).length, seededMonthIds))
+    .toBe(seededMonthIds.length);
+
+  return seededMonthIds;
+}
+
 test("HTTP redirects to HTTPS", async ({ request }) => {
   const response = await request.get(httpUrl, { maxRedirects: 0 });
   expect(response.status()).toBe(308);
   expect(response.headers().location).toMatch(/^https:\/\//);
+});
+
+test("landing page serves standalone entry", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".landing-headline")).toHaveText("Weekly budgeting, clearly presented.");
+  await expect(page.locator('.landing-actions a[href="#trialAccessCard"]')).toBeVisible();
+  await expect(page.locator("#landingLoginForm")).toBeVisible();
+  await expect(page.locator("#authOverlay")).toHaveCount(0);
 });
 
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
@@ -385,19 +457,19 @@ test("click trend chart switches to selected month", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
+  const seededMonthIds = await seedTrendMonths(page);
   // Ensure we're in overview with trend chart visible
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await expectCanvasReady(page, "#monthlyTrendChart");
-  // Get current month and a target month from trendPoints
-  const firstMonth = await page.evaluate(() => currentMonthId);
-  const targetInfo = await page.evaluate(() => {
+  // Get a target seeded month from trendPoints
+  const targetInfo = await page.evaluate((ids) => {
     // Need at least 2 trend points with different months
     if (trendPoints.length < 2) return null;
-    const otherIdx = trendPoints.findIndex(p => p.row.id !== currentMonthId);
+    const otherIdx = trendPoints.findIndex(p => ids.includes(p.row.id) && p.row.id !== currentMonthId);
     if (otherIdx < 0) return null;
     return { idx: otherIdx, id: trendPoints[otherIdx].row.id, x: Math.round(trendPoints[otherIdx].x) };
-  });
-  test.skip(!targetInfo, "Need at least 2 months in trend chart");
+  }, seededMonthIds);
+  expect(targetInfo).not.toBeNull();
   // Click trend chart at the target month's position (y=center of chart)
   await page.locator("#monthlyTrendChart").click({ position: { x: targetInfo.x, y: 150 } });
   // Verify month switched
@@ -475,12 +547,12 @@ test("trend chart renders status bars with correct colors", async ({ page }) => 
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
+  const seededMonthIds = await seedTrendMonths(page);
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await expectCanvasReady(page, "#monthlyTrendChart");
 
-  const barInfo = await page.evaluate(() => {
-    const rows = monthlyTrendRows();
-    if (rows.length < 2) return { skip: true };
+  const barInfo = await page.evaluate((ids) => {
+    const rows = monthlyTrendRows().filter((row) => ids.includes(row.id));
     return rows.map((r) => ({
       name: r.name,
       total: r.total,
@@ -488,11 +560,9 @@ test("trend chart renders status bars with correct colors", async ({ page }) => 
       limit: r.creditLimit,
       ratio: r.total / r.creditLimit,
     }));
-  });
+  }, seededMonthIds);
 
-  test.skip(barInfo.skip, "Need at least 2 months in trend chart");
-
-  expect(barInfo.length).toBeGreaterThanOrEqual(2);
+  expect(barInfo).toHaveLength(seededMonthIds.length);
   barInfo.forEach((m) => {
     expect(m.total).toBeGreaterThan(0);
     expect(["good", "watch", "over", "empty"]).toContain(m.kind);
