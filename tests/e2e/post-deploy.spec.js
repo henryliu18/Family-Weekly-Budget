@@ -2,9 +2,10 @@ const { expect, test } = require("@playwright/test");
 
 const httpUrl = process.env.E2E_HTTP_URL || "http://127.0.0.1:18080";
 const password = process.env.E2E_APP_PASSWORD || "";
+const appUrl = "/app";
 
 async function login(page) {
-  await page.goto("/");
+  await page.goto(appUrl);
   await expect(page.locator("#authOverlay")).toBeVisible();
   await expect(page.locator(".auth-copy")).toHaveText(
     "This family budget is password-protected. Ask the household budget owner for access.",
@@ -53,6 +54,13 @@ test("HTTP redirects to HTTPS", async ({ request }) => {
   const response = await request.get(httpUrl, { maxRedirects: 0 });
   expect(response.status()).toBe(308);
   expect(response.headers().location).toMatch(/^https:\/\//);
+});
+
+test("landing page serves standalone entry", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".landing-headline")).toHaveText("Weekly budgeting, clearly presented.");
+  await expect(page.locator('a[href="/app"]')).toBeVisible();
+  await expect(page.locator("#authOverlay")).toHaveCount(0);
 });
 
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
