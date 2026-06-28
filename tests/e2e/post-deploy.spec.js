@@ -50,6 +50,60 @@ async function addMonth(page, monthValue) {
   await expect(page.locator("#monthDialog")).toBeHidden();
 }
 
+async function seedTrendMonths(page) {
+  const base = await page.evaluate(() => structuredClone(appState));
+  const limit = 15000;
+  const months = [
+    {
+      id: "e2e-trend-2026-01",
+      name: "2026 January",
+      cumulativeSpend: 3600,
+      categoryValues: { medical: 400, transport: 220, shoppingDining: 420, incidentals: 0 },
+    },
+    {
+      id: "e2e-trend-2026-02",
+      name: "2026 February",
+      cumulativeSpend: 6800,
+      categoryValues: { privateInsurance: 511.44, electricity: 180, government: 540, incidentals: 320 },
+    },
+    {
+      id: "e2e-trend-2026-03",
+      name: "2026 March",
+      cumulativeSpend: 9300,
+      categoryValues: { school: 620, carInsurance: 420, shoppingDining: 380, incidentals: 520 },
+    },
+  ];
+
+  months.forEach((month) => {
+    base.months[month.id] = {
+      id: month.id,
+      name: month.name,
+      displayName: month.name,
+      creditLimit: limit,
+      weeks: [
+        {
+          id: `${month.id}-w1`,
+          period: "Period 1",
+          availableBalance: limit - month.cumulativeSpend,
+          unpaidPrevious: null,
+          cumulativeSpend: month.cumulativeSpend,
+          categoryValues: month.categoryValues,
+          notes: "E2E trend seed",
+        },
+      ],
+    };
+  });
+  base.currentMonthId = months[0].id;
+
+  const response = await page.request.post("/api/state", { data: base });
+  expect(response.ok()).toBe(true);
+  await page.goto(appUrl);
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  await expectCanvasReady(page, "#monthlyTrendChart");
+
+  return months.map((month) => month.id);
+}
+
 test("HTTP redirects to HTTPS", async ({ request }) => {
   const response = await request.get(httpUrl, { maxRedirects: 0 });
   expect(response.status()).toBe(308);
@@ -394,6 +448,7 @@ test("click trend chart switches to selected month", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
+  await seedTrendMonths(page);
   // Ensure we're in overview with trend chart visible
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await expectCanvasReady(page, "#monthlyTrendChart");
@@ -484,6 +539,7 @@ test("trend chart renders status bars with correct colors", async ({ page }) => 
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
+  await seedTrendMonths(page);
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await expectCanvasReady(page, "#monthlyTrendChart");
 
