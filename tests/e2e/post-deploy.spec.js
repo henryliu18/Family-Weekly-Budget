@@ -593,7 +593,8 @@ test("monthly trend bar status colors match overview", async ({ page }) => {
   // Switch to another month and verify _barStatusKind gets set when overview renders
   const monthIds = await page.evaluate(() => Object.keys(appState.months));
   if (monthIds.length >= 2) {
-    const otherId = monthIds.find((id) => id !== currentMonthId);
+    const selectedMonthId = await page.evaluate(() => currentMonthId);
+    const otherId = monthIds.find((id) => id !== selectedMonthId);
     if (otherId) {
       await page.locator("#monthSelect").selectOption(otherId);
       await expect(page.locator("#overviewView")).toHaveClass(/active/);
