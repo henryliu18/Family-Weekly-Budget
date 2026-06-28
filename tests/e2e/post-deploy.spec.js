@@ -607,23 +607,22 @@ test("monthly trend bar status colors match overview", async ({ page }) => {
   }
 });
 
-test("weekly chart color enums match status palette", async ({ page }) => {
+test("weekly chart category colors stay distinct from status palette", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
   await expectCanvasReady(page, "#weeklyChart");
 
-  const colorValues = await page.evaluate(() => {
-    // The drawChart function defines:
-    // nonGrocery: rgba(36, 113, 93, 0.70)  → good
-    // grocery: rgba(195, 107, 45, 0.70)    → watch
-    // incidentals: rgba(185, 65, 61, 0.70) → over
-    return {
-      goodRgba: "rgba(36, 113, 93, 0.70)",
-      watchRgba: "rgba(195, 107, 45, 0.70)",
-      overRgba: "rgba(185, 65, 61, 0.70)",
-    };
-  });
+  const appJs = await page.request.get("/app.js");
+  expect(appJs.ok()).toBe(true);
+  const source = await appJs.text();
+  const palette = source.match(/var CATEGORY_CHART_COLORS[\s\S]*?\}\);/)?.[0] || "";
+  expect(palette).toContain("rgba(88, 80, 196, 0.74)");
+  expect(palette).toContain("rgba(15, 118, 168, 0.72)");
+  expect(palette).toContain("rgba(168, 85, 247, 0.70)");
+  expect(palette).not.toContain("rgba(36, 113, 93, 0.70)");
+  expect(palette).not.toContain("rgba(195, 107, 45, 0.70)");
+  expect(palette).not.toContain("rgba(185, 65, 61, 0.70)");
 
   // Verify the weekly chart canvas has rendered content
   const hasContent = await page.evaluate(() => {
