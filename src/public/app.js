@@ -433,6 +433,18 @@ let chartBars = [];
 let trendPoints = [];
 let importDraft = createEmptyImportDraft();
 
+var CATEGORY_CHART_COLORS = Object.freeze({
+  nonGrocery: "rgba(88, 80, 196, 0.74)",
+  grocery: "rgba(15, 118, 168, 0.72)",
+  incidentals: "rgba(168, 85, 247, 0.70)",
+});
+
+var CATEGORY_CHART_LABEL_COLORS = Object.freeze({
+  nonGrocery: "#5850c4",
+  grocery: "#0f76a8",
+  incidentals: "#a855f7",
+});
+
 const IMPORT_STATUSES = {
   INCLUDED: "included",
   REVIEW: "review",
@@ -1626,9 +1638,17 @@ function renderWeeksTable(rows) {
     <tbody>
       ${rows
         .map(
-          (row) => `
+          (row, index) => {
+            const periodDisplay = formatPeriodDisplay(row.week.period) || t("unnamedPeriod");
+            const periodCode = `P${index + 1}`;
+            return `
             <tr>
-              <td data-label="${labels.period}">${escapeHtml(row.week.period || t("unnamedPeriod"))}</td>
+              <td data-label="${labels.period}">
+                <span class="period-chip" tabindex="0" aria-label="${escapeHtml(`${periodCode}: ${periodDisplay}`)}">
+                  <span class="period-chip-code">${escapeHtml(periodCode)}</span>
+                  <span class="period-tooltip" role="tooltip">${escapeHtml(periodDisplay)}</span>
+                </span>
+              </td>
               <td class="amount" data-label="${labels.cumulative}">${formatMoney(row.cumulativeSpend)}</td>
               <td class="amount" data-label="${labels.weeklyTotal}">${formatMoney(row.weeklyTotal)}</td>
               <td class="amount" data-label="${labels.nonGrocery}">${formatMoney(row.nonGrocery)}</td>
@@ -1637,7 +1657,8 @@ function renderWeeksTable(rows) {
               <td data-label="${labels.notes}">${escapeHtml(row.week.notes || "")}</td>
               <td data-label="${labels.edit}"><button class="ghost-btn" type="button" onclick="editWeek('${row.week.id}')">${labels.edit}</button></td>
             </tr>
-          `,
+          `;
+          },
         )
         .join("")}
     </tbody>
@@ -1803,7 +1824,7 @@ function createEmptyImportDraft() {
 function updateImportPeriodLabel() {
   if (!els.importPeriodLabel) return;
   const range = currentImportPeriodRange();
-  els.importPeriodLabel.textContent = range.start && range.end ? `${range.start} - ${range.end}` : "-";
+  els.importPeriodLabel.textContent = range.start && range.end ? formatDateRangeDisplay(range.start, range.end) : "-";
 }
 
 function currentImportPeriodRange() {
@@ -2669,7 +2690,7 @@ function drawChart() {
   const top = 28;
   const compact = width < 460;
   const right = compact ? 12 : 20;
-  const bottom = 54;
+  const bottom = 60;
   const left = compact ? 54 : 76;
   const chartWidth = Math.max(1, width - left - right);
   const chartHeight = Math.max(1, height - top - bottom);
@@ -2698,18 +2719,8 @@ function drawChart() {
   const gap = compact ? 10 : 26;
   const minBarWidth = compact ? 20 : 34;
   const barWidth = Math.max(minBarWidth, (chartWidth - gap * (rows.length + 1)) / Math.max(rows.length, 1));
-  const colors = {
-    nonGrocery: "rgba(36, 113, 93, 0.70)",
-    grocery: "rgba(195, 107, 45, 0.70)",
-    incidentals: "rgba(185, 65, 61, 0.70)",
-  };
-
-  // Brighter label colors for value indicators
-  const labelColors = {
-    nonGrocery: "#1d9e76",
-    grocery: "#3b82f6",
-    incidentals: "#e8893a",
-  };
+  const colors = CATEGORY_CHART_COLORS;
+  const labelColors = CATEGORY_CHART_LABEL_COLORS;
 
   rows.forEach((row, index) => {
     const x = left + gap + index * (barWidth + gap);
@@ -2734,10 +2745,7 @@ function drawChart() {
       yBase -= h;
     });
 
-    ctx.fillStyle = "#17201b";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.fillText(compact ? `P${index + 1}` : shortPeriod(row.week.period), x + barWidth / 2, top + chartHeight + 10);
+    drawCalendarBadge(ctx, x + barWidth / 2, top + chartHeight + 14, `P${index + 1}`, colors.nonGrocery, compact ? 0.9 : 1);
 
     chartBars.push({ x, y: top, width: barWidth, height: chartHeight, row });
   });
@@ -2763,6 +2771,70 @@ function drawSegmentLabel(ctx, label, value, x, y, width, height) {
     ctx.font = "700 11px Microsoft JhengHei, sans-serif";
     ctx.fillText(lines[1], centerX, centerY + 9);
   }
+  ctx.restore();
+}
+
+function drawCalendarBadge(ctx, centerX, topY, label, accentColor, scale = 1) {
+  const width = 34 * scale;
+  const height = 30 * scale;
+  const x = centerX - width / 2;
+  const y = topY;
+  const radius = 7 * scale;
+
+  ctx.save();
+  ctx.shadowColor = "rgba(23, 32, 27, 0.12)";
+  ctx.shadowBlur = 8 * scale;
+  ctx.shadowOffsetY = 2 * scale;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, radius);
+  ctx.fill();
+
+  ctx.shadowColor = "transparent";
+  ctx.fillStyle = accentColor;
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, 9 * scale, radius);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(23, 32, 27, 0.14)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
+
+  ctx.fillStyle = "#17201b";
+  ctx.font = `700 ${11 * scale}px Microsoft JhengHei, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, centerX, y + 20 * scale);
+  ctx.restore();
+}
+
+function drawMonthBadge(ctx, centerX, topY, label, accentColor, selected) {
+  const radius = selected ? 15 : 13;
+
+  ctx.save();
+  ctx.shadowColor = selected ? "rgba(88, 80, 196, 0.22)" : "rgba(23, 32, 27, 0.10)";
+  ctx.shadowBlur = selected ? 10 : 6;
+  ctx.shadowOffsetY = 2;
+  ctx.fillStyle = selected ? "#f8f7ff" : "#ffffff";
+  ctx.beginPath();
+  ctx.arc(centerX, topY + radius, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.shadowColor = "transparent";
+  ctx.strokeStyle = selected ? accentColor : "rgba(23, 32, 27, 0.16)";
+  ctx.lineWidth = selected ? 2 : 1;
+  ctx.stroke();
+
+  ctx.fillStyle = accentColor;
+  ctx.beginPath();
+  ctx.arc(centerX, topY + 6, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#17201b";
+  ctx.font = "700 11px Microsoft JhengHei, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, centerX, topY + radius + 2);
   ctx.restore();
 }
 
@@ -2798,6 +2870,7 @@ function monthlyTrendRows() {
       incidentals: roundCurrency(incidentals),
       total: roundCurrency(nonGrocery + grocery + incidentals),
       creditLimit: month.creditLimit || CREDIT_LIMIT,
+      sortKey: inferMonthSortKey(month),
     };
   });
 }
@@ -2827,22 +2900,12 @@ function drawMonthlyTrendChart() {
   const top = 34;
   const compact = width < 460;
   const right = compact ? 12 : 24;
-  const bottom = 62;
+  const bottom = 66;
   const left = compact ? 54 : 76;
   const chartWidth = Math.max(1, width - left - right);
   const chartHeight = Math.max(1, height - top - bottom);
-  const colors = {
-    nonGrocery: "#24715d",
-    grocery: "#2f5e9e",
-    incidentals: "#c36b2d",
-  };
-
-  // Brighter label colors for value indicators
-  const labelColors = {
-    nonGrocery: "#1d9e76",
-    grocery: "#3b82f6",
-    incidentals: "#e8893a",
-  };
+  const colors = CATEGORY_CHART_COLORS;
+  const labelColors = CATEGORY_CHART_LABEL_COLORS;
 
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#ffffff";
@@ -2971,12 +3034,8 @@ function drawMonthlyTrendChart() {
   }
 
 
-  ctx.fillStyle = "#17201b";
-  ctx.font = "12px Microsoft JhengHei, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
   rows.forEach((row, index) => {
-    ctx.fillText(shortMonthName(row.name), xForIndex(index), top + chartHeight + 12);
+    drawMonthBadge(ctx, xForIndex(index), top + chartHeight + 14, monthAxisLabel(row), colors.nonGrocery, row.id === currentMonthId);
   });
 
   drawTrendLegend(ctx, width, colors);
@@ -3090,7 +3149,7 @@ function showChartTooltip(event) {
   }
 
   els.chartTooltip.innerHTML = `
-    <strong>${escapeHtml(bar.row.week.period || "未命名週次")}</strong><br />
+    <strong>${escapeHtml(formatPeriodDisplay(bar.row.week.period) || t("unnamedPeriod"))}</strong><br />
     ${escapeHtml(t("weeklyTotal"))}：${formatMoney(bar.row.weeklyTotal)}<br />
     ${escapeHtml(t("nonGrocery"))}：${formatMoney(bar.row.nonGrocery)}<br />
     ${escapeHtml(t("grocery"))}：${formatMoney(bar.row.grocery)}<br />
@@ -3299,6 +3358,62 @@ function shortPeriod(period) {
   return period.replace(/\s+/g, " ").replace(" - ", "-");
 }
 
+function parseIsoDateParts(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
+
+function monthShortName(monthNumber) {
+  return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][monthNumber - 1] || "";
+}
+
+function formatIsoDateDisplay(value) {
+  const date = parseIsoDateParts(value);
+  if (!date) return value || "";
+  if (currentLanguage === "zh") {
+    return `${date.year}/${String(date.month).padStart(2, "0")}/${String(date.day).padStart(2, "0")}`;
+  }
+  return `${date.day} ${monthShortName(date.month)} ${date.year}`;
+}
+
+function formatDateRangeDisplay(startValue, endValue) {
+  const start = parseIsoDateParts(startValue);
+  const end = parseIsoDateParts(endValue);
+  if (!start && !end) return "";
+  if (!end) return formatIsoDateDisplay(startValue);
+  if (!start) return formatIsoDateDisplay(endValue);
+  if (start.year === end.year && start.month === end.month && start.day === end.day) {
+    return formatIsoDateDisplay(startValue);
+  }
+  if (currentLanguage === "zh") {
+    if (start.year === end.year && start.month === end.month) {
+      return `${start.year}/${String(start.month).padStart(2, "0")}/${String(start.day).padStart(2, "0")}-${String(end.day).padStart(2, "0")}`;
+    }
+    if (start.year === end.year) {
+      return `${start.year}/${String(start.month).padStart(2, "0")}/${String(start.day).padStart(2, "0")}-${String(end.month).padStart(2, "0")}/${String(end.day).padStart(2, "0")}`;
+    }
+    return `${formatIsoDateDisplay(startValue)}-${formatIsoDateDisplay(endValue)}`;
+  }
+  if (start.year === end.year && start.month === end.month) {
+    return `${start.day}-${end.day} ${monthShortName(start.month)} ${start.year}`;
+  }
+  if (start.year === end.year) {
+    return `${start.day} ${monthShortName(start.month)} - ${end.day} ${monthShortName(end.month)} ${start.year}`;
+  }
+  return `${formatIsoDateDisplay(startValue)} - ${formatIsoDateDisplay(endValue)}`;
+}
+
+function formatPeriodDisplay(period) {
+  const range = parsePeriodRange(period);
+  if (range.start || range.end) return formatDateRangeDisplay(range.start, range.end);
+  return shortPeriod(period);
+}
+
 function parsePeriodRange(period) {
   const match = String(period || "").match(
     /^\s*(\d{4}-\d{2}-\d{2})(?:\s*(?:-|to|至)\s*(\d{4}-\d{2}-\d{2}))?\s*$/i,
@@ -3320,6 +3435,13 @@ function shortMonthName(name) {
   if (!name) return "";
   const cleaned = name.replace(/\s+/g, " ").trim();
   return cleaned.length > 14 ? `${cleaned.slice(0, 13)}…` : cleaned;
+}
+
+function monthAxisLabel(row) {
+  const sortKey = row?.sortKey || row?.id || "";
+  const match = String(sortKey).match(/^\d{4}-(\d{2})$/);
+  if (match) return match[1];
+  return shortMonthName(row?.name || "").slice(0, 2).toUpperCase();
 }
 
 function slugify(value) {

@@ -742,7 +742,7 @@ a.ghost-btn {
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
   overscroll-behavior-inline: contain;
 }
 
@@ -777,6 +777,77 @@ th.amount {
 
 tr:hover td {
   background: #f8faf8;
+}
+
+.period-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  outline: none;
+}
+
+.period-chip-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  border: 1px solid rgba(88, 80, 196, 0.22);
+  border-radius: 999px;
+  background: #f8f7ff;
+  color: #3d35a6;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  box-shadow: 0 8px 18px rgba(88, 80, 196, 0.10);
+}
+
+.period-tooltip {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 6;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 48px));
+  transform: translate(0, 4px);
+  border: 1px solid rgba(36, 49, 42, 0.12);
+  border-radius: 8px;
+  background: #17201b;
+  color: #f7fbf7;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 14px 30px rgba(23, 32, 27, 0.20);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.period-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 100%;
+  width: 8px;
+  height: 8px;
+  transform: translate(0, -4px) rotate(45deg);
+  background: #17201b;
+}
+
+.period-chip:hover .period-tooltip,
+.period-chip:focus .period-tooltip,
+.period-chip:focus-visible .period-tooltip {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+.period-chip:focus .period-chip-code,
+.period-chip:focus-visible .period-chip-code {
+  box-shadow: 0 0 0 3px rgba(88, 80, 196, 0.18), 0 8px 18px rgba(88, 80, 196, 0.10);
 }
 
 .entry-layout {
@@ -1886,5 +1957,13 @@ body.landing-open {
   #historyTable td.amount {
     text-align: left;
     white-space: normal;
+  }
+
+  #weeksTable .period-chip {
+    justify-self: start;
+  }
+
+  #weeksTable .period-tooltip {
+    max-width: min(220px, calc(100vw - 48px));
   }
 }
