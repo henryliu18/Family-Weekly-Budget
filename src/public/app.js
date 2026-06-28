@@ -1203,6 +1203,8 @@ function updateAuthUi() {
   els.logoutBtn?.classList.toggle("hidden", !authState.authEnabled || !authState.authenticated);
   document.body.classList.toggle("landing-open", shouldShowOverlay);
   document.body.classList.toggle("auth-locked", isAuthLocked());
+  const authCopy = els.authOverlay?.querySelector(".auth-copy");
+  if (authCopy) authCopy.textContent = t("loginSub");
   if (shouldShowOverlay) {
     clearSensitiveUi();
     if (isAuthLocked()) {

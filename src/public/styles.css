@@ -1175,6 +1175,36 @@ body.auth-locked .app-shell {
   display: none;
 }
 
+body.auth-locked #authOverlay {
+  display: grid;
+  place-items: center;
+}
+
+body.auth-locked #authOverlay .auth-scene {
+  display: grid;
+  min-height: auto;
+  width: min(420px, 100%);
+  place-items: center;
+}
+
+body.auth-locked #authOverlay .auth-marketing {
+  display: block;
+  width: 100%;
+  padding: 0;
+  color: var(--ink);
+}
+
+body.auth-locked #authOverlay .auth-marketing > :not(#trialAccessCard) {
+  display: none;
+}
+
+body.auth-locked #trialAccessCard {
+  width: 100%;
+  max-width: none;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 body.landing-open {
   overflow: hidden;
 }
