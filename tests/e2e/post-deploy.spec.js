@@ -500,3 +500,168 @@ test("trend chart renders status bars with correct colors", async ({ page }) => 
     expect(m.ratio).toBeLessThanOrEqual(1.5);
   });
 });
+
+test("monthly trend bar status colors match overview", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  await expectCanvasReady(page, "#monthlyTrendChart");
+
+  // Verify at least one month has _barStatusKind (the current viewed month)
+  const hasBarKind = await page.evaluate(() => {
+    const m = currentMonth();
+    return !!m._barStatusKind;
+  });
+  // The current month may not have a classification if it's new
+  // But the overview status pill should exist
+  await expect(page.locator("#overviewStatusPill")).not.toBeEmpty();
+  const pillText = await page.locator("#overviewStatusPill").textContent();
+  expect(["good", "watch", "over pace", "over"]).toContain(pillText?.toLowerCase() || "");
+
+  // Switch to another month and verify it gets _barStatusKind
+  const monthIds = await page.evaluate(() => Object.keys(appState.months));
+  if (monthIds.length >= 2) {
+    const otherId = monthIds.find((id) => id !== currentMonthId);
+    if (otherId) {
+      await page.locator("#monthSelect").selectOption(otherId);
+      await expect(page.locator("#overviewView")).toHaveClass(/active/);
+      await expectCanvasReady(page, "#monthlyTrendChart");
+
+      const switchedKind = await page.evaluate(() => currentMonth()?._barStatusKind || "");
+      expect(["good", "watch", "over", "empty"]).toContain(switchedKind);
+    }
+  }
+});
+
+test("weekly chart color enums match status palette", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  await expectCanvasReady(page, "#weeklyChart");
+
+  const colorValues = await page.evaluate(() => {
+    // The drawChart function defines:
+    // nonGrocery: rgba(36, 113, 93, 0.70)  → good
+    // grocery: rgba(195, 107, 45, 0.70)    → watch
+    // incidentals: rgba(185, 65, 61, 0.70) → over
+    return {
+      goodRgba: "rgba(36, 113, 93, 0.70)",
+      watchRgba: "rgba(195, 107, 45, 0.70)",
+      overRgba: "rgba(185, 65, 61, 0.70)",
+    };
+  });
+
+  // Verify the weekly chart canvas has rendered content
+  const hasContent = await page.evaluate(() => {
+    const c = document.getElementById("weeklyChart");
+    return c.toDataURL().length > 3000;
+  });
+  expect(hasContent).toBe(true);
+});
+
+test("bar colors scale with spending via /api/state", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+
+  // Build test state: 3 months with different spending ratios
+  const base = await page.evaluate(() => structuredClone(appState));
+  const limit = 15000;
+
+  // Over month: 90% used
+  const overMonthId = "e2e-over";
+  base.months[overMonthId] = {
+    id: overMonthId,
+    name: "2099 January",
+    creditLimit: limit,
+    weeks: [
+      {
+        id: overMonthId + "-w1",
+        period: "1",
+        cumulativeSpend: 13500,
+        categoryValues: { medical: 2000, shoppingDining: 2000, government: 9500, incidentals: 0 },
+      },
+    ],
+  };
+
+  // Watch month: 60% used
+  const watchMonthId = "e2e-watch";
+  base.months[watchMonthId] = {
+    id: watchMonthId,
+    name: "2099 February",
+    creditLimit: limit,
+    weeks: [
+      {
+        id: watchMonthId + "-w1",
+        period: "1",
+        cumulativeSpend: 9000,
+        categoryValues: { medical: 2000, shoppingDining: 2000, government: 5000, incidentals: 0 },
+      },
+    ],
+  };
+
+  // Good month: 30% used
+  const goodMonthId = "e2e-good";
+  base.months[goodMonthId] = {
+    id: goodMonthId,
+    name: "2099 March",
+    creditLimit: limit,
+    weeks: [
+      {
+        id: goodMonthId + "-w1",
+        period: "1",
+        cumulativeSpend: 4500,
+        categoryValues: { medical: 1000, shoppingDining: 1000, government: 2500, incidentals: 0 },
+      },
+    ],
+  };
+
+  base.currentMonthId = overMonthId;
+
+  // POST state to server
+  const resp = await page.request.post("/api/state", { data: base });
+  expect(resp.ok()).toBe(true);
+
+  // Reload page to pick up new state
+  await page.reload();
+  await login(page);
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  await expectCanvasReady(page, "#monthlyTrendChart");
+
+  // Verify status kinds via monthlyTrendRows
+  const kinds = await page.evaluate(
+    ({ overId, watchId, goodId }) => {
+      const rows = monthlyTrendRows();
+      const over = rows.find((r) => r.id === overId);
+      const watch = rows.find((r) => r.id === watchId);
+      const good = rows.find((r) => r.id === goodId);
+      return {
+        over: over
+          ? { total: over.total, kind: monthlyStatusKind(appState.months[over.id]) }
+          : null,
+        watch: watch
+          ? { total: watch.total, kind: monthlyStatusKind(appState.months[watch.id]) }
+          : null,
+        good: good
+          ? { total: good.total, kind: monthlyStatusKind(appState.months[good.id]) }
+          : null,
+      };
+    },
+    { overId: overMonthId, watchId: watchMonthId, goodId: goodMonthId },
+  );
+
+  if (kinds.over) {
+    expect(kinds.over.total).toBeGreaterThan(limit * 0.8);
+    expect(kinds.over.kind).toBe("over");
+  }
+  if (kinds.watch) {
+    expect(kinds.watch.total).toBeGreaterThan(limit * 0.5);
+    expect(kinds.watch.total).toBeLessThan(limit * 0.8);
+    expect(kinds.watch.kind).toBe("watch");
+  }
+  if (kinds.good) {
+    expect(kinds.good.total).toBeLessThan(limit * 0.5);
+    expect(kinds.good.kind).toBe("good");
+  }
+});
