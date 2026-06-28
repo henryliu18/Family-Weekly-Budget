@@ -1194,7 +1194,16 @@ body.auth-locked #authOverlay .auth-marketing {
   color: var(--ink);
 }
 
-body.auth-locked #authOverlay .auth-marketing > :not(#trialAccessCard) {
+body.auth-locked #authOverlay .auth-marketing > :not(.landing-panel-grid) {
+  display: none;
+}
+
+body.auth-locked #authOverlay .landing-panel-grid {
+  display: block;
+  width: 100%;
+}
+
+body.auth-locked #authOverlay .landing-panel-grid > :not(#trialAccessCard) {
   display: none;
 }
 
