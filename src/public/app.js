@@ -1445,6 +1445,8 @@ function renderOverviewDecision(month, rows) {
 }
 
 function setOverviewStatus(kind, title, copy) {
+  const month = currentMonth();
+  if (month) month._barStatusKind = kind;
   setText(els.overviewStatusTitle, title);
   setText(els.overviewStatusCopy, copy);
   if (!els.overviewStatusPill) return;
@@ -2692,9 +2694,9 @@ function drawChart() {
   const minBarWidth = compact ? 20 : 34;
   const barWidth = Math.max(minBarWidth, (chartWidth - gap * (rows.length + 1)) / Math.max(rows.length, 1));
   const colors = {
-    nonGrocery: "#24715d",
-    grocery: "#2f5e9e",
-    incidentals: "#c36b2d",
+    nonGrocery: "rgba(36, 113, 93, 0.70)",
+    grocery: "rgba(195, 107, 45, 0.70)",
+    incidentals: "rgba(185, 65, 61, 0.70)",
   };
 
   // Brighter label colors for value indicators
@@ -2715,9 +2717,15 @@ function drawChart() {
 
     segments.forEach(([key, label, value]) => {
       const h = (value / maxValue) * chartHeight;
+      const segmentX = x;
+      const segmentY = yBase - h;
+      ctx.save();
       ctx.fillStyle = colors[key];
-      ctx.fillRect(x, yBase - h, barWidth, h);
-      drawSegmentLabel(ctx, label, value, x, yBase - h, barWidth, h);
+      ctx.beginPath();
+      ctx.roundRect(segmentX, segmentY, barWidth, h, 2);
+      ctx.fill();
+      ctx.restore();
+      drawSegmentLabel(ctx, label, value, segmentX, segmentY, barWidth, h);
       yBase -= h;
     });
 
@@ -2793,17 +2801,15 @@ function monthlyTrendRows() {
 function monthlyStatusKind(month) {
   const limit = numberOrZero(month.creditLimit);
   if (!limit) return "empty";
-  const completedRows = computedWeeks(month).filter((r) => r.week.cumulativeSpend !== null);
-  if (completedRows.length === 0) return "empty";
-  const latest = completedRows[completedRows.length - 1];
-  const totalWeeks = month.weeks.length;
-  const latestIndex = month.weeks.findIndex((w) => w.id === latest.week.id);
-  const elapsedShare = Math.min(1, Math.max((latestIndex + 1) / Math.max(totalWeeks, 1), 0));
-  const cumulative = numberOrZero(latest.cumulativeSpend);
-  const projected = elapsedShare > 0 ? cumulative / elapsedShare : cumulative;
-  const usedShare = limit > 0 ? cumulative / limit : 0;
-  if (projected > limit) return "over";
-  if (usedShare >= 0.5 || projected / limit >= 0.85) return "watch";
+  const rows = computedWeeks(month).filter((r) => r.week.cumulativeSpend !== null);
+  if (rows.length === 0) return "empty";
+  const nonGrocery = rows.reduce((sum, r) => sum + numberOrZero(r.nonGrocery), 0);
+  const grocery = rows.reduce((sum, r) => sum + Math.max(0, numberOrZero(r.grocery)), 0);
+  const incidentals = rows.reduce((sum, r) => sum + numberOrZero(r.incidentals), 0);
+  const total = nonGrocery + grocery + incidentals;
+  const ratio = total / limit;
+  if (ratio >= 0.8) return "over";
+  if (ratio >= 0.5) return "watch";
   return "good";
 }
 
@@ -2903,14 +2909,14 @@ function drawMonthlyTrendChart() {
 
   // ── Monthly total bar ──
   const statusBarColors = {
-    good: "rgba(36, 113, 93, 0.18)",
-    watch: "rgba(195, 107, 45, 0.18)",
-    over: "rgba(185, 65, 61, 0.18)",
-    empty: "rgba(102, 115, 107, 0.10)",
+    good: "rgba(36, 113, 93, 0.70)",
+    watch: "rgba(195, 107, 45, 0.70)",
+    over: "rgba(185, 65, 61, 0.70)",
+    empty: "rgba(102, 115, 107, 0.30)",
   };
 
   rows.forEach((row, index) => {
-    const kind = monthlyStatusKind(appState.months[row.id]);
+    const kind = appState.months[row.id]._barStatusKind || monthlyStatusKind(appState.months[row.id]);
     const barColor = statusBarColors[kind] || statusBarColors.empty;
     const barValue = row.total;
     const barTop = yForValue(barValue);
