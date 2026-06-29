@@ -17,6 +17,11 @@ const WORKSPACE_REGISTRY_SEED_IDS = (process.env.WORKSPACE_REGISTRY_SEED_IDS || 
   .split(",")
   .map((workspaceId) => workspaceId.trim())
   .filter(Boolean);
+const WORKSPACE_REGISTRY_UNOWNED_SEED_IDS = (process.env.WORKSPACE_REGISTRY_UNOWNED_SEED_IDS || "")
+  .split(",")
+  .map((workspaceId) => workspaceId.trim())
+  .filter(Boolean);
+const DEFAULT_ACCOUNT_ID = process.env.DEFAULT_ACCOUNT_ID || "default-owner";
 const DEFAULT_PORT = 5173;
 const DEFAULT_HTTPS_PORT = 5443;
 const AUTH_COOKIE = "family_budget_session";
@@ -103,6 +108,24 @@ function registeredWorkspace(workspaceId, name = workspaceId) {
   };
 }
 
+function registeredAccount(accountId, displayName = accountId) {
+  const id = normalizeWorkspaceId(accountId);
+  return {
+    id,
+    displayName,
+    authProvider: "password",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function ensureAccountRecord(registry, accountId, displayName = accountId) {
+  const id = normalizeWorkspaceId(accountId);
+  if (!registry.accounts[id]) {
+    registry.accounts[id] = registeredAccount(id, displayName);
+  }
+  return registry.accounts[id];
+}
+
 function ensureWorkspaceRecord(registry, workspaceId, name = workspaceId) {
   const id = normalizeWorkspaceId(workspaceId);
   if (!registry.workspaces[id]) {
@@ -111,10 +134,41 @@ function ensureWorkspaceRecord(registry, workspaceId, name = workspaceId) {
   return registry.workspaces[id];
 }
 
+function hasMembership(registry, accountId, workspaceId) {
+  return registry.memberships.some(
+    (membership) =>
+      membership.accountId === accountId &&
+      membership.workspaceId === workspaceId,
+  );
+}
+
+function ensureMembershipRecord(registry, accountId, workspaceId, role = "owner") {
+  if (!hasMembership(registry, accountId, workspaceId)) {
+    registry.memberships.push({
+      accountId,
+      workspaceId,
+      role,
+      createdAt: new Date().toISOString(),
+    });
+  }
+}
+
+function ensureDefaultIdentity(registry) {
+  const account = ensureAccountRecord(registry, DEFAULT_ACCOUNT_ID, "Default Owner");
+  [DEFAULT_WORKSPACE_ID, ...WORKSPACE_REGISTRY_SEED_IDS].forEach((workspaceId) => {
+    const workspace = ensureWorkspaceRecord(
+      registry,
+      workspaceId,
+      workspaceId === DEFAULT_WORKSPACE_ID ? "Default Workspace" : workspaceId,
+    );
+    ensureMembershipRecord(registry, account.id, workspace.id, "owner");
+  });
+}
+
 function buildDefaultAccountRegistry() {
   const registry = emptyAccountRegistry();
-  ensureWorkspaceRecord(registry, DEFAULT_WORKSPACE_ID, "Default Workspace");
-  WORKSPACE_REGISTRY_SEED_IDS.forEach((workspaceId) => ensureWorkspaceRecord(registry, workspaceId));
+  ensureDefaultIdentity(registry);
+  WORKSPACE_REGISTRY_UNOWNED_SEED_IDS.forEach((workspaceId) => ensureWorkspaceRecord(registry, workspaceId));
   return registry;
 }
 
@@ -140,31 +194,34 @@ async function writeAccountRegistry(registry) {
 
 async function ensureAccountRegistry() {
   const registry = await readAccountRegistry();
-  let changed = false;
-  [DEFAULT_WORKSPACE_ID, ...WORKSPACE_REGISTRY_SEED_IDS].forEach((workspaceId) => {
-    const id = normalizeWorkspaceId(workspaceId);
-    if (!registry.workspaces[id]) {
-      ensureWorkspaceRecord(registry, id, id === DEFAULT_WORKSPACE_ID ? "Default Workspace" : id);
-      changed = true;
-    }
-  });
+  const before = JSON.stringify(registry);
+  ensureDefaultIdentity(registry);
+  WORKSPACE_REGISTRY_UNOWNED_SEED_IDS.forEach((workspaceId) => ensureWorkspaceRecord(registry, workspaceId));
+  const changed = before !== JSON.stringify(registry);
   if (changed || !fsSync.existsSync(ACCOUNT_REGISTRY_PATH)) {
     await writeAccountRegistry(registry);
   }
   return registry;
 }
 
-async function registeredWorkspaceId(workspaceId) {
+async function registeredWorkspaceIdForAccount(accountId, workspaceId) {
+  const account = normalizeWorkspaceId(accountId || DEFAULT_ACCOUNT_ID);
   const id = normalizeWorkspaceId(workspaceId || DEFAULT_WORKSPACE_ID);
   const registry = await ensureAccountRegistry();
+  if (!registry.accounts[account]) {
+    throw new AccountRegistryError("Account is not registered.", 403);
+  }
   if (!registry.workspaces[id]) {
     throw new AccountRegistryError("Workspace is not registered.", 403);
+  }
+  if (!hasMembership(registry, account, id)) {
+    throw new AccountRegistryError("Account is not a member of this workspace.", 403);
   }
   return id;
 }
 
 function sessionForRequest(req) {
-  if (!APP_PASSWORD) return { workspaceId: DEFAULT_WORKSPACE_ID };
+  if (!APP_PASSWORD) return { accountId: DEFAULT_ACCOUNT_ID, workspaceId: DEFAULT_WORKSPACE_ID };
   const token = parseCookies(req)[AUTH_COOKIE];
   return token ? sessions.get(token) || null : null;
 }
@@ -263,7 +320,8 @@ function createSessionToken() {
 async function createSession(workspaceId) {
   const token = createSessionToken();
   const session = {
-    workspaceId: await registeredWorkspaceId(workspaceId),
+    accountId: DEFAULT_ACCOUNT_ID,
+    workspaceId: await registeredWorkspaceIdForAccount(DEFAULT_ACCOUNT_ID, workspaceId),
     createdAt: new Date().toISOString(),
   };
   sessions.set(token, session);
@@ -308,6 +366,7 @@ async function serveApi(req, res, pathname) {
     sendJson(res, 200, {
       authenticated: !APP_PASSWORD || !!session,
       authEnabled: !!APP_PASSWORD,
+      accountId: session?.accountId || DEFAULT_ACCOUNT_ID,
       workspaceId: session?.workspaceId || DEFAULT_WORKSPACE_ID,
     });
     return true;
@@ -336,7 +395,12 @@ async function serveApi(req, res, pathname) {
     sendJsonWithCookie(
       res,
       200,
-      { ok: true, authEnabled: true, workspaceId: created.session.workspaceId },
+      {
+        ok: true,
+        authEnabled: true,
+        accountId: created.session.accountId,
+        workspaceId: created.session.workspaceId,
+      },
       sessionCookie(created.token),
     );
     return true;
