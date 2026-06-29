@@ -51,6 +51,17 @@ async function addMonth(page, monthValue) {
   await expect(page.locator("#monthDialog")).toBeHidden();
 }
 
+async function readState(page) {
+  const response = await page.request.get("/api/state");
+  expect(response.ok()).toBe(true);
+  return response.json();
+}
+
+async function restoreState(page, state) {
+  const response = await page.request.post("/api/state", { data: state });
+  expect(response.ok()).toBe(true);
+}
+
 async function seedTrendMonths(page) {
   const base = await page.evaluate(() => structuredClone(appState));
   const limit = 15000;
@@ -642,105 +653,102 @@ test("transaction import draft filters, reviews, and applies rows", async ({ pag
 
   await login(page);
   await page.locator("#languageSelect").selectOption("en");
+  const originalState = await readState(page);
 
-  await addMonth(page, "2026-06");
-  await page.locator('.nav-tab[data-view="entry"]').click();
-  await expect(page.locator("#entryView")).toHaveClass(/active/);
+  try {
+    await addMonth(page, "2026-06");
+    await page.locator('.nav-tab[data-view="entry"]').click();
+    await expect(page.locator("#entryView")).toHaveClass(/active/);
 
-  await page.locator("#periodStartInput").fill("2026-06-13");
-  await page.locator("#periodEndInput").fill("2026-06-17");
-  await page.locator("#availableInput").fill("14420.20");
-  await page.locator("#unpaidInput").fill("0");
+    await page.locator("#periodStartInput").fill("2026-06-13");
+    await page.locator("#periodEndInput").fill("2026-06-17");
+    await page.locator("#availableInput").fill("14420.20");
+    await page.locator("#unpaidInput").fill("0");
 
-  const csvRows = [
-    '12/06/2026,"-1.00","COLES BEFORE PERIOD",""',
-    '13/06/2026,"-36.35","COLES 7735 DONCASTER VIC",""',
-    '14/06/2026,"-90.00","EDWARD WONG MEDICAL",""',
-    '15/06/2026,"-123.45","AAMI INSURANCE",""',
-    '15/06/2026,"-123.45","AAMI INSURANCE",""',
-    '16/06/2026,"-88.00","HOLLARD HOME INSURANCE",""',
-    '16/06/2026,"25.00","CARD PAYMENT THANK YOU",""',
-    '17/06/2026,"-77.00","LUMO ENERGY",""',
-    '17/06/2026,"-66.00","AGL SALES",""',
-    '17/06/2026,"-55.00","DEPARTMENT OF TRANSPOR VIC",""',
-    '17/06/2026,"-44.00","KOENIGMACHINERY",""',
-    '17/06/2026,"-12.00","UNKNOWN MERCHANT",""',
-    '18/06/2026,"-2.00","COLES AFTER PERIOD",""',
-    '18/07/2026,"-3.00","COLES MISSING MONTH",""',
-  ].join("\n");
+    const csvRows = [
+      '12/06/2026,"-1.00","COLES BEFORE PERIOD",""',
+      '13/06/2026,"-36.35","COLES 7735 DONCASTER VIC",""',
+      '14/06/2026,"-90.00","EDWARD WONG MEDICAL",""',
+      '15/06/2026,"-123.45","AAMI INSURANCE",""',
+      '15/06/2026,"-123.45","AAMI INSURANCE",""',
+      '16/06/2026,"-88.00","HOLLARD HOME INSURANCE",""',
+      '16/06/2026,"25.00","CARD PAYMENT THANK YOU",""',
+      '17/06/2026,"-77.00","LUMO ENERGY",""',
+      '17/06/2026,"-66.00","AGL SALES",""',
+      '17/06/2026,"-55.00","DEPARTMENT OF TRANSPOR VIC",""',
+      '17/06/2026,"-44.00","KOENIGMACHINERY",""',
+      '17/06/2026,"-12.00","UNKNOWN MERCHANT",""',
+      '18/06/2026,"-2.00","COLES AFTER PERIOD",""',
+      '18/07/2026,"-3.00","COLES MISSING MONTH",""',
+    ].join("\n");
 
-  await page.locator("#transactionImportInput").fill(csvRows);
-  await page.locator("#parseImportBtn").click();
-  await expect(page.locator("#importSummary")).toContainText("Included");
-  await expect(page.locator("#importSummary")).toContainText("8 transactions");
-  await expect(page.locator("#importSummary")).toContainText("Needs review");
-  await expect(page.locator("#importSummary")).toContainText("2 transactions");
-  await expect(page.locator("#importSummary")).toContainText("Excluded");
-  await expect(page.locator("#importSummary")).toContainText("4");
-  await expect(page.locator("#importRows")).toContainText("COLES 7735");
-  await expect(page.locator("#importRows")).toContainText("Grocery");
-  await expect(page.locator("#importRows")).toContainText("EDWARD WONG");
-  await expect(page.locator("#importRows")).toContainText("Medical out-of-pocket");
-  await expect(page.locator("#importRows")).toContainText("AAMI");
-  await expect(page.locator("#importRows")).toContainText("Car insurance");
-  await expect(page.locator("#importRows")).toContainText("duplicate candidate");
-  await expect(page.locator("#importRows")).toContainText("HOLLARD");
-  await expect(page.locator("#importRows")).toContainText("Home insurance");
-  await expect(page.locator("#importRows")).toContainText("LUMO");
-  await expect(page.locator("#importRows")).toContainText("Electricity");
-  await expect(page.locator("#importRows")).toContainText("AGL SALES");
-  await expect(page.locator("#importRows")).toContainText("Gas");
-  await expect(page.locator("#importRows")).toContainText("DEPARTMENT OF TRANSPOR");
-  await expect(page.locator("#importRows")).toContainText("Transport");
+    await page.locator("#transactionImportInput").fill(csvRows);
+    await page.locator("#parseImportBtn").click();
+    await expect(page.locator("#importSummary")).toContainText("Included");
+    await expect(page.locator("#importSummary")).toContainText("8 transactions");
+    await expect(page.locator("#importSummary")).toContainText("Needs review");
+    await expect(page.locator("#importSummary")).toContainText("2 transactions");
+    await expect(page.locator("#importSummary")).toContainText("Excluded");
+    await expect(page.locator("#importSummary")).toContainText("4");
+    await expect(page.locator("#importRows")).toContainText("COLES 7735");
+    await expect(page.locator("#importRows")).toContainText("Grocery");
+    await expect(page.locator("#importRows")).toContainText("EDWARD WONG");
+    await expect(page.locator("#importRows")).toContainText("Medical out-of-pocket");
+    await expect(page.locator("#importRows")).toContainText("AAMI");
+    await expect(page.locator("#importRows")).toContainText("Car insurance");
+    await expect(page.locator("#importRows")).toContainText("duplicate candidate");
+    await expect(page.locator("#importRows")).toContainText("HOLLARD");
+    await expect(page.locator("#importRows")).toContainText("Home insurance");
+    await expect(page.locator("#importRows")).toContainText("LUMO");
+    await expect(page.locator("#importRows")).toContainText("Electricity");
+    await expect(page.locator("#importRows")).toContainText("AGL SALES");
+    await expect(page.locator("#importRows")).toContainText("Gas");
+    await expect(page.locator("#importRows")).toContainText("DEPARTMENT OF TRANSPOR");
+    await expect(page.locator("#importRows")).toContainText("Transport");
 
-  await page.locator('[data-import-tab="review"]').click();
-  await expect(page.locator("#importRows")).toContainText("KOENIGMACHINERY");
-  await expect(page.locator("#importRows")).toContainText("incidentals require confirmation");
-  await expect(page.locator("#importRows")).toContainText("UNKNOWN MERCHANT");
-  await expect(page.locator("#importRows")).toContainText("low confidence");
-  await page
-    .locator(".import-row-card", { hasText: "KOENIGMACHINERY" })
-    .locator('[data-import-action="include"]')
-    .click();
+    await page.locator('[data-import-tab="review"]').click();
+    await expect(page.locator("#importRows")).toContainText("KOENIGMACHINERY");
+    await expect(page.locator("#importRows")).toContainText("incidentals require confirmation");
+    await expect(page.locator("#importRows")).toContainText("UNKNOWN MERCHANT");
+    await expect(page.locator("#importRows")).toContainText("low confidence");
+    await page
+      .locator(".import-row-card", { hasText: "KOENIGMACHINERY" })
+      .locator('[data-import-action="include"]')
+      .click();
 
-  await page.locator('[data-import-tab="excluded"]').click();
-  await expect(page.locator("#importRows")).toContainText("outside selected period");
-  await expect(page.locator("#importRows")).toContainText("positive amount / payment / refund");
-  await expect(page.locator("#importRows")).toContainText("month not created");
+    await page.locator('[data-import-tab="excluded"]').click();
+    await expect(page.locator("#importRows")).toContainText("outside selected period");
+    await expect(page.locator("#importRows")).toContainText("positive amount / payment / refund");
+    await expect(page.locator("#importRows")).toContainText("month not created");
 
-  await page.locator("#applyImportBtn").click();
-  await expect(page.locator("#importStatus")).toContainText("Applied 9 transactions");
-  await expect(page.locator('input[data-category="medical"]')).toHaveValue("90");
-  await expect(page.locator('input[data-category="carInsurance"]')).toHaveValue("246.9");
-  await expect(page.locator('input[data-category="homeInsurance"]')).toHaveValue("88");
-  await expect(page.locator('input[data-category="electricity"]')).toHaveValue("77");
-  await expect(page.locator('input[data-category="gas"]')).toHaveValue("66");
-  await expect(page.locator('input[data-category="transport"]')).toHaveValue("55");
-  await expect(page.locator('input[data-category="incidentals"]')).toHaveValue("44");
-  await expect(page.locator("#notesInput")).toHaveValue(/KOENIGMACHINERY/);
+    await page.locator("#applyImportBtn").click();
+    await expect(page.locator("#importStatus")).toContainText("Applied 9 transactions");
+    await expect(page.locator('input[data-category="medical"]')).toHaveValue("90");
+    await expect(page.locator('input[data-category="carInsurance"]')).toHaveValue("246.9");
+    await expect(page.locator('input[data-category="homeInsurance"]')).toHaveValue("88");
+    await expect(page.locator('input[data-category="electricity"]')).toHaveValue("77");
+    await expect(page.locator('input[data-category="gas"]')).toHaveValue("66");
+    await expect(page.locator('input[data-category="transport"]')).toHaveValue("55");
+    await expect(page.locator('input[data-category="incidentals"]')).toHaveValue("44");
+    await expect(page.locator("#notesInput")).toHaveValue(/KOENIGMACHINERY/);
 
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect
-    .poll(async () =>
-      page.evaluate(() => ({
-        pageFits: document.documentElement.scrollWidth <= window.innerWidth + 1,
-        importFits: document.querySelector(".transaction-import-panel").getBoundingClientRect().right <= window.innerWidth + 1,
-      })),
-    )
-    .toEqual({ pageFits: true, importFits: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect
+      .poll(async () =>
+        page.evaluate(() => ({
+          pageFits: document.documentElement.scrollWidth <= window.innerWidth + 1,
+          importFits: document.querySelector(".transaction-import-panel").getBoundingClientRect().right <= window.innerWidth + 1,
+        })),
+      )
+      .toEqual({ pageFits: true, importFits: true });
 
-  await page.locator("#languageSelect").selectOption("zh");
-  await expect(page.locator("#parseImportBtn")).not.toHaveText("Parse transactions");
-  await page.locator("#languageSelect").selectOption("en");
-  await page.setViewportSize({ width: 1280, height: 720 });
-
-  page.on("dialog", async (dialog) => {
-    expect(dialog.type()).toBe("confirm");
-    await dialog.accept();
-  });
-  await page.locator('.nav-tab[data-view="overview"]').click();
-  await page.locator("#deleteMonthBtn").click();
-  await expect(page.locator("#overviewTitle")).not.toHaveText("2026 June");
+    await page.locator("#languageSelect").selectOption("zh");
+    await expect(page.locator("#parseImportBtn")).not.toHaveText("Parse transactions");
+    await page.locator("#languageSelect").selectOption("en");
+    await page.setViewportSize({ width: 1280, height: 720 });
+  } finally {
+    await restoreState(page, originalState);
+  }
 });
 
 test("transaction import accepts copied online banking text", async ({ page }) => {
@@ -748,74 +756,71 @@ test("transaction import accepts copied online banking text", async ({ page }) =
 
   await login(page);
   await page.locator("#languageSelect").selectOption("en");
+  const originalState = await readState(page);
 
-  await addMonth(page, "2026-09");
-  await page.locator('.nav-tab[data-view="entry"]').click();
-  await expect(page.locator("#entryView")).toHaveClass(/active/);
+  try {
+    await addMonth(page, "2026-09");
+    await page.locator('.nav-tab[data-view="entry"]').click();
+    await expect(page.locator("#entryView")).toHaveClass(/active/);
 
-  await page.locator("#periodStartInput").fill("2026-06-22");
-  await page.locator("#periodEndInput").fill("2026-06-23");
-  await page.locator("#availableInput").fill("14800");
-  await page.locator("#unpaidInput").fill("0");
+    await page.locator("#periodStartInput").fill("2026-06-22");
+    await page.locator("#periodEndInput").fill("2026-06-23");
+    await page.locator("#availableInput").fill("14800");
+    await page.locator("#unpaidInput").fill("0");
 
-  const copiedRows = [
-    "Available",
-    "+$10,956.21",
-    "",
-    "Total owing$3,687.95",
-    "23 Jun 2026",
-    "Open transaction detailsPENDING - Department of Transpor Melbourne AUS",
-    "-$20.00",
-    "23 Jun 2026",
-    "Open transaction detailsPENDING - Public Transport Victo Melbourne AUS",
-    "",
-    "23 Jun 2026",
-    "Open transaction detailsPENDING - SQ *DONCASTER Doncaster Eas AUS",
-    "-$26.50",
-    "23 Jun 2026",
-    "Open transaction detailsPENDING - ALDI STORES THE PINES AUS",
-    "-$42.55",
-    "22 Jun 2026",
-    "Open transaction detailsPENDING - POINT PARKING Dandenong Rd AUS",
-    "-$4.06",
-    "22 Jun 2026",
-    "Open transaction detailsPENDING - Daiso (Chadstone SC) Chadstone AUS",
-    "-$3.30",
-  ].join("\n");
+    const copiedRows = [
+      "Available",
+      "+$10,956.21",
+      "",
+      "Total owing$3,687.95",
+      "23 Jun 2026",
+      "Open transaction detailsPENDING - Department of Transpor Melbourne AUS",
+      "-$20.00",
+      "23 Jun 2026",
+      "Open transaction detailsPENDING - Public Transport Victo Melbourne AUS",
+      "",
+      "23 Jun 2026",
+      "Open transaction detailsPENDING - SQ *DONCASTER Doncaster Eas AUS",
+      "-$26.50",
+      "23 Jun 2026",
+      "Open transaction detailsPENDING - ALDI STORES THE PINES AUS",
+      "-$42.55",
+      "22 Jun 2026",
+      "Open transaction detailsPENDING - POINT PARKING Dandenong Rd AUS",
+      "-$4.06",
+      "22 Jun 2026",
+      "Open transaction detailsPENDING - Daiso (Chadstone SC) Chadstone AUS",
+      "-$3.30",
+    ].join("\n");
 
-  await page.locator("#transactionImportInput").fill(copiedRows);
-  await page.locator("#parseImportBtn").click();
-  await expect(page.locator("#importSummary")).toContainText("Included");
-  await expect(page.locator("#importSummary")).toContainText("5 transactions");
-  await expect(page.locator("#importSummary")).toContainText("Excluded");
-  await expect(page.locator("#importSummary")).toContainText("1");
-  await expect(page.locator("#availableInput")).toHaveValue("10956.21");
-  await expect(page.locator("#unpaidInput")).toHaveValue("3687.95");
-  await expect(page.locator("#importRows")).toContainText("Department of Transpor");
-  await expect(page.locator("#importRows")).toContainText("Transport");
-  await expect(page.locator("#importRows")).toContainText("SQ *DONCASTER");
-  await expect(page.locator("#importRows")).toContainText("Grocery");
-  await expect(page.locator("#importRows")).toContainText("ALDI STORES");
-  await expect(page.locator("#importRows")).toContainText("POINT PARKING");
-  await expect(page.locator("#importRows")).toContainText("Daiso");
-  await expect(page.locator("#importRows")).toContainText("Shopping and dining");
+    await page.locator("#transactionImportInput").fill(copiedRows);
+    await page.locator("#parseImportBtn").click();
+    await expect(page.locator("#importSummary")).toContainText("Included");
+    await expect(page.locator("#importSummary")).toContainText("5 transactions");
+    await expect(page.locator("#importSummary")).toContainText("Excluded");
+    await expect(page.locator("#importSummary")).toContainText("1");
+    await expect(page.locator("#availableInput")).toHaveValue("10956.21");
+    await expect(page.locator("#unpaidInput")).toHaveValue("3687.95");
+    await expect(page.locator("#importRows")).toContainText("Department of Transpor");
+    await expect(page.locator("#importRows")).toContainText("Transport");
+    await expect(page.locator("#importRows")).toContainText("SQ *DONCASTER");
+    await expect(page.locator("#importRows")).toContainText("Grocery");
+    await expect(page.locator("#importRows")).toContainText("ALDI STORES");
+    await expect(page.locator("#importRows")).toContainText("POINT PARKING");
+    await expect(page.locator("#importRows")).toContainText("Daiso");
+    await expect(page.locator("#importRows")).toContainText("Shopping and dining");
 
-  await page.locator('[data-import-tab="excluded"]').click();
-  await expect(page.locator("#importRows")).toContainText("Public Transport Victo");
-  await expect(page.locator("#importRows")).toContainText("unsupported row format");
+    await page.locator('[data-import-tab="excluded"]').click();
+    await expect(page.locator("#importRows")).toContainText("Public Transport Victo");
+    await expect(page.locator("#importRows")).toContainText("unsupported row format");
 
-  await page.locator("#applyImportBtn").click();
-  await expect(page.locator("#importStatus")).toContainText("Applied 5 transactions");
-  await expect(page.locator('input[data-category="transport"]')).toHaveValue("24.06");
-  await expect(page.locator('input[data-category="shoppingDining"]')).toHaveValue("3.3");
-
-  page.on("dialog", async (dialog) => {
-    expect(dialog.type()).toBe("confirm");
-    await dialog.accept();
-  });
-  await page.locator('.nav-tab[data-view="overview"]').click();
-  await page.locator("#deleteMonthBtn").click();
-  await expect(page.locator("#overviewTitle")).not.toHaveText("2026 September");
+    await page.locator("#applyImportBtn").click();
+    await expect(page.locator("#importStatus")).toContainText("Applied 5 transactions");
+    await expect(page.locator('input[data-category="transport"]')).toHaveValue("24.06");
+    await expect(page.locator('input[data-category="shoppingDining"]')).toHaveValue("3.3");
+  } finally {
+    await restoreState(page, originalState);
+  }
 });
 
 test("brand home link navigates to overview", async ({ page }) => {
