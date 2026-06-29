@@ -312,6 +312,119 @@ test("account read model returns only current account workspaces", async () => {
   }
 });
 
+test("session workspace switch changes current state workspace", async () => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const unauthenticated = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  try {
+    const unauthenticatedSwitch = await unauthenticated.post("/api/session/workspace", {
+      data: { workspaceId: "e2e-session-alpha" },
+    });
+    expect(unauthenticatedSwitch.status()).toBe(401);
+
+    const loginResponse = await context.post("/api/session", {
+      data: { password, workspaceId: "e2e-session-alpha" },
+    });
+    expect(loginResponse.ok()).toBe(true);
+
+    const alphaStateResponse = await context.get("/api/state");
+    expect(alphaStateResponse.ok()).toBe(true);
+    const alphaState = await alphaStateResponse.json();
+    alphaState.currentMonthId = "e2e-switch-alpha-month";
+    alphaState.months["e2e-switch-alpha-month"] = {
+      id: "e2e-switch-alpha-month",
+      sortKey: "2099-08",
+      name: "Switch Alpha",
+      displayName: "Switch Alpha",
+      creditLimit: 15000,
+      weeks: [
+        {
+          id: "e2e-switch-alpha-month-w1",
+          period: "Period 1",
+          availableBalance: 14900,
+          unpaidPrevious: null,
+          cumulativeSpend: 100,
+          categoryValues: { transport: 100, shoppingDining: 0, incidentals: 0 },
+          notes: "alpha switch workspace",
+        },
+      ],
+    };
+    expect((await context.post("/api/state", { data: alphaState })).ok()).toBe(true);
+
+    const switchToBravo = await context.post("/api/session/workspace", {
+      data: { workspaceId: "e2e-session-bravo" },
+    });
+    expect(switchToBravo.ok()).toBe(true);
+    await expect(switchToBravo.json()).resolves.toMatchObject({
+      accountId: "default-owner",
+      workspaceId: "e2e-session-bravo",
+    });
+
+    const meAfterBravo = await context.get("/api/me");
+    expect(meAfterBravo.ok()).toBe(true);
+    await expect(meAfterBravo.json()).resolves.toMatchObject({
+      currentWorkspace: { id: "e2e-session-bravo", role: "owner" },
+    });
+
+    const bravoStateResponse = await context.get("/api/state");
+    expect(bravoStateResponse.ok()).toBe(true);
+    const bravoState = await bravoStateResponse.json();
+    expect(bravoState.currentMonthId).not.toBe("e2e-switch-alpha-month");
+    bravoState.currentMonthId = "e2e-switch-bravo-month";
+    bravoState.months["e2e-switch-bravo-month"] = {
+      id: "e2e-switch-bravo-month",
+      sortKey: "2099-09",
+      name: "Switch Bravo",
+      displayName: "Switch Bravo",
+      creditLimit: 15000,
+      weeks: [
+        {
+          id: "e2e-switch-bravo-month-w1",
+          period: "Period 1",
+          availableBalance: 14800,
+          unpaidPrevious: null,
+          cumulativeSpend: 200,
+          categoryValues: { transport: 0, shoppingDining: 200, incidentals: 0 },
+          notes: "bravo switch workspace",
+        },
+      ],
+    };
+    expect((await context.post("/api/state", { data: bravoState })).ok()).toBe(true);
+
+    const rejectUnowned = await context.post("/api/session/workspace", {
+      data: { workspaceId: "e2e-unowned-workspace" },
+    });
+    expect(rejectUnowned.status()).toBe(403);
+
+    const rejectUnknown = await context.post("/api/session/workspace", {
+      data: { workspaceId: "e2e-unknown-workspace" },
+    });
+    expect(rejectUnknown.status()).toBe(403);
+
+    const rejectBadId = await context.post("/api/session/workspace", {
+      data: { workspaceId: "../bad" },
+    });
+    expect(rejectBadId.status()).toBe(400);
+
+    const switchBackToAlpha = await context.post("/api/session/workspace", {
+      data: { workspaceId: "e2e-session-alpha" },
+    });
+    expect(switchBackToAlpha.ok()).toBe(true);
+    const alphaAgain = await context.get("/api/state");
+    expect(alphaAgain.ok()).toBe(true);
+    const alphaAgainState = await alphaAgain.json();
+    expect(alphaAgainState.currentMonthId).toBe("e2e-switch-alpha-month");
+    expect(alphaAgainState.months["e2e-switch-alpha-month"]?.weeks?.[0]?.notes).toBe(
+      "alpha switch workspace",
+    );
+    expect(alphaAgainState.months["e2e-switch-bravo-month"]).toBeUndefined();
+  } finally {
+    await unauthenticated.dispose();
+    await context.dispose();
+  }
+});
+
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
