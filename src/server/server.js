@@ -10,6 +10,13 @@ const PUBLIC_ROOT = process.env.PUBLIC_ROOT || path.join(ROOT, "src", "public");
 const STORE_PATH = process.env.STORE_PATH || path.join(ROOT, "budget-store.json");
 const WORKSPACE_STORE_ROOT = process.env.WORKSPACE_STORE_ROOT || "";
 const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || "default";
+const ACCOUNT_REGISTRY_PATH =
+  process.env.ACCOUNT_REGISTRY_PATH ||
+  path.join(WORKSPACE_STORE_ROOT || path.dirname(STORE_PATH), "account-registry.json");
+const WORKSPACE_REGISTRY_SEED_IDS = (process.env.WORKSPACE_REGISTRY_SEED_IDS || "")
+  .split(",")
+  .map((workspaceId) => workspaceId.trim())
+  .filter(Boolean);
 const DEFAULT_PORT = 5173;
 const DEFAULT_HTTPS_PORT = 5443;
 const AUTH_COOKIE = "family_budget_session";
@@ -25,6 +32,14 @@ class StorePathError extends Error {
   constructor(message) {
     super(message);
     this.name = "StorePathError";
+  }
+}
+
+class AccountRegistryError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.name = "AccountRegistryError";
+    this.status = status;
   }
 }
 
@@ -68,6 +83,84 @@ function normalizeWorkspaceId(workspaceId) {
     throw new StorePathError("Workspace id contains unsupported characters.");
   }
   return value;
+}
+
+function emptyAccountRegistry() {
+  return {
+    version: 1,
+    accounts: {},
+    workspaces: {},
+    memberships: [],
+  };
+}
+
+function registeredWorkspace(workspaceId, name = workspaceId) {
+  const id = normalizeWorkspaceId(workspaceId);
+  return {
+    id,
+    name,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function ensureWorkspaceRecord(registry, workspaceId, name = workspaceId) {
+  const id = normalizeWorkspaceId(workspaceId);
+  if (!registry.workspaces[id]) {
+    registry.workspaces[id] = registeredWorkspace(id, name);
+  }
+  return registry.workspaces[id];
+}
+
+function buildDefaultAccountRegistry() {
+  const registry = emptyAccountRegistry();
+  ensureWorkspaceRecord(registry, DEFAULT_WORKSPACE_ID, "Default Workspace");
+  WORKSPACE_REGISTRY_SEED_IDS.forEach((workspaceId) => ensureWorkspaceRecord(registry, workspaceId));
+  return registry;
+}
+
+async function readAccountRegistry() {
+  try {
+    const text = await fs.readFile(ACCOUNT_REGISTRY_PATH, "utf8");
+    const registry = JSON.parse(text);
+    registry.version = registry.version || 1;
+    registry.accounts = registry.accounts || {};
+    registry.workspaces = registry.workspaces || {};
+    registry.memberships = Array.isArray(registry.memberships) ? registry.memberships : [];
+    return registry;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  return buildDefaultAccountRegistry();
+}
+
+async function writeAccountRegistry(registry) {
+  await fs.mkdir(path.dirname(ACCOUNT_REGISTRY_PATH), { recursive: true });
+  await fs.writeFile(ACCOUNT_REGISTRY_PATH, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+}
+
+async function ensureAccountRegistry() {
+  const registry = await readAccountRegistry();
+  let changed = false;
+  [DEFAULT_WORKSPACE_ID, ...WORKSPACE_REGISTRY_SEED_IDS].forEach((workspaceId) => {
+    const id = normalizeWorkspaceId(workspaceId);
+    if (!registry.workspaces[id]) {
+      ensureWorkspaceRecord(registry, id, id === DEFAULT_WORKSPACE_ID ? "Default Workspace" : id);
+      changed = true;
+    }
+  });
+  if (changed || !fsSync.existsSync(ACCOUNT_REGISTRY_PATH)) {
+    await writeAccountRegistry(registry);
+  }
+  return registry;
+}
+
+async function registeredWorkspaceId(workspaceId) {
+  const id = normalizeWorkspaceId(workspaceId || DEFAULT_WORKSPACE_ID);
+  const registry = await ensureAccountRegistry();
+  if (!registry.workspaces[id]) {
+    throw new AccountRegistryError("Workspace is not registered.", 403);
+  }
+  return id;
 }
 
 function sessionForRequest(req) {
@@ -167,10 +260,10 @@ function createSessionToken() {
   return crypto.randomBytes(24).toString("hex");
 }
 
-function createSession(workspaceId) {
+async function createSession(workspaceId) {
   const token = createSessionToken();
   const session = {
-    workspaceId: normalizeWorkspaceId(workspaceId || DEFAULT_WORKSPACE_ID),
+    workspaceId: await registeredWorkspaceId(workspaceId),
     createdAt: new Date().toISOString(),
   };
   sessions.set(token, session);
@@ -199,6 +292,7 @@ async function serveApi(req, res, pathname) {
   }
 
   if (pathname === "/api/health" && req.method === "GET") {
+    await ensureAccountRegistry();
     await ensureStoreFile();
     sendJson(res, 200, {
       ok: true,
@@ -231,10 +325,10 @@ async function serveApi(req, res, pathname) {
     }
     let created;
     try {
-      created = createSession(body.workspaceId);
+      created = await createSession(body.workspaceId);
     } catch (error) {
-      if (error instanceof StorePathError) {
-        sendJson(res, 400, { error: error.message });
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
         return true;
       }
       throw error;
@@ -341,6 +435,10 @@ async function handleRequest(req, res) {
     console.error(error);
     if (error instanceof StorePathError) {
       sendJson(res, 500, { error: error.message });
+      return;
+    }
+    if (error instanceof AccountRegistryError) {
+      sendJson(res, error.status || 500, { error: error.message });
       return;
     }
     sendJson(res, 500, { error: "Internal server error" });

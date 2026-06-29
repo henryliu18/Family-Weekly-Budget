@@ -236,6 +236,21 @@ test("authenticated sessions resolve isolated workspaces", async () => {
   }
 });
 
+test("session login rejects unregistered workspaces", async () => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  try {
+    const response = await context.post("/api/session", {
+      data: { password, workspaceId: "e2e-unregistered-workspace" },
+    });
+    expect(response.status()).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: "Workspace is not registered." });
+  } finally {
+    await context.dispose();
+  }
+});
+
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
