@@ -45,6 +45,11 @@
 
       <main class="workspace">
         <div class="workspace-toolbar">
+          <label id="workspaceSwitcher" class="field workspace-switcher hidden" for="workspaceSelect">
+            <span data-i18n="workspace">Workspace</span>
+            <select id="workspaceSelect"></select>
+            <small id="workspaceSwitchStatus" class="workspace-switch-status" role="status" aria-live="polite"></small>
+          </label>
           <label class="field language-control">
             <span data-i18n="language">Language</span>
             <select id="languageSelect">

@@ -425,6 +425,87 @@ test("session workspace switch changes current state workspace", async () => {
   }
 });
 
+test("workspace selector lists allowed workspaces and switches visible state", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  await page.locator("#languageSelect").selectOption("en");
+  await expect(page.locator("#workspaceSwitcher")).toBeVisible();
+  await expect(page.locator("#workspaceSelect")).toBeVisible();
+
+  const workspaceValues = await page.locator("#workspaceSelect option").evaluateAll((options) =>
+    options.map((option) => option.value),
+  );
+  expect(workspaceValues).toEqual(
+    expect.arrayContaining(["e2e-default", "e2e-session-alpha", "e2e-session-bravo"]),
+  );
+  expect(workspaceValues).not.toContain("e2e-unowned-workspace");
+  await expect(page.locator("#workspaceSelect")).toHaveValue("e2e-default");
+
+  const seedWorkspace = async (workspaceId, monthId, monthName, notes) => {
+    const switchResponse = await page.request.post("/api/session/workspace", {
+      data: { workspaceId },
+    });
+    expect(switchResponse.ok()).toBe(true);
+
+    const stateResponse = await page.request.get("/api/state");
+    expect(stateResponse.ok()).toBe(true);
+    const state = await stateResponse.json();
+    state.currentMonthId = monthId;
+    state.months[monthId] = {
+      id: monthId,
+      sortKey: monthId,
+      name: monthName,
+      displayName: monthName,
+      creditLimit: 15000,
+      weeks: [
+        {
+          id: `${monthId}-w1`,
+          period: "Period 1",
+          availableBalance: 14850,
+          unpaidPrevious: null,
+          cumulativeSpend: 150,
+          categoryValues: { transport: 50, shoppingDining: 100, incidentals: 0 },
+          notes,
+        },
+      ],
+    };
+    const writeResponse = await page.request.post("/api/state", { data: state });
+    expect(writeResponse.ok()).toBe(true);
+  };
+
+  await seedWorkspace(
+    "e2e-session-alpha",
+    "e2e-ui-alpha-month",
+    "UI Alpha Workspace",
+    "workspace selector alpha seed",
+  );
+  await seedWorkspace(
+    "e2e-session-bravo",
+    "e2e-ui-bravo-month",
+    "UI Bravo Workspace",
+    "workspace selector bravo seed",
+  );
+
+  const resetResponse = await page.request.post("/api/session/workspace", {
+    data: { workspaceId: "e2e-default" },
+  });
+  expect(resetResponse.ok()).toBe(true);
+  await page.goto(appUrl);
+  await page.locator("#languageSelect").selectOption("en");
+  await expect(page.locator("#workspaceSelect")).toHaveValue("e2e-default");
+
+  await page.locator("#workspaceSelect").selectOption("e2e-session-alpha");
+  await expect(page.locator("#workspaceSwitchStatus")).toHaveText("Workspace switched");
+  await expect(page.locator("#workspaceSelect")).toHaveValue("e2e-session-alpha");
+  await expect(page.locator("#overviewTitle")).toHaveText("UI Alpha Workspace");
+
+  await page.locator("#workspaceSelect").selectOption("e2e-session-bravo");
+  await expect(page.locator("#workspaceSwitchStatus")).toHaveText("Workspace switched");
+  await expect(page.locator("#workspaceSelect")).toHaveValue("e2e-session-bravo");
+  await expect(page.locator("#overviewTitle")).toHaveText("UI Bravo Workspace");
+});
+
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
