@@ -264,6 +264,20 @@ function sessionForRequest(req) {
   return token ? sessions.get(token) || null : null;
 }
 
+async function switchSessionWorkspace(req, workspaceId) {
+  if (!APP_PASSWORD) {
+    return { accountId: DEFAULT_ACCOUNT_ID, workspaceId: DEFAULT_WORKSPACE_ID };
+  }
+  const token = parseCookies(req)[AUTH_COOKIE];
+  const session = token ? sessions.get(token) || null : null;
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  session.workspaceId = await registeredWorkspaceIdForAccount(session.accountId, workspaceId);
+  sessions.set(token, session);
+  return session;
+}
+
 function workspaceIdForRequest(req) {
   // Real account sessions will resolve this from the user's workspace membership.
   return sessionForRequest(req)?.workspaceId || DEFAULT_WORKSPACE_ID;
@@ -451,6 +465,25 @@ async function serveApi(req, res, pathname) {
       },
       sessionCookie(created.token),
     );
+    return true;
+  }
+
+  if (pathname === "/api/session/workspace" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)) || "{}");
+    try {
+      const session = await switchSessionWorkspace(req, body.workspaceId);
+      sendJson(res, 200, {
+        ok: true,
+        accountId: session.accountId,
+        workspaceId: session.workspaceId,
+      });
+    } catch (error) {
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
     return true;
   }
 
