@@ -189,7 +189,10 @@ test("authenticated sessions resolve isolated workspaces", async () => {
         data: { password, workspaceId: workspace.workspaceId },
       });
       expect(loginResponse.ok()).toBe(true);
-      await expect(loginResponse.json()).resolves.toMatchObject({ workspaceId: workspace.workspaceId });
+      await expect(loginResponse.json()).resolves.toMatchObject({
+        accountId: "default-owner",
+        workspaceId: workspace.workspaceId,
+      });
 
       const stateResponse = await workspace.context.get("/api/state");
       expect(stateResponse.ok()).toBe(true);
@@ -246,6 +249,23 @@ test("session login rejects unregistered workspaces", async () => {
     });
     expect(response.status()).toBe(403);
     await expect(response.json()).resolves.toMatchObject({ error: "Workspace is not registered." });
+  } finally {
+    await context.dispose();
+  }
+});
+
+test("session login rejects workspaces without account membership", async () => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  try {
+    const response = await context.post("/api/session", {
+      data: { password, workspaceId: "e2e-unowned-workspace" },
+    });
+    expect(response.status()).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Account is not a member of this workspace.",
+    });
   } finally {
     await context.dispose();
   }
