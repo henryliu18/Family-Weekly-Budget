@@ -127,6 +127,51 @@ test("landing page serves standalone entry", async ({ page }) => {
   await expect(page.locator("#authOverlay")).toHaveCount(0);
 });
 
+test("authenticated state API persists current workspace data", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+
+  const originalResponse = await page.request.get("/api/state");
+  expect(originalResponse.ok()).toBe(true);
+  const originalState = await originalResponse.json();
+  const testMonthId = "e2e-workspace-seam";
+  const updatedState = structuredClone(originalState);
+  updatedState.months[testMonthId] = {
+    id: testMonthId,
+    sortKey: "2098-12",
+    name: "2098 December",
+    displayName: "2098 December",
+    creditLimit: 15000,
+    weeks: [
+      {
+        id: `${testMonthId}-w1`,
+        period: "Period 1",
+        availableBalance: 14900,
+        unpaidPrevious: null,
+        cumulativeSpend: 100,
+        categoryValues: { transport: 25, shoppingDining: 25, incidentals: 0 },
+        notes: "E2E workspace seam seed",
+      },
+    ],
+  };
+  updatedState.currentMonthId = testMonthId;
+
+  try {
+    const writeResponse = await page.request.post("/api/state", { data: updatedState });
+    expect(writeResponse.ok()).toBe(true);
+
+    const persistedResponse = await page.request.get("/api/state");
+    expect(persistedResponse.ok()).toBe(true);
+    const persistedState = await persistedResponse.json();
+    expect(persistedState.currentMonthId).toBe(testMonthId);
+    expect(persistedState.months[testMonthId]?.weeks?.[0]?.notes).toBe("E2E workspace seam seed");
+  } finally {
+    const restoreResponse = await page.request.post("/api/state", { data: originalState });
+    expect(restoreResponse.ok()).toBe(true);
+  }
+});
+
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
