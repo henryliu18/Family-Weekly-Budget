@@ -19,7 +19,7 @@ const BUILD_TIME = process.env.APP_BUILD_TIME || new Date().toISOString();
 const SSL_CERT_PATH = process.env.SSL_CERT_PATH || "";
 const SSL_KEY_PATH = process.env.SSL_KEY_PATH || "";
 const REDIRECT_HTTP_TO_HTTPS = process.env.REDIRECT_HTTP_TO_HTTPS === "true";
-const sessions = new Set();
+const sessions = new Map();
 
 class StorePathError extends Error {
   constructor(message) {
@@ -70,9 +70,15 @@ function normalizeWorkspaceId(workspaceId) {
   return value;
 }
 
-function workspaceIdForRequest(_req) {
+function sessionForRequest(req) {
+  if (!APP_PASSWORD) return { workspaceId: DEFAULT_WORKSPACE_ID };
+  const token = parseCookies(req)[AUTH_COOKIE];
+  return token ? sessions.get(token) || null : null;
+}
+
+function workspaceIdForRequest(req) {
   // Real account sessions will resolve this from the user's workspace membership.
-  return DEFAULT_WORKSPACE_ID;
+  return sessionForRequest(req)?.workspaceId || DEFAULT_WORKSPACE_ID;
 }
 
 function storePathForWorkspace(workspaceId) {
@@ -100,6 +106,20 @@ async function loadDefaultState() {
   return sandbox.window.BUDGET_DATA.initialState;
 }
 
+async function loadSeedState(storePath) {
+  if (path.resolve(storePath) !== path.resolve(STORE_PATH)) {
+    try {
+      const stats = await fs.stat(STORE_PATH);
+      if (!stats.isDirectory()) {
+        return JSON.parse(await fs.readFile(STORE_PATH, "utf8"));
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  return loadDefaultState();
+}
+
 async function ensureStoreFile(storePath = storePathForWorkspace(DEFAULT_WORKSPACE_ID)) {
   try {
     const stats = await fs.stat(storePath);
@@ -114,7 +134,7 @@ async function ensureStoreFile(storePath = storePathForWorkspace(DEFAULT_WORKSPA
     if (error.code !== "ENOENT") throw error;
   }
 
-  const state = await loadDefaultState();
+  const state = await loadSeedState(storePath);
   await fs.mkdir(path.dirname(storePath), { recursive: true });
   await fs.writeFile(storePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
@@ -136,8 +156,7 @@ function parseCookies(req) {
 
 function isAuthenticated(req) {
   if (!APP_PASSWORD) return true;
-  const token = parseCookies(req)[AUTH_COOKIE];
-  return !!token && sessions.has(token);
+  return !!sessionForRequest(req);
 }
 
 function authRequired(res) {
@@ -146,6 +165,16 @@ function authRequired(res) {
 
 function createSessionToken() {
   return crypto.randomBytes(24).toString("hex");
+}
+
+function createSession(workspaceId) {
+  const token = createSessionToken();
+  const session = {
+    workspaceId: normalizeWorkspaceId(workspaceId || DEFAULT_WORKSPACE_ID),
+    createdAt: new Date().toISOString(),
+  };
+  sessions.set(token, session);
+  return { token, session };
 }
 
 function sessionCookie(token, maxAge = 60 * 60 * 24 * 14) {
@@ -181,9 +210,11 @@ async function serveApi(req, res, pathname) {
   }
 
   if (pathname === "/api/session" && req.method === "GET") {
+    const session = sessionForRequest(req);
     sendJson(res, 200, {
-      authenticated: isAuthenticated(req),
+      authenticated: !APP_PASSWORD || !!session,
       authEnabled: !!APP_PASSWORD,
+      workspaceId: session?.workspaceId || DEFAULT_WORKSPACE_ID,
     });
     return true;
   }
@@ -198,9 +229,22 @@ async function serveApi(req, res, pathname) {
       sendJson(res, 401, { error: "Invalid password" });
       return true;
     }
-    const token = createSessionToken();
-    sessions.add(token);
-    sendJsonWithCookie(res, 200, { ok: true, authEnabled: true }, sessionCookie(token));
+    let created;
+    try {
+      created = createSession(body.workspaceId);
+    } catch (error) {
+      if (error instanceof StorePathError) {
+        sendJson(res, 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    sendJsonWithCookie(
+      res,
+      200,
+      { ok: true, authEnabled: true, workspaceId: created.session.workspaceId },
+      sessionCookie(created.token),
+    );
     return true;
   }
 
