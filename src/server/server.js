@@ -220,6 +220,44 @@ async function registeredWorkspaceIdForAccount(accountId, workspaceId) {
   return id;
 }
 
+async function accountReadModelForSession(session) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  const registry = await ensureAccountRegistry();
+  const account = registry.accounts[session.accountId];
+  if (!account) {
+    throw new AccountRegistryError("Account is not registered.", 403);
+  }
+
+  const memberships = registry.memberships.filter(
+    (membership) => membership.accountId === account.id,
+  );
+  const workspaces = memberships
+    .map((membership) => {
+      const workspace = registry.workspaces[membership.workspaceId];
+      if (!workspace) return null;
+      return {
+        id: workspace.id,
+        name: workspace.name,
+        role: membership.role,
+      };
+    })
+    .filter(Boolean);
+  const currentWorkspace =
+    workspaces.find((workspace) => workspace.id === session.workspaceId) || null;
+
+  return {
+    account: {
+      id: account.id,
+      displayName: account.displayName,
+      authProvider: account.authProvider,
+    },
+    currentWorkspace,
+    workspaces,
+  };
+}
+
 function sessionForRequest(req) {
   if (!APP_PASSWORD) return { accountId: DEFAULT_ACCOUNT_ID, workspaceId: DEFAULT_WORKSPACE_ID };
   const token = parseCookies(req)[AUTH_COOKIE];
@@ -369,6 +407,16 @@ async function serveApi(req, res, pathname) {
       accountId: session?.accountId || DEFAULT_ACCOUNT_ID,
       workspaceId: session?.workspaceId || DEFAULT_WORKSPACE_ID,
     });
+    return true;
+  }
+
+  if (pathname === "/api/me" && req.method === "GET") {
+    const session = sessionForRequest(req);
+    if (!session) {
+      authRequired(res);
+      return true;
+    }
+    sendJson(res, 200, await accountReadModelForSession(session));
     return true;
   }
 
