@@ -13,6 +13,7 @@ services:
       APP_PASSWORD: ${APP_PASSWORD}
       DEFAULT_WORKSPACE_ID: ${DEFAULT_WORKSPACE_ID:-e2e-default}
       WORKSPACE_STORE_ROOT: ${WORKSPACE_STORE_ROOT:-/app/workspaces}
+      WORKSPACE_REGISTRY_SEED_IDS: ${WORKSPACE_REGISTRY_SEED_IDS:-e2e-session-alpha,e2e-session-bravo}
       APP_BUILD_VERSION: ${APP_BUILD_VERSION:-e2e}
       APP_BUILD_TIME: ${APP_BUILD_TIME:-}
       SSL_CERT_PATH: ${SSL_CERT_PATH:-/app/certs/server.crt}
