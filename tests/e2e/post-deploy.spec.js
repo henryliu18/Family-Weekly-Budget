@@ -271,6 +271,47 @@ test("session login rejects workspaces without account membership", async () => 
   }
 });
 
+test("account read model returns only current account workspaces", async () => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  try {
+    const unauthenticatedResponse = await context.get("/api/me");
+    expect(unauthenticatedResponse.status()).toBe(401);
+
+    const loginResponse = await context.post("/api/session", {
+      data: { password, workspaceId: "e2e-session-alpha" },
+    });
+    expect(loginResponse.ok()).toBe(true);
+
+    const response = await context.get("/api/me");
+    expect(response.ok()).toBe(true);
+    const me = await response.json();
+    expect(me.account).toEqual({
+      id: "default-owner",
+      displayName: "Default Owner",
+      authProvider: "password",
+    });
+    expect(me.currentWorkspace).toEqual({
+      id: "e2e-session-alpha",
+      name: "e2e-session-alpha",
+      role: "owner",
+    });
+    expect(me.workspaces).toEqual(
+      expect.arrayContaining([
+        { id: "e2e-default", name: "Default Workspace", role: "owner" },
+        { id: "e2e-session-alpha", name: "e2e-session-alpha", role: "owner" },
+        { id: "e2e-session-bravo", name: "e2e-session-bravo", role: "owner" },
+      ]),
+    );
+    expect(me.workspaces.map((workspace) => workspace.id)).not.toContain("e2e-unowned-workspace");
+    expect(JSON.stringify(me)).not.toContain("memberships");
+    expect(JSON.stringify(me)).not.toContain("accounts");
+  } finally {
+    await context.dispose();
+  }
+});
+
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
