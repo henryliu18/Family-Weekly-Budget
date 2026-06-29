@@ -8,6 +8,8 @@ const crypto = require("crypto");
 const ROOT = process.env.APP_ROOT || path.resolve(__dirname, "..", "..");
 const PUBLIC_ROOT = process.env.PUBLIC_ROOT || path.join(ROOT, "src", "public");
 const STORE_PATH = process.env.STORE_PATH || path.join(ROOT, "budget-store.json");
+const WORKSPACE_STORE_ROOT = process.env.WORKSPACE_STORE_ROOT || "";
+const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || "default";
 const DEFAULT_PORT = 5173;
 const DEFAULT_HTTPS_PORT = 5443;
 const AUTH_COOKIE = "family_budget_session";
@@ -60,15 +62,35 @@ async function readBody(req) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-async function readStore() {
-  await ensureStoreFile();
-  const text = await fs.readFile(STORE_PATH, "utf8");
+function normalizeWorkspaceId(workspaceId) {
+  const value = String(workspaceId || "").trim();
+  if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
+    throw new StorePathError("Workspace id contains unsupported characters.");
+  }
+  return value;
+}
+
+function workspaceIdForRequest(_req) {
+  // Real account sessions will resolve this from the user's workspace membership.
+  return DEFAULT_WORKSPACE_ID;
+}
+
+function storePathForWorkspace(workspaceId) {
+  if (!WORKSPACE_STORE_ROOT) return STORE_PATH;
+  return path.join(WORKSPACE_STORE_ROOT, normalizeWorkspaceId(workspaceId), "budget-store.json");
+}
+
+async function readBudgetState(workspaceId) {
+  const storePath = storePathForWorkspace(workspaceId);
+  await ensureStoreFile(storePath);
+  const text = await fs.readFile(storePath, "utf8");
   return JSON.parse(text);
 }
 
-async function writeStore(state) {
-  await ensureStoreFile();
-  await fs.writeFile(STORE_PATH, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+async function writeBudgetState(workspaceId, state) {
+  const storePath = storePathForWorkspace(workspaceId);
+  await ensureStoreFile(storePath);
+  await fs.writeFile(storePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
 async function loadDefaultState() {
@@ -78,12 +100,12 @@ async function loadDefaultState() {
   return sandbox.window.BUDGET_DATA.initialState;
 }
 
-async function ensureStoreFile() {
+async function ensureStoreFile(storePath = storePathForWorkspace(DEFAULT_WORKSPACE_ID)) {
   try {
-    const stats = await fs.stat(STORE_PATH);
+    const stats = await fs.stat(storePath);
     if (stats.isDirectory()) {
       throw new StorePathError(
-        "budget-store.json is a directory. Replace it with a JSON file before starting the app.",
+        `${path.basename(storePath)} is a directory. Replace it with a JSON file before starting the app.`,
       );
     }
     return;
@@ -93,7 +115,8 @@ async function ensureStoreFile() {
   }
 
   const state = await loadDefaultState();
-  await fs.writeFile(STORE_PATH, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  await fs.mkdir(path.dirname(storePath), { recursive: true });
+  await fs.writeFile(storePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
 function parseCookies(req) {
@@ -200,21 +223,21 @@ async function serveApi(req, res, pathname) {
   }
 
   if (pathname === "/api/state" && req.method === "GET") {
-    sendJson(res, 200, await readStore());
+    sendJson(res, 200, await readBudgetState(workspaceIdForRequest(req)));
     return true;
   }
 
   if (pathname === "/api/state" && req.method === "POST") {
     const body = await readBody(req);
     const state = JSON.parse(body);
-    await writeStore(state);
+    await writeBudgetState(workspaceIdForRequest(req), state);
     sendJson(res, 200, { ok: true });
     return true;
   }
 
   if (pathname === "/api/reset" && req.method === "POST") {
     const state = await loadDefaultState();
-    await writeStore(state);
+    await writeBudgetState(workspaceIdForRequest(req), state);
     sendJson(res, 200, state);
     return true;
   }
