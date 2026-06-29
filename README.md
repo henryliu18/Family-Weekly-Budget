@@ -58,7 +58,8 @@ Notes:
 
 - local runtime uses `deploy/docker-compose.yml`
 - local runtime is HTTP only, on port `5173`
-- local `budget-store.json` is bind-mounted into `/app/budget-store.json`
+- local `budget-store.json` is bind-mounted into `/app/budget-store.json` for the default workspace
+- local `workspace-stores/` is bind-mounted into `/app/workspace-stores` for additional workspace-owned data files
 - `budget-store.json` must be a file, not a directory
 
 ## Docker image build and E2E validation
@@ -130,7 +131,8 @@ This compose file:
 - exposes `80:5173` and `443:5443`
 - redirects HTTP to HTTPS
 - mounts runtime certs from `./certs`
-- mounts runtime data from `./budget-store.json`
+- mounts default workspace data from `./budget-store.json`
+- mounts additional workspace data from `./workspace-stores`
 
 ### `deploy-vm.yml`
 
@@ -149,6 +151,7 @@ The workflow:
   - `APP_PASSWORD`
   - `APP_BUILD_VERSION`
   - `APP_BUILD_TIME`
+- ensures `${VM_APP_PATH}/workspace-stores` exists for workspace-owned budget files
 - pulls the selected image and starts the compose project `family-budget`
 
 Automatic deploys use the immutable `sha-<commit>` image tag from the upstream build workflow. Manual runs fall back to `latest`.

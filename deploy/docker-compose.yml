@@ -13,6 +13,8 @@ services:
       APP_PASSWORD: ${APP_PASSWORD:-}
       APP_BUILD_VERSION: ${APP_BUILD_VERSION:-}
       APP_BUILD_TIME: ${APP_BUILD_TIME:-}
+      WORKSPACE_STORE_ROOT: ${WORKSPACE_STORE_ROOT:-/app/workspace-stores}
     volumes:
       - ../budget-store.json:/app/budget-store.json
+      - ../workspace-stores:/app/workspace-stores
     restart: unless-stopped

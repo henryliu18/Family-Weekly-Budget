@@ -350,8 +350,10 @@ function workspaceIdForRequest(req) {
 }
 
 function storePathForWorkspace(workspaceId) {
-  if (!WORKSPACE_STORE_ROOT) return STORE_PATH;
-  return path.join(WORKSPACE_STORE_ROOT, normalizeWorkspaceId(workspaceId), "budget-store.json");
+  const id = normalizeWorkspaceId(workspaceId);
+  if (WORKSPACE_STORE_ROOT) return path.join(WORKSPACE_STORE_ROOT, id, "budget-store.json");
+  if (id === DEFAULT_WORKSPACE_ID) return STORE_PATH;
+  return path.join(path.dirname(STORE_PATH), "workspace-stores", id, "budget-store.json");
 }
 
 async function readBudgetState(workspaceId) {

@@ -79,6 +79,7 @@ jobs:
           printf 'APP_BUILD_VERSION=%s\nAPP_BUILD_TIME=%s\n' "$APP_BUILD_VERSION" "$APP_BUILD_TIME" >> .env
 
           touch budget-store.json
+          mkdir -p workspace-stores
 
           sudo -n docker compose -p family-budget down
           sudo -n docker compose -p family-budget up -d

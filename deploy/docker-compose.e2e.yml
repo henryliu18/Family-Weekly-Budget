@@ -12,7 +12,7 @@ services:
       REDIRECT_HTTP_TO_HTTPS: "true"
       APP_PASSWORD: ${APP_PASSWORD}
       DEFAULT_WORKSPACE_ID: ${DEFAULT_WORKSPACE_ID:-e2e-default}
-      WORKSPACE_STORE_ROOT: ${WORKSPACE_STORE_ROOT:-/app/workspaces}
+      WORKSPACE_STORE_ROOT: ${WORKSPACE_STORE_ROOT:-/app/workspace-stores}
       WORKSPACE_REGISTRY_SEED_IDS: ${WORKSPACE_REGISTRY_SEED_IDS:-e2e-session-alpha,e2e-session-bravo}
       WORKSPACE_REGISTRY_UNOWNED_SEED_IDS: ${WORKSPACE_REGISTRY_UNOWNED_SEED_IDS:-e2e-unowned-workspace}
       APP_BUILD_VERSION: ${APP_BUILD_VERSION:-e2e}
@@ -21,6 +21,6 @@ services:
       SSL_KEY_PATH: ${SSL_KEY_PATH:-/app/certs/server.key}
     volumes:
       - ./budget-store.json:/app/budget-store.json
-      - ./workspace-stores:/app/workspaces
+      - ./workspace-stores:/app/workspace-stores
       - ./certs:/app/certs:ro
     restart: unless-stopped
