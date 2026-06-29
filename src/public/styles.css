@@ -98,8 +98,27 @@ button {
 
 .workspace-toolbar {
   display: flex;
+  align-items: flex-start;
+  gap: 12px;
   justify-content: flex-end;
   margin-bottom: 18px;
+}
+
+.workspace-switcher {
+  width: min(260px, 100%);
+}
+
+.workspace-switcher select {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 247, 0.96));
+  border-color: rgba(36, 113, 93, 0.22);
+  box-shadow: 0 8px 22px rgba(19, 38, 29, 0.08);
+}
+
+.workspace-switch-status {
+  min-height: 15px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .language-control {
@@ -1792,7 +1811,14 @@ body.landing-open {
   }
 
   .workspace-toolbar {
+    align-items: stretch;
+    flex-direction: column;
     margin-bottom: 14px;
+  }
+
+  .workspace-switcher,
+  .language-control {
+    width: 100%;
   }
 
   .page-head,

@@ -210,6 +210,10 @@ const i18n = {
     logout: "登出",
     cancel: "取消",
     loginFailed: "密碼不正確，請再試一次。",
+    workspace: "\u5de5\u4f5c\u5340",
+    workspaceSwitching: "\u5207\u63db\u4e2d...",
+    workspaceSwitched: "\u5df2\u5207\u63db\u5de5\u4f5c\u5340",
+    workspaceSwitchFailed: "\u7121\u6cd5\u5207\u63db\u5de5\u4f5c\u5340\uff0c\u8acb\u518d\u8a66\u4e00\u6b21\u3002",
   },
   en: {
     language: "Language",
@@ -414,11 +418,16 @@ const i18n = {
     logout: "Log out",
     cancel: "Cancel",
     loginFailed: "Incorrect password. Please try again.",
+    workspace: "Workspace",
+    workspaceSwitching: "Switching...",
+    workspaceSwitched: "Workspace switched",
+    workspaceSwitchFailed: "Unable to switch workspace. Please try again.",
   },
 };
 let currentLanguage = localStorage.getItem(LANGUAGE_KEY) || DEFAULT_LANGUAGE;
 let appMeta = META_FALLBACK;
 let authState = { authEnabled: false, authenticated: true };
+let accountState = null;
 
 const money = new Intl.NumberFormat("en-AU", {
   style: "currency",
@@ -671,6 +680,7 @@ async function bootstrapApp() {
   updateBuildVersion();
   updateAuthUi();
   if (authState.authEnabled && !authState.authenticated) return;
+  await loadAccountState();
   await loadState();
   renderAll();
 }
@@ -692,6 +702,26 @@ async function loadSession() {
     authState = await response.json();
   } catch {
     authState = { authEnabled: false, authenticated: true };
+  }
+}
+
+async function loadAccountState() {
+  if (authState.authEnabled && !authState.authenticated) {
+    accountState = null;
+    return;
+  }
+  try {
+    const response = await fetch("/api/me", { cache: "no-store" });
+    if (response.status === 401) {
+      accountState = null;
+      authState = { ...authState, authenticated: false };
+      updateAuthUi();
+      return;
+    }
+    if (!response.ok) throw new Error("Account request failed");
+    accountState = await response.json();
+  } catch {
+    accountState = null;
   }
 }
 
@@ -852,6 +882,9 @@ function bindElements() {
     "loginBtn",
     "enterWorkspaceBtn",
     "logoutBtn",
+    "workspaceSwitcher",
+    "workspaceSelect",
+    "workspaceSwitchStatus",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -867,6 +900,8 @@ function bindEvents() {
     localStorage.setItem(LANGUAGE_KEY, currentLanguage);
     renderAll();
   });
+
+  els.workspaceSelect?.addEventListener("change", switchWorkspace);
 
   els.monthSelect.addEventListener("change", () => {
     currentMonthId = els.monthSelect.value;
@@ -1111,6 +1146,7 @@ function renderAll() {
     clearSensitiveUi();
     return;
   }
+  renderWorkspaceSwitcher();
   renderMonthOptions();
   renderOverview();
   renderEntryForm();
@@ -1199,6 +1235,7 @@ function applyLanguage() {
   if (els.loginError?.dataset.key) {
     els.loginError.textContent = t(els.loginError.dataset.key);
   }
+  renderWorkspaceSwitcher();
   renderImportDraft();
 }
 
@@ -1213,6 +1250,7 @@ function updateAuthUi() {
   const shouldShowOverlay = isAuthLocked();
   els.authOverlay?.classList.toggle("hidden", !shouldShowOverlay);
   els.logoutBtn?.classList.toggle("hidden", !authState.authEnabled || !authState.authenticated);
+  renderWorkspaceSwitcher();
   document.body.classList.toggle("landing-open", shouldShowOverlay);
   document.body.classList.toggle("auth-locked", isAuthLocked());
   const authCopy = els.authOverlay?.querySelector(".auth-copy");
@@ -1244,6 +1282,7 @@ async function handleLogin(event) {
     authState = { authEnabled: true, authenticated: true };
     els.passwordInput.value = "";
     updateAuthUi();
+    await loadAccountState();
     await loadState();
     renderAll();
   } catch {
@@ -1256,7 +1295,61 @@ async function logout() {
     await fetch("/api/session", { method: "DELETE" });
   } catch {}
   authState = { ...authState, authenticated: false };
+  accountState = null;
   updateAuthUi();
+}
+
+function renderWorkspaceSwitcher() {
+  if (!els.workspaceSwitcher || !els.workspaceSelect) return;
+  const workspaces = Array.isArray(accountState?.workspaces) ? accountState.workspaces : [];
+  const currentWorkspaceId = accountState?.currentWorkspace?.id || "";
+  const shouldShow = !isAuthLocked() && workspaces.length > 0;
+  els.workspaceSwitcher.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow) {
+    els.workspaceSelect.innerHTML = "";
+    if (els.workspaceSwitchStatus) els.workspaceSwitchStatus.textContent = "";
+    return;
+  }
+
+  const selectedValue = els.workspaceSelect.value;
+  els.workspaceSelect.innerHTML = "";
+  workspaces.forEach((workspace) => {
+    const option = document.createElement("option");
+    option.value = workspace.id;
+    option.textContent = workspace.name || workspace.id;
+    option.dataset.workspaceId = workspace.id;
+    els.workspaceSelect.append(option);
+  });
+  els.workspaceSelect.value =
+    workspaces.some((workspace) => workspace.id === currentWorkspaceId)
+      ? currentWorkspaceId
+      : selectedValue;
+  els.workspaceSelect.disabled = workspaces.length < 2;
+}
+
+async function switchWorkspace() {
+  const workspaceId = els.workspaceSelect?.value;
+  if (!workspaceId || workspaceId === accountState?.currentWorkspace?.id) return;
+  const previousWorkspaceId = accountState?.currentWorkspace?.id || "";
+  if (els.workspaceSwitchStatus) els.workspaceSwitchStatus.textContent = t("workspaceSwitching");
+  els.workspaceSelect.disabled = true;
+  try {
+    const response = await fetch("/api/session/workspace", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceId }),
+    });
+    if (!response.ok) throw new Error("Workspace switch failed");
+    await loadAccountState();
+    await loadState();
+    importDraft = createEmptyImportDraft();
+    renderAll();
+    if (els.workspaceSwitchStatus) els.workspaceSwitchStatus.textContent = t("workspaceSwitched");
+  } catch {
+    els.workspaceSelect.value = previousWorkspaceId;
+    if (els.workspaceSwitchStatus) els.workspaceSwitchStatus.textContent = t("workspaceSwitchFailed");
+    renderWorkspaceSwitcher();
+  }
 }
 
 function clearSensitiveUi() {
