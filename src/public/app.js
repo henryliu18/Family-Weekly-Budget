@@ -214,6 +214,9 @@ const i18n = {
     workspaceSwitching: "\u5207\u63db\u4e2d...",
     workspaceSwitched: "\u5df2\u5207\u63db\u5de5\u4f5c\u5340",
     workspaceSwitchFailed: "\u7121\u6cd5\u5207\u63db\u5de5\u4f5c\u5340\uff0c\u8acb\u518d\u8a66\u4e00\u6b21\u3002",
+    createWorkspace: "\u65b0\u589e\u5de5\u4f5c\u5340",
+    createWorkspacePrompt: "\u8acb\u8f38\u5165\u65b0\u5de5\u4f5c\u5340\u540d\u7a31",
+    createWorkspaceFailed: "\u7121\u6cd5\u65b0\u589e\u5de5\u4f5c\u5340\uff0c\u8acb\u518d\u8a66\u4e00\u6b21\u3002",
   },
   en: {
     language: "Language",
@@ -422,6 +425,9 @@ const i18n = {
     workspaceSwitching: "Switching...",
     workspaceSwitched: "Workspace switched",
     workspaceSwitchFailed: "Unable to switch workspace. Please try again.",
+    createWorkspace: "New workspace",
+    createWorkspacePrompt: "Enter a name for the new workspace",
+    createWorkspaceFailed: "Unable to create workspace. Please try again.",
   },
 };
 let currentLanguage = localStorage.getItem(LANGUAGE_KEY) || DEFAULT_LANGUAGE;
@@ -885,6 +891,7 @@ function bindElements() {
     "workspaceSwitcher",
     "workspaceSelect",
     "workspaceSwitchStatus",
+    "createWorkspaceBtn",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -902,6 +909,7 @@ function bindEvents() {
   });
 
   els.workspaceSelect?.addEventListener("change", switchWorkspace);
+  els.createWorkspaceBtn?.addEventListener("click", createWorkspace);
 
   els.monthSelect.addEventListener("change", () => {
     currentMonthId = els.monthSelect.value;
@@ -1200,6 +1208,7 @@ function applyLanguage() {
     "#cancelMonthBtn": "cancel",
     "#loginBtn": "login",
     "#logoutBtn": "logout",
+    "#createWorkspaceBtn": "createWorkspace",
   };
 
   Object.entries(textBySelector).forEach(([selector, key]) => {
@@ -1305,6 +1314,7 @@ function renderWorkspaceSwitcher() {
   const currentWorkspaceId = accountState?.currentWorkspace?.id || "";
   const shouldShow = !isAuthLocked() && workspaces.length > 0;
   els.workspaceSwitcher.classList.toggle("hidden", !shouldShow);
+  els.createWorkspaceBtn?.classList.toggle("hidden", !shouldShow);
   if (!shouldShow) {
     els.workspaceSelect.innerHTML = "";
     if (els.workspaceSwitchStatus) els.workspaceSwitchStatus.textContent = "";
@@ -1325,6 +1335,35 @@ function renderWorkspaceSwitcher() {
       ? currentWorkspaceId
       : selectedValue;
   els.workspaceSelect.disabled = workspaces.length < 2;
+}
+
+async function createWorkspace() {
+  const name = window.prompt(t("createWorkspacePrompt"));
+  if (!name || !name.trim()) return;
+  if (els.workspaceSwitchStatus) els.workspaceSwitchStatus.textContent = t("workspaceSwitching");
+  if (els.createWorkspaceBtn) els.createWorkspaceBtn.disabled = true;
+  try {
+    const response = await fetch("/api/workspaces", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!response.ok) throw new Error("Workspace create failed");
+    const result = await response.json();
+    const workspaceId = result.workspace?.id;
+    await loadAccountState();
+    renderWorkspaceSwitcher();
+    if (workspaceId) {
+      els.workspaceSelect.value = workspaceId;
+      await switchWorkspace();
+    } else {
+      renderAll();
+    }
+  } catch {
+    if (els.workspaceSwitchStatus) els.workspaceSwitchStatus.textContent = t("createWorkspaceFailed");
+  } finally {
+    if (els.createWorkspaceBtn) els.createWorkspaceBtn.disabled = false;
+  }
 }
 
 async function switchWorkspace() {

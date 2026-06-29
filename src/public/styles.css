@@ -121,6 +121,11 @@ button {
   font-size: 12px;
 }
 
+.workspace-create-btn {
+  margin-top: 20px;
+  white-space: nowrap;
+}
+
 .language-control {
   width: min(180px, 100%);
 }
@@ -1817,8 +1822,13 @@ body.landing-open {
   }
 
   .workspace-switcher,
+  .workspace-create-btn,
   .language-control {
     width: 100%;
+  }
+
+  .workspace-create-btn {
+    margin-top: 0;
   }
 
   .page-head,

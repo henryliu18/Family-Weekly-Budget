@@ -90,6 +90,24 @@ function normalizeWorkspaceId(workspaceId) {
   return value;
 }
 
+function normalizeWorkspaceName(name) {
+  const value = String(name || "").trim().replace(/\s+/g, " ");
+  if (value.length < 2 || value.length > 80) {
+    throw new AccountRegistryError("Workspace name must be between 2 and 80 characters.", 400);
+  }
+  return value;
+}
+
+function workspaceSlugFromName(name) {
+  const slug = normalizeWorkspaceName(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+  return slug || "workspace";
+}
+
 function emptyAccountRegistry() {
   return {
     version: 1,
@@ -255,6 +273,54 @@ async function accountReadModelForSession(session) {
     },
     currentWorkspace,
     workspaces,
+  };
+}
+
+function uniqueWorkspaceId(registry, name) {
+  const base = workspaceSlugFromName(name);
+  let candidate = base;
+  let index = 2;
+  while (registry.workspaces[candidate]) {
+    candidate = `${base}-${index}`;
+    index += 1;
+  }
+  return normalizeWorkspaceId(candidate);
+}
+
+async function ensureFreshWorkspaceStore(workspaceId) {
+  const storePath = storePathForWorkspace(workspaceId);
+  try {
+    await fs.stat(storePath);
+    return;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  const state = await loadDefaultState();
+  await fs.mkdir(path.dirname(storePath), { recursive: true });
+  await fs.writeFile(storePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
+async function createWorkspaceForSession(session, name) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  const registry = await ensureAccountRegistry();
+  const account = registry.accounts[session.accountId];
+  if (!account) {
+    throw new AccountRegistryError("Account is not registered.", 403);
+  }
+
+  const workspaceName = normalizeWorkspaceName(name);
+  const workspaceId = uniqueWorkspaceId(registry, workspaceName);
+  const workspace = ensureWorkspaceRecord(registry, workspaceId, workspaceName);
+  ensureMembershipRecord(registry, account.id, workspace.id, "owner");
+  await ensureFreshWorkspaceStore(workspace.id);
+  await writeAccountRegistry(registry);
+
+  return {
+    id: workspace.id,
+    name: workspace.name,
+    role: "owner",
   };
 }
 
@@ -477,6 +543,38 @@ async function serveApi(req, res, pathname) {
         accountId: session.accountId,
         workspaceId: session.workspaceId,
       });
+    } catch (error) {
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
+  if (pathname === "/api/workspaces" && req.method === "GET") {
+    try {
+      const model = await accountReadModelForSession(sessionForRequest(req));
+      sendJson(res, 200, {
+        currentWorkspace: model.currentWorkspace,
+        workspaces: model.workspaces,
+      });
+    } catch (error) {
+      if (error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
+  if (pathname === "/api/workspaces" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)) || "{}");
+    try {
+      const workspace = await createWorkspaceForSession(sessionForRequest(req), body.name);
+      sendJson(res, 201, { ok: true, workspace });
     } catch (error) {
       if (error instanceof StorePathError || error instanceof AccountRegistryError) {
         sendJson(res, error.status || 400, { error: error.message });
