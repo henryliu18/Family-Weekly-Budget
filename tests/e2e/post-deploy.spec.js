@@ -323,6 +323,89 @@ test("account read model returns only current account workspaces", async () => {
   }
 });
 
+test("workspace management API creates account-owned isolated workspaces", async () => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const unauthenticated = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  try {
+    const unauthenticatedCreate = await unauthenticated.post("/api/workspaces", {
+      data: { name: "Unauthenticated Workspace" },
+    });
+    expect(unauthenticatedCreate.status()).toBe(401);
+
+    const loginResponse = await context.post("/api/session", {
+      data: { password, workspaceId: "e2e-default" },
+    });
+    expect(loginResponse.ok()).toBe(true);
+
+    const invalidCreate = await context.post("/api/workspaces", {
+      data: { name: "x" },
+    });
+    expect(invalidCreate.status()).toBe(400);
+
+    const createResponse = await context.post("/api/workspaces", {
+      data: { name: "E2E Managed Workspace" },
+    });
+    expect(createResponse.status()).toBe(201);
+    const created = await createResponse.json();
+    expect(created.workspace).toMatchObject({
+      name: "E2E Managed Workspace",
+      role: "owner",
+    });
+    expect(created.workspace.id).toMatch(/^e2e-managed-workspace(-\d+)?$/);
+
+    const listResponse = await context.get("/api/workspaces");
+    expect(listResponse.ok()).toBe(true);
+    const list = await listResponse.json();
+    expect(list.workspaces).toEqual(
+      expect.arrayContaining([
+        { id: created.workspace.id, name: "E2E Managed Workspace", role: "owner" },
+      ]),
+    );
+    expect(list.workspaces.map((workspace) => workspace.id)).not.toContain("e2e-unowned-workspace");
+
+    const switchResponse = await context.post("/api/session/workspace", {
+      data: { workspaceId: created.workspace.id },
+    });
+    expect(switchResponse.ok()).toBe(true);
+
+    const managedStateResponse = await context.get("/api/state");
+    expect(managedStateResponse.ok()).toBe(true);
+    const managedState = await managedStateResponse.json();
+    const managedMonthId = `${created.workspace.id}-month`;
+    managedState.currentMonthId = managedMonthId;
+    managedState.months[managedMonthId] = {
+      id: managedMonthId,
+      sortKey: "2099-11",
+      name: "Managed Workspace Month",
+      displayName: "Managed Workspace Month",
+      creditLimit: 15000,
+      weeks: [
+        {
+          id: "e2e-managed-workspace-month-w1",
+          period: "Period 1",
+          availableBalance: 14925,
+          unpaidPrevious: null,
+          cumulativeSpend: 75,
+          categoryValues: { transport: 75, shoppingDining: 0, incidentals: 0 },
+          notes: "managed workspace isolated state",
+        },
+      ],
+    };
+    expect((await context.post("/api/state", { data: managedState })).ok()).toBe(true);
+
+    expect((await context.post("/api/session/workspace", { data: { workspaceId: "e2e-default" } })).ok()).toBe(true);
+    const defaultStateResponse = await context.get("/api/state");
+    expect(defaultStateResponse.ok()).toBe(true);
+    const defaultState = await defaultStateResponse.json();
+    expect(defaultState.months[managedMonthId]).toBeUndefined();
+  } finally {
+    await unauthenticated.dispose();
+    await context.dispose();
+  }
+});
+
 test("session workspace switch changes current state workspace", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
@@ -515,6 +598,35 @@ test("workspace selector lists allowed workspaces and switches visible state", a
   await expect(page.locator("#workspaceSwitchStatus")).toHaveText("Workspace switched");
   await expect(page.locator("#workspaceSelect")).toHaveValue("e2e-session-bravo");
   await expect(page.locator("#overviewTitle")).toHaveText("UI Bravo Workspace");
+});
+
+test("workspace create button adds and switches to a new workspace", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  await page.locator("#languageSelect").selectOption("en");
+  await expect(page.locator("#createWorkspaceBtn")).toBeVisible();
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.type()).toBe("prompt");
+    expect(dialog.message()).toBe("Enter a name for the new workspace");
+    await dialog.accept("E2E UI Workspace");
+  });
+  await page.locator("#createWorkspaceBtn").click();
+  await expect(page.locator("#workspaceSwitchStatus")).toHaveText("Workspace switched");
+  await expect(page.locator("#workspaceSelect option:checked")).toHaveText("E2E UI Workspace");
+  const selectedWorkspaceId = await page.locator("#workspaceSelect").inputValue();
+  expect(selectedWorkspaceId).toMatch(/^e2e-ui-workspace(-\d+)?$/);
+
+  const meResponse = await page.request.get("/api/me");
+  expect(meResponse.ok()).toBe(true);
+  const me = await meResponse.json();
+  expect(me.currentWorkspace).toMatchObject({
+    id: selectedWorkspaceId,
+    name: "E2E UI Workspace",
+    role: "owner",
+  });
+  expect(me.workspaces.map((workspace) => workspace.id)).toContain(selectedWorkspaceId);
 });
 
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
