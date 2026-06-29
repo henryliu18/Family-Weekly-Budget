@@ -1,6 +1,7 @@
-const { expect, test } = require("@playwright/test");
+const { expect, test, request: apiRequest } = require("@playwright/test");
 
 const httpUrl = process.env.E2E_HTTP_URL || "http://127.0.0.1:18080";
+const baseUrl = process.env.E2E_BASE_URL || "https://127.0.0.1:18443";
 const password = process.env.E2E_APP_PASSWORD || "";
 const appUrl = "/app";
 
@@ -169,6 +170,69 @@ test("authenticated state API persists current workspace data", async ({ page })
   } finally {
     const restoreResponse = await page.request.post("/api/state", { data: originalState });
     expect(restoreResponse.ok()).toBe(true);
+  }
+});
+
+test("authenticated sessions resolve isolated workspaces", async () => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const first = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  const second = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  const workspaces = [
+    { context: first, workspaceId: "e2e-session-alpha", monthId: "e2e-session-alpha-month" },
+    { context: second, workspaceId: "e2e-session-bravo", monthId: "e2e-session-bravo-month" },
+  ];
+
+  try {
+    for (const workspace of workspaces) {
+      const loginResponse = await workspace.context.post("/api/session", {
+        data: { password, workspaceId: workspace.workspaceId },
+      });
+      expect(loginResponse.ok()).toBe(true);
+      await expect(loginResponse.json()).resolves.toMatchObject({ workspaceId: workspace.workspaceId });
+
+      const stateResponse = await workspace.context.get("/api/state");
+      expect(stateResponse.ok()).toBe(true);
+      const state = await stateResponse.json();
+      state.months[workspace.monthId] = {
+        id: workspace.monthId,
+        sortKey: "2099-10",
+        name: workspace.workspaceId,
+        displayName: workspace.workspaceId,
+        creditLimit: 15000,
+        weeks: [
+          {
+            id: `${workspace.monthId}-w1`,
+            period: "Period 1",
+            availableBalance: 14950,
+            unpaidPrevious: null,
+            cumulativeSpend: 50,
+            categoryValues: { transport: 25, shoppingDining: 25, incidentals: 0 },
+            notes: `E2E session workspace ${workspace.workspaceId}`,
+          },
+        ],
+      };
+      state.currentMonthId = workspace.monthId;
+
+      const writeResponse = await workspace.context.post("/api/state", { data: state });
+      expect(writeResponse.ok()).toBe(true);
+    }
+
+    for (const workspace of workspaces) {
+      const persistedResponse = await workspace.context.get("/api/state");
+      expect(persistedResponse.ok()).toBe(true);
+      const persisted = await persistedResponse.json();
+      expect(persisted.currentMonthId).toBe(workspace.monthId);
+      expect(persisted.months[workspace.monthId]?.weeks?.[0]?.notes).toBe(
+        `E2E session workspace ${workspace.workspaceId}`,
+      );
+
+      const otherWorkspace = workspaces.find((candidate) => candidate.workspaceId !== workspace.workspaceId);
+      expect(persisted.months[otherWorkspace.monthId]).toBeUndefined();
+    }
+  } finally {
+    await first.dispose();
+    await second.dispose();
   }
 });
 
