@@ -205,6 +205,7 @@ const i18n = {
     loginRequired: "需要登入",
     loginTitle: "輸入密碼",
     loginSub: "這份家庭預算受密碼保護；請向家庭預算管理者取得密碼。",
+    loginAccountId: "\u5e33\u865f ID\uff08\u9078\u586b\uff09",
     password: "密碼",
     login: "登入",
     logout: "登出",
@@ -217,6 +218,19 @@ const i18n = {
     createWorkspace: "\u65b0\u589e\u5de5\u4f5c\u5340",
     createWorkspacePrompt: "\u8acb\u8f38\u5165\u65b0\u5de5\u4f5c\u5340\u540d\u7a31",
     createWorkspaceFailed: "\u7121\u6cd5\u65b0\u589e\u5de5\u4f5c\u5340\uff0c\u8acb\u518d\u8a66\u4e00\u6b21\u3002",
+    accountAdminTitle: "\u5e33\u865f\u7ba1\u7406",
+    accountAdminSub: "\u5efa\u7acb\u64c1\u6709\u7368\u7acb\u7a7a\u767d\u5de5\u4f5c\u5340\u7684\u5bc6\u78bc\u5e33\u865f\u3002",
+    accountId: "\u5e33\u865f ID",
+    displayName: "\u986f\u793a\u540d\u7a31",
+    emailOptional: "Email\uff08\u9078\u586b\uff09",
+    workspaceName: "\u5de5\u4f5c\u5340\u540d\u7a31",
+    temporaryPassword: "\u81e8\u6642\u5bc6\u78bc",
+    createAccount: "\u5efa\u7acb\u5e33\u865f",
+    accountCreateSaving: "\u5efa\u7acb\u4e2d...",
+    accountCreateSuccess: (account, workspace) => `\u5df2\u5efa\u7acb ${account}\uff0c\u4e26\u958b\u555f\u5de5\u4f5c\u5340 ${workspace}\u3002`,
+    accountCreateFailed: "\u7121\u6cd5\u5efa\u7acb\u5e33\u865f\uff0c\u8acb\u6aa2\u67e5\u8f38\u5165\u5167\u5bb9\u5f8c\u518d\u8a66\u4e00\u6b21\u3002",
+    accountCreateDuplicate: "\u9019\u500b\u5e33\u865f ID \u5df2\u5b58\u5728\uff0c\u8acb\u6539\u7528\u5176\u4ed6 ID\u3002",
+    accountLoginHint: "\u8acb\u5c07\u81e8\u6642\u5bc6\u78bc\u4ee5\u5b89\u5168\u9014\u5f91\u4ea4\u7d66\u4f7f\u7528\u8005\uff1b\u7cfb\u7d71\u4e0d\u6703\u986f\u793a\u6216\u5132\u5b58\u660e\u78bc\u3002",
   },
   en: {
     language: "Language",
@@ -416,6 +430,7 @@ const i18n = {
     loginRequired: "Login required",
     loginTitle: "Enter password",
     loginSub: "This family budget is password-protected. Ask the household budget owner for access.",
+    loginAccountId: "Account ID (optional)",
     password: "Password",
     login: "Log in",
     logout: "Log out",
@@ -428,6 +443,19 @@ const i18n = {
     createWorkspace: "New workspace",
     createWorkspacePrompt: "Enter a name for the new workspace",
     createWorkspaceFailed: "Unable to create workspace. Please try again.",
+    accountAdminTitle: "Account management",
+    accountAdminSub: "Create a password account with its own clean workspace.",
+    accountId: "Account ID",
+    displayName: "Display name",
+    emailOptional: "Email (optional)",
+    workspaceName: "Workspace name",
+    temporaryPassword: "Temporary password",
+    createAccount: "Create account",
+    accountCreateSaving: "Creating...",
+    accountCreateSuccess: (account, workspace) => `Created ${account} with workspace ${workspace}.`,
+    accountCreateFailed: "Unable to create account. Check the details and try again.",
+    accountCreateDuplicate: "This account ID already exists. Choose another ID.",
+    accountLoginHint: "Share the temporary password securely. The app will not show or store plaintext passwords.",
   },
 };
 let currentLanguage = localStorage.getItem(LANGUAGE_KEY) || DEFAULT_LANGUAGE;
@@ -883,6 +911,7 @@ function bindElements() {
     "buildVersionValue",
     "authOverlay",
     "loginForm",
+    "loginAccountIdInput",
     "passwordInput",
     "loginError",
     "loginBtn",
@@ -892,6 +921,16 @@ function bindElements() {
     "workspaceSelect",
     "workspaceSwitchStatus",
     "createWorkspaceBtn",
+    "accountAdminPanel",
+    "accountAdminForm",
+    "newAccountIdInput",
+    "newAccountDisplayNameInput",
+    "newAccountEmailInput",
+    "newAccountWorkspaceInput",
+    "newAccountPasswordInput",
+    "createAccountBtn",
+    "accountAdminStatus",
+    "accountAdminResult",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -973,6 +1012,7 @@ function bindEvents() {
   els.resetLocalDataBtn.addEventListener("click", resetLocalData);
   els.loginForm?.addEventListener("submit", handleLogin);
   els.logoutBtn?.addEventListener("click", logout);
+  els.accountAdminForm?.addEventListener("submit", createAccountFromForm);
 
   els.weeklyChart.addEventListener("mousemove", showChartTooltip);
   els.weeklyChart.addEventListener("mouseleave", () => els.chartTooltip.classList.add("hidden"));
@@ -1155,6 +1195,7 @@ function renderAll() {
     return;
   }
   renderWorkspaceSwitcher();
+  renderAccountAdminPanel();
   renderMonthOptions();
   renderOverview();
   renderEntryForm();
@@ -1209,6 +1250,7 @@ function applyLanguage() {
     "#loginBtn": "login",
     "#logoutBtn": "logout",
     "#createWorkspaceBtn": "createWorkspace",
+    "#createAccountBtn": "createAccount",
   };
 
   Object.entries(textBySelector).forEach(([selector, key]) => {
@@ -1230,6 +1272,12 @@ function applyLanguage() {
     monthNameInput: "monthName",
     creditLimitInput: "creditLimit",
     newMonthPicker: "selectMonth",
+    loginAccountIdInput: "loginAccountId",
+    newAccountIdInput: "accountId",
+    newAccountDisplayNameInput: "displayName",
+    newAccountEmailInput: "emailOptional",
+    newAccountWorkspaceInput: "workspaceName",
+    newAccountPasswordInput: "temporaryPassword",
   };
   Object.entries(spans).forEach(([id, key]) => {
     const label = document.getElementById(id)?.closest("label")?.querySelector("span");
@@ -1245,6 +1293,7 @@ function applyLanguage() {
     els.loginError.textContent = t(els.loginError.dataset.key);
   }
   renderWorkspaceSwitcher();
+  renderAccountAdminPanel();
   renderImportDraft();
 }
 
@@ -1260,6 +1309,7 @@ function updateAuthUi() {
   els.authOverlay?.classList.toggle("hidden", !shouldShowOverlay);
   els.logoutBtn?.classList.toggle("hidden", !authState.authEnabled || !authState.authenticated);
   renderWorkspaceSwitcher();
+  renderAccountAdminPanel();
   document.body.classList.toggle("landing-open", shouldShowOverlay);
   document.body.classList.toggle("auth-locked", isAuthLocked());
   const authCopy = els.authOverlay?.querySelector(".auth-copy");
@@ -1278,11 +1328,13 @@ async function handleLogin(event) {
   event.preventDefault();
   clearLoginError();
   const password = els.passwordInput.value;
+  const accountId = els.loginAccountIdInput?.value.trim();
+  const payload = accountId ? { accountId, password } : { password };
   try {
     const response = await fetch("/api/session", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify(payload),
     });
     if (!response.ok) {
       showLoginError("loginFailed");
@@ -1290,6 +1342,7 @@ async function handleLogin(event) {
     }
     authState = { authEnabled: true, authenticated: true };
     els.passwordInput.value = "";
+    if (els.loginAccountIdInput) els.loginAccountIdInput.value = "";
     updateAuthUi();
     await loadAccountState();
     await loadState();
@@ -1335,6 +1388,100 @@ function renderWorkspaceSwitcher() {
       ? currentWorkspaceId
       : selectedValue;
   els.workspaceSelect.disabled = workspaces.length < 2;
+}
+
+function renderAccountAdminPanel() {
+  if (!els.accountAdminPanel) return;
+  const shouldShow = !isAuthLocked() && accountState?.account?.isDefaultUser === true;
+  els.accountAdminPanel.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow) {
+    clearAccountAdminStatus();
+    clearAccountAdminResult();
+  }
+}
+
+async function createAccountFromForm(event) {
+  event.preventDefault();
+  if (!els.accountAdminForm) return;
+  clearAccountAdminStatus();
+  clearAccountAdminResult();
+  const payload = {
+    accountId: els.newAccountIdInput.value.trim(),
+    displayName: els.newAccountDisplayNameInput.value.trim(),
+    email: els.newAccountEmailInput.value.trim(),
+    password: els.newAccountPasswordInput.value,
+    workspaceName: els.newAccountWorkspaceInput.value.trim(),
+  };
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === "") delete payload[key];
+  });
+
+  setAccountAdminStatus("accountCreateSaving");
+  if (els.createAccountBtn) els.createAccountBtn.disabled = true;
+  try {
+    const response = await fetch("/api/admin/accounts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setAccountAdminStatus(response.status === 409 ? "accountCreateDuplicate" : "accountCreateFailed", true);
+      return;
+    }
+
+    els.newAccountPasswordInput.value = "";
+    setAccountAdminStatus(
+      "accountCreateSuccess",
+      false,
+      result.account?.displayName || result.account?.id || payload.displayName,
+      result.workspace?.name || result.workspace?.id || payload.workspaceName,
+    );
+    renderAccountAdminResult(result);
+  } catch {
+    setAccountAdminStatus("accountCreateFailed", true);
+  } finally {
+    if (els.createAccountBtn) els.createAccountBtn.disabled = false;
+  }
+}
+
+function renderAccountAdminResult(result) {
+  if (!els.accountAdminResult) return;
+  const account = result.account || {};
+  const workspace = result.workspace || {};
+  els.accountAdminResult.innerHTML = `
+    <strong>${escapeHtml(account.displayName || account.id || "-")}</strong>
+    <dl>
+      <div><dt>${escapeHtml(t("accountId"))}</dt><dd>${escapeHtml(account.id || "-")}</dd></div>
+      <div><dt>${escapeHtml(t("emailOptional"))}</dt><dd>${escapeHtml(account.email || "-")}</dd></div>
+      <div><dt>${escapeHtml(t("workspaceName"))}</dt><dd>${escapeHtml(workspace.name || workspace.id || "-")}</dd></div>
+    </dl>
+    <p>${escapeHtml(t("accountLoginHint"))}</p>
+  `;
+  els.accountAdminResult.classList.remove("hidden");
+}
+
+function setAccountAdminStatus(key, isError = false, ...args) {
+  if (!els.accountAdminStatus) return;
+  els.accountAdminStatus.dataset.key = key;
+  els.accountAdminStatus.dataset.status = isError ? "error" : "ok";
+  els.accountAdminStatus.textContent = t(key, ...args);
+  els.accountAdminStatus.classList.remove("hidden");
+}
+
+function clearAccountAdminStatus() {
+  if (!els.accountAdminStatus) return;
+  delete els.accountAdminStatus.dataset.key;
+  delete els.accountAdminStatus.dataset.status;
+  els.accountAdminStatus.textContent = "";
+  els.accountAdminStatus.classList.add("hidden");
+}
+
+function clearAccountAdminResult() {
+  if (!els.accountAdminResult) return;
+  els.accountAdminResult.innerHTML = "";
+  els.accountAdminResult.classList.add("hidden");
 }
 
 async function createWorkspace() {

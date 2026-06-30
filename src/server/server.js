@@ -549,10 +549,21 @@ async function ensureAccountRegistry() {
 
 async function registeredWorkspaceIdForAccount(accountId, workspaceId) {
   const account = normalizeWorkspaceId(accountId || DEFAULT_ACCOUNT_ID);
-  const id = normalizeWorkspaceId(workspaceId || DEFAULT_WORKSPACE_ID);
   const registry = await ensureAccountRegistry();
   if (!registry.accounts[account]) {
     throw new AccountRegistryError("Account is not registered.", 403);
+  }
+
+  const ownedWorkspaceIds = registry.memberships
+    .filter((membership) => membership.accountId === account)
+    .map((membership) => membership.workspaceId);
+  const id = workspaceId
+    ? normalizeWorkspaceId(workspaceId)
+    : ownedWorkspaceIds.includes(DEFAULT_WORKSPACE_ID)
+      ? DEFAULT_WORKSPACE_ID
+      : ownedWorkspaceIds[0];
+  if (!id) {
+    throw new AccountRegistryError("Account does not have a workspace.", 403);
   }
   if (!registry.workspaces[id]) {
     throw new AccountRegistryError("Workspace is not registered.", 403);

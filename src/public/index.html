@@ -398,6 +398,44 @@
             </div>
           </section>
 
+          <section id="accountAdminPanel" class="panel account-admin-panel hidden">
+            <div class="panel-head">
+              <div>
+                <h3 data-i18n="accountAdminTitle">Account management</h3>
+                <p data-i18n="accountAdminSub">Create a password account with its own clean workspace.</p>
+              </div>
+            </div>
+            <form id="accountAdminForm" class="account-admin-form">
+              <div class="form-grid">
+                <label class="field">
+                  <span data-i18n="accountId">Account ID</span>
+                  <input id="newAccountIdInput" type="text" autocomplete="off" placeholder="family-member" />
+                </label>
+                <label class="field">
+                  <span data-i18n="displayName">Display name</span>
+                  <input id="newAccountDisplayNameInput" type="text" autocomplete="name" />
+                </label>
+                <label class="field">
+                  <span data-i18n="emailOptional">Email (optional)</span>
+                  <input id="newAccountEmailInput" type="email" autocomplete="email" />
+                </label>
+                <label class="field">
+                  <span data-i18n="workspaceName">Workspace name</span>
+                  <input id="newAccountWorkspaceInput" type="text" autocomplete="off" />
+                </label>
+                <label class="field">
+                  <span data-i18n="temporaryPassword">Temporary password</span>
+                  <input id="newAccountPasswordInput" type="password" autocomplete="new-password" />
+                </label>
+              </div>
+              <div class="account-admin-actions">
+                <button id="createAccountBtn" class="primary-btn" type="submit" data-i18n="createAccount">Create account</button>
+                <p id="accountAdminStatus" class="save-status hidden" role="status" aria-live="polite"></p>
+              </div>
+              <div id="accountAdminResult" class="account-admin-result hidden" aria-live="polite"></div>
+            </form>
+          </section>
+
           <section class="panel">
             <div class="panel-head">
               <div>
@@ -539,6 +577,10 @@
               </p>
             </div>
             <form id="loginForm" class="auth-form">
+              <label class="field">
+                <span data-i18n="loginAccountId">Account ID (optional)</span>
+                <input id="loginAccountIdInput" type="text" autocomplete="username" />
+              </label>
               <label class="field">
                 <span data-i18n="password">Password</span>
                 <input id="passwordInput" type="password" autocomplete="current-password" />
