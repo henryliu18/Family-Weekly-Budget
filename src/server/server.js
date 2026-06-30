@@ -40,6 +40,7 @@ const DEFAULT_PORT = 5173;
 const DEFAULT_HTTPS_PORT = 5443;
 const AUTH_COOKIE = "family_budget_session";
 const APP_PASSWORD = process.env.APP_PASSWORD || "";
+const SESSION_SECRET = process.env.SESSION_SECRET || "";
 const BUILD_VERSION = process.env.APP_BUILD_VERSION || "";
 const BUILD_TIME = process.env.APP_BUILD_TIME || new Date().toISOString();
 const SSL_CERT_PATH = process.env.SSL_CERT_PATH || "";
@@ -375,6 +376,7 @@ function authSummary(registry) {
   return {
     accountPasswordEnabled: isSupportedPasswordHash(registry.accounts[DEFAULT_ACCOUNT_ID]?.passwordHash),
     fallbackPasswordEnabled: !!APP_PASSWORD,
+    sessionSecretConfigured: !!SESSION_SECRET,
   };
 }
 
@@ -397,6 +399,9 @@ function emptySessionRegistry() {
 }
 
 function sessionTokenHash(token) {
+  if (SESSION_SECRET) {
+    return crypto.createHmac("sha256", SESSION_SECRET).update(String(token || "")).digest("hex");
+  }
   return crypto.createHash("sha256").update(String(token || "")).digest("hex");
 }
 
@@ -482,7 +487,8 @@ function sessionRegistrySummary() {
     schemaVersion: SESSION_REGISTRY_SCHEMA_VERSION,
     activeSessionCount: sessions.size,
     ttlSeconds: SESSION_TTL_SECONDS,
-    tokenStorage: "sha256",
+    tokenStorage: SESSION_SECRET ? "hmac-sha256" : "sha256",
+    sessionSecretConfigured: !!SESSION_SECRET,
     persistent: true,
   };
 }

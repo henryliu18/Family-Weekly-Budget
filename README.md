@@ -157,6 +157,7 @@ The workflow:
 - writes `.env` values on the VM for:
   - `APP_IMAGE_TAG`
   - `APP_PASSWORD`
+  - `SESSION_SECRET`
   - `DEFAULT_ACCOUNT_PASSWORD_HASH`
   - `APP_BUILD_VERSION`
   - `APP_BUILD_TIME`
@@ -239,10 +240,15 @@ DOCKERHUB_TOKEN
 VM_SSH_PRIVATE_KEY
 VM_SSH_KNOWN_HOSTS
 APP_PASSWORD
+SESSION_SECRET
 DEFAULT_ACCOUNT_PASSWORD_HASH
 APP_SSL_CERT
 APP_SSL_KEY
 ```
+
+`SESSION_SECRET` is a secret, not a variable. It is used to HMAC session tokens before they are written to the durable session registry. If it is not set, the app falls back to plain SHA-256 token hashing so existing development deployments keep working, but production should set it.
+
+Generate `SESSION_SECRET` as a long random value, for example `openssl rand -hex 32`, and store it as a GitHub Actions secret.
 
 `DEFAULT_ACCOUNT_PASSWORD_HASH` is a secret, not a variable. It should contain the `scrypt$<salt>$<key>` output from `npm.cmd run hash-password`. Keep `APP_PASSWORD` during the transition; it remains the fallback password if the account hash is missing or invalid.
 

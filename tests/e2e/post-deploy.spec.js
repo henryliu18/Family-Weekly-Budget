@@ -250,6 +250,7 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
     auth: {
       accountPasswordEnabled: true,
       fallbackPasswordEnabled: true,
+      sessionSecretConfigured: true,
     },
     registry: {
       schemaVersion: 1,
@@ -265,7 +266,8 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
     },
     sessions: {
       schemaVersion: 1,
-      tokenStorage: "sha256",
+      tokenStorage: "hmac-sha256",
+      sessionSecretConfigured: true,
       persistent: true,
     },
     bootstrap: {
@@ -297,6 +299,7 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
   expect(serialized).not.toContain("authSubject");
   expect(serialized).not.toContain("passwordHash");
   expect(serialized).not.toContain(accountPassword);
+  expect(serialized).not.toContain("e2e-session-secret");
   expect(serialized).not.toContain("DEFAULT_AUTH_SUBJECT");
   expect(serialized).not.toContain("tokenHash");
   expect(serialized).not.toContain("accounts");
@@ -489,6 +492,7 @@ test("registry diagnostics are authenticated and safe", async () => {
       auth: {
         accountPasswordEnabled: true,
         fallbackPasswordEnabled: true,
+        sessionSecretConfigured: true,
       },
       registry: {
         schemaVersion: 1,
@@ -507,7 +511,8 @@ test("registry diagnostics are authenticated and safe", async () => {
     expect(diagnostics.registry.identityProviderCount).toBeGreaterThanOrEqual(1);
     expect(diagnostics.sessions).toMatchObject({
       schemaVersion: 1,
-      tokenStorage: "sha256",
+      tokenStorage: "hmac-sha256",
+      sessionSecretConfigured: true,
       persistent: true,
     });
     expect(diagnostics.bootstrap).toMatchObject({
@@ -531,6 +536,7 @@ test("registry diagnostics are authenticated and safe", async () => {
     expect(serialized).not.toContain("authSubject");
     expect(serialized).not.toContain("passwordHash");
     expect(serialized).not.toContain(accountPassword);
+    expect(serialized).not.toContain("e2e-session-secret");
     expect(serialized).not.toContain("tokenHash");
     expect(serialized).not.toContain("accounts");
     expect(serialized).not.toContain("memberships");
@@ -557,7 +563,8 @@ test("durable session registry keeps tokens server-side and logout invalidates t
     const diagnostics = await diagnosticsResponse.json();
     expect(diagnostics.sessions).toMatchObject({
       schemaVersion: 1,
-      tokenStorage: "sha256",
+      tokenStorage: "hmac-sha256",
+      sessionSecretConfigured: true,
       persistent: true,
     });
     expect(diagnostics.sessions.activeSessionCount).toBeGreaterThanOrEqual(1);
