@@ -11,6 +11,11 @@ const i18n = {
     language: "語言",
     appTitle: "家庭週預算",
     appSubtitle: "Weekly budget tracker",
+    titleUserFallback: "使用者",
+    personalTitleSuffix: "的家庭週預算",
+    periodControls: "期間",
+    workspaceControls: "工作區",
+    systemControls: "系統",
     month: "月份",
     selectMonth: "選擇月份",
     addMonth: "新增月份",
@@ -236,6 +241,11 @@ const i18n = {
     language: "Language",
     appTitle: "Family Weekly Budget",
     appSubtitle: "Weekly budget tracker",
+    titleUserFallback: "User",
+    personalTitleSuffix: "’s Family Weekly Budget",
+    periodControls: "Period",
+    workspaceControls: "Workspace",
+    systemControls: "System",
     month: "Month",
     selectMonth: "Select month",
     addMonth: "Add month",
@@ -908,6 +918,8 @@ function bindElements() {
     "cancelMonthBtn",
     "confirmMonthBtn",
     "brandHome",
+    "userIdentityLabel",
+    "personalTitleSuffix",
     "buildVersionValue",
     "authOverlay",
     "loginForm",
@@ -1196,6 +1208,7 @@ function renderAll() {
   }
   renderWorkspaceSwitcher();
   renderAccountAdminPanel();
+  renderPersonalTitle();
   renderMonthOptions();
   renderOverview();
   renderEntryForm();
@@ -1229,8 +1242,6 @@ function applyLanguage() {
   });
 
   const textBySelector = {
-    ".brand h1": "appTitle",
-    ".brand p": "appSubtitle",
     'label.field span:not([data-i18n])': null,
     "#addMonthBtn": "addMonth",
     "#deleteMonthBtn": "deleteMonth",
@@ -1294,7 +1305,19 @@ function applyLanguage() {
   }
   renderWorkspaceSwitcher();
   renderAccountAdminPanel();
+  renderPersonalTitle();
   renderImportDraft();
+}
+
+function renderPersonalTitle() {
+  if (!els.userIdentityLabel || !els.personalTitleSuffix) return;
+  const displayName =
+    accountState?.account?.displayName ||
+    accountState?.user?.displayName ||
+    accountState?.account?.id ||
+    t("titleUserFallback");
+  els.userIdentityLabel.textContent = displayName;
+  els.personalTitleSuffix.textContent = t("personalTitleSuffix");
 }
 
 function updateBuildVersion() {
@@ -1310,6 +1333,7 @@ function updateAuthUi() {
   els.logoutBtn?.classList.toggle("hidden", !authState.authEnabled || !authState.authenticated);
   renderWorkspaceSwitcher();
   renderAccountAdminPanel();
+  renderPersonalTitle();
   document.body.classList.toggle("landing-open", shouldShowOverlay);
   document.body.classList.toggle("auth-locked", isAuthLocked());
   const authCopy = els.authOverlay?.querySelector(".auth-copy");

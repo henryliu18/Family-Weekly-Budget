@@ -1096,6 +1096,7 @@ test("account admin UI creates secondary account with isolated workspace", async
 
   await expect(page.locator("#authOverlay")).toBeHidden();
   await expect(page.locator("#accountAdminPanel")).toBeHidden();
+  await expect(page.locator("#userIdentityLabel")).toHaveText(displayName);
   await expect(page.locator("#workspaceSelect option")).toHaveCount(1);
   await expect(page.locator("#workspaceSelect option:checked")).toHaveText(workspaceName);
 
@@ -1123,6 +1124,9 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await page.locator("#languageSelect").selectOption("en");
 
   await expect(page.locator("#monthSelect")).toBeVisible();
+  await expect(page.locator("#userIdentityLabel")).toHaveText("E2E Owner");
+  await expect(page.locator("#personalTitleSuffix")).toHaveText("’s Family Weekly Budget");
+  await expect(page.locator(".topbar-nav")).toBeVisible();
   await expect(page.locator("#limitKpi")).toContainText("$");
   await expect(page.locator("#monthSpendKpi")).toContainText("$");
   await expect(page.locator("#availableKpi")).toContainText("$");
