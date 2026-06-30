@@ -62,6 +62,16 @@ Notes:
 - local `workspace-stores/` is bind-mounted into `/app/workspace-stores` for additional workspace-owned data files
 - `budget-store.json` must be a file, not a directory
 
+### Password hash helper
+
+Generate an account password hash locally with:
+
+```powershell
+npm.cmd run hash-password -- "your-password-here"
+```
+
+The output is a `scrypt$<salt>$<key>` value suitable for the `DEFAULT_ACCOUNT_PASSWORD_HASH` GitHub Actions secret. Treat this hash as sensitive authentication material. Do not commit it to the repo or paste it into logs.
+
 ## Docker image build and E2E validation
 
 The published app image is built from:
@@ -149,12 +159,15 @@ The workflow:
 - writes `.env` values on the VM for:
   - `APP_IMAGE_TAG`
   - `APP_PASSWORD`
+  - `DEFAULT_ACCOUNT_PASSWORD_HASH`
   - `APP_BUILD_VERSION`
   - `APP_BUILD_TIME`
 - ensures `${VM_APP_PATH}/workspace-stores` exists for workspace-owned budget files
 - pulls the selected image and starts the compose project `family-budget`
 
 Automatic deploys use the immutable `sha-<commit>` image tag from the upstream build workflow. Manual runs fall back to `latest`.
+
+Production authentication checks the account registry password hash first. If the default account does not yet have a `passwordHash`, the server bootstraps it from `DEFAULT_ACCOUNT_PASSWORD_HASH`. `APP_PASSWORD` remains as a fallback during the current development phase so a bad hash secret does not lock out the only user.
 
 ## Terraform infrastructure
 
@@ -228,9 +241,12 @@ DOCKERHUB_TOKEN
 VM_SSH_PRIVATE_KEY
 VM_SSH_KNOWN_HOSTS
 APP_PASSWORD
+DEFAULT_ACCOUNT_PASSWORD_HASH
 APP_SSL_CERT
 APP_SSL_KEY
 ```
+
+`DEFAULT_ACCOUNT_PASSWORD_HASH` is a secret, not a variable. It should contain the `scrypt$<salt>$<key>` output from `npm.cmd run hash-password`. Keep `APP_PASSWORD` during the transition; it remains the fallback password if the account hash is missing or invalid.
 
 ### Variables used by image / E2E / deploy workflows
 

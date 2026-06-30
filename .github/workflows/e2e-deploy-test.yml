@@ -72,10 +72,11 @@ jobs:
             DEFAULT_ACCOUNT_ID='e2e-owner' \
             DEFAULT_ACCOUNT_DISPLAY_NAME='E2E Owner' \
             DEFAULT_ACCOUNT_EMAIL='owner@example.test' \
+            DEFAULT_ACCOUNT_PASSWORD_HASH='scrypt\$e2e-owner-password-salt\$61e4d9ce121dc595866796dab4c7f04f8bf7b0be0069d63a7f4772a93cf4604626802897938b0cdc17b23684a8e68980a379279dd85e81431abec7caabfc75e8' \
             DEFAULT_ACCOUNT_PASSWORD='e2e-owner-password' \
             DEFAULT_AUTH_PROVIDER='password' \
             DEFAULT_AUTH_SUBJECT='e2e-owner-subject' \
-            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME,DEFAULT_ACCOUNT_ID,DEFAULT_ACCOUNT_DISPLAY_NAME,DEFAULT_ACCOUNT_EMAIL,DEFAULT_ACCOUNT_PASSWORD,DEFAULT_AUTH_PROVIDER,DEFAULT_AUTH_SUBJECT docker compose \
+            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME,DEFAULT_ACCOUNT_ID,DEFAULT_ACCOUNT_DISPLAY_NAME,DEFAULT_ACCOUNT_EMAIL,DEFAULT_ACCOUNT_PASSWORD_HASH,DEFAULT_ACCOUNT_PASSWORD,DEFAULT_AUTH_PROVIDER,DEFAULT_AUTH_SUBJECT docker compose \
               -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' \
               --project-directory '${{ steps.e2e.outputs.app_path }}' \
               -p family-budget-e2e pull && \
@@ -86,10 +87,11 @@ jobs:
             DEFAULT_ACCOUNT_ID='e2e-owner' \
             DEFAULT_ACCOUNT_DISPLAY_NAME='E2E Owner' \
             DEFAULT_ACCOUNT_EMAIL='owner@example.test' \
+            DEFAULT_ACCOUNT_PASSWORD_HASH='scrypt\$e2e-owner-password-salt\$61e4d9ce121dc595866796dab4c7f04f8bf7b0be0069d63a7f4772a93cf4604626802897938b0cdc17b23684a8e68980a379279dd85e81431abec7caabfc75e8' \
             DEFAULT_ACCOUNT_PASSWORD='e2e-owner-password' \
             DEFAULT_AUTH_PROVIDER='password' \
             DEFAULT_AUTH_SUBJECT='e2e-owner-subject' \
-            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME,DEFAULT_ACCOUNT_ID,DEFAULT_ACCOUNT_DISPLAY_NAME,DEFAULT_ACCOUNT_EMAIL,DEFAULT_ACCOUNT_PASSWORD,DEFAULT_AUTH_PROVIDER,DEFAULT_AUTH_SUBJECT docker compose \
+            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME,DEFAULT_ACCOUNT_ID,DEFAULT_ACCOUNT_DISPLAY_NAME,DEFAULT_ACCOUNT_EMAIL,DEFAULT_ACCOUNT_PASSWORD_HASH,DEFAULT_ACCOUNT_PASSWORD,DEFAULT_AUTH_PROVIDER,DEFAULT_AUTH_SUBJECT docker compose \
               -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' \
               --project-directory '${{ steps.e2e.outputs.app_path }}' \
               -p family-budget-e2e up -d"
