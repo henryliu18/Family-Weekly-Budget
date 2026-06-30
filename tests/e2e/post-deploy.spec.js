@@ -5,6 +5,7 @@ const baseUrl = process.env.E2E_BASE_URL || "https://127.0.0.1:18443";
 const password = process.env.E2E_APP_PASSWORD || "";
 const accountPassword = process.env.E2E_ACCOUNT_PASSWORD || password;
 const appUrl = "/app";
+const defaultWorkspaceId = "e2e-default";
 const expectedOwner = {
   id: process.env.E2E_EXPECT_ACCOUNT_ID || "default-owner",
   displayName: process.env.E2E_EXPECT_ACCOUNT_DISPLAY_NAME || "Default Owner",
@@ -29,6 +30,15 @@ async function login(page) {
   await page.locator("#passwordInput").fill(accountPassword);
   await page.locator("#loginBtn").click();
   await expect(page.locator("#authOverlay")).toBeHidden();
+}
+
+async function createDefaultWorkspaceApiContext() {
+  const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  const loginResponse = await context.post("/api/session", {
+    data: { password: accountPassword, workspaceId: defaultWorkspaceId },
+  });
+  expect(loginResponse.ok()).toBe(true);
+  return context;
 }
 
 async function resetCurrentWorkspaceState(page) {
@@ -85,8 +95,7 @@ async function restoreState(page, state) {
 }
 
 async function seedTrendMonths(page) {
-  await resetCurrentWorkspaceState(page);
-  const base = await page.evaluate(() => structuredClone(appState));
+  const apiContext = await createDefaultWorkspaceApiContext();
   const limit = 15000;
   const months = [
     {
@@ -112,41 +121,53 @@ async function seedTrendMonths(page) {
     },
   ];
 
-  months.forEach((month) => {
-    base.months[month.id] = {
-      id: month.id,
-      sortKey: month.sortKey,
-      name: month.name,
-      displayName: month.name,
-      creditLimit: limit,
-      weeks: [
-        {
-          id: `${month.id}-w1`,
-          period: "Period 1",
-          availableBalance: limit - month.cumulativeSpend,
-          unpaidPrevious: null,
-          cumulativeSpend: month.cumulativeSpend,
-          categoryValues: month.categoryValues,
-          notes: "E2E trend seed",
-        },
-      ],
-    };
-  });
-  base.currentMonthId = months[0].id;
-
-  const response = await page.request.post("/api/state", { data: base });
-  expect(response.ok()).toBe(true);
   const seededMonthIds = months.map((month) => month.id);
-  await expect
-    .poll(async () => {
-      const stateResponse = await page.request.get("/api/state");
-      if (!stateResponse.ok()) return 0;
-      const state = await stateResponse.json();
-      return seededMonthIds.filter((id) => state.months?.[id]).length;
-    })
-    .toBe(seededMonthIds.length);
+  try {
+    const resetResponse = await apiContext.post("/api/reset");
+    expect(resetResponse.ok()).toBe(true);
 
-  await page.goto(appUrl);
+    const stateResponse = await apiContext.get("/api/state");
+    expect(stateResponse.ok()).toBe(true);
+    const base = await stateResponse.json();
+
+    months.forEach((month) => {
+      base.months[month.id] = {
+        id: month.id,
+        sortKey: month.sortKey,
+        name: month.name,
+        displayName: month.name,
+        creditLimit: limit,
+        weeks: [
+          {
+            id: `${month.id}-w1`,
+            period: "Period 1",
+            availableBalance: limit - month.cumulativeSpend,
+            unpaidPrevious: null,
+            cumulativeSpend: month.cumulativeSpend,
+            categoryValues: month.categoryValues,
+            notes: "E2E trend seed",
+          },
+        ],
+      };
+    });
+    base.currentMonthId = months[0].id;
+
+    const response = await apiContext.post("/api/state", { data: base });
+    expect(response.ok()).toBe(true);
+    await expect
+      .poll(async () => {
+        const seededStateResponse = await apiContext.get("/api/state");
+        if (!seededStateResponse.ok()) return 0;
+        const state = await seededStateResponse.json();
+        return seededMonthIds.filter((id) => state.months?.[id]).length;
+      })
+      .toBe(seededMonthIds.length);
+  } finally {
+    await apiContext.dispose();
+  }
+
+  await page.context().clearCookies();
+  await login(page);
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await expect
     .poll(async () => page.evaluate((ids) => ids.filter((id) => appState.months?.[id]).length, seededMonthIds))
