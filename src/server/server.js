@@ -13,6 +13,9 @@ const DEFAULT_WORKSPACE_ID = process.env.DEFAULT_WORKSPACE_ID || "default";
 const ACCOUNT_REGISTRY_PATH =
   process.env.ACCOUNT_REGISTRY_PATH ||
   path.join(WORKSPACE_STORE_ROOT || path.dirname(STORE_PATH), "account-registry.json");
+const SESSION_REGISTRY_PATH =
+  process.env.SESSION_REGISTRY_PATH ||
+  path.join(WORKSPACE_STORE_ROOT || path.dirname(STORE_PATH), "session-registry.json");
 const WORKSPACE_REGISTRY_SEED_IDS = (process.env.WORKSPACE_REGISTRY_SEED_IDS || "")
   .split(",")
   .map((workspaceId) => workspaceId.trim())
@@ -22,6 +25,7 @@ const WORKSPACE_REGISTRY_UNOWNED_SEED_IDS = (process.env.WORKSPACE_REGISTRY_UNOW
   .map((workspaceId) => workspaceId.trim())
   .filter(Boolean);
 const ACCOUNT_REGISTRY_SCHEMA_VERSION = 1;
+const SESSION_REGISTRY_SCHEMA_VERSION = 1;
 const DEFAULT_ACCOUNT_ID = process.env.DEFAULT_ACCOUNT_ID || "default-owner";
 const DEFAULT_ACCOUNT_DISPLAY_NAME = process.env.DEFAULT_ACCOUNT_DISPLAY_NAME || "Default Owner";
 const DEFAULT_ACCOUNT_EMAIL = process.env.DEFAULT_ACCOUNT_EMAIL || "";
@@ -36,7 +40,9 @@ const BUILD_TIME = process.env.APP_BUILD_TIME || new Date().toISOString();
 const SSL_CERT_PATH = process.env.SSL_CERT_PATH || "";
 const SSL_KEY_PATH = process.env.SSL_KEY_PATH || "";
 const REDIRECT_HTTP_TO_HTTPS = process.env.REDIRECT_HTTP_TO_HTTPS === "true";
+const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 60 * 60 * 24 * 14);
 const sessions = new Map();
+let sessionRegistryWriteQueue = Promise.resolve();
 
 class StorePathError extends Error {
   constructor(message) {
@@ -79,6 +85,10 @@ function sendText(res, status, value) {
 function sendEmpty(res, status, headers = {}) {
   res.writeHead(status, headers);
   res.end();
+}
+
+function nowIso() {
+  return new Date().toISOString();
 }
 
 async function readBody(req) {
@@ -127,13 +137,13 @@ function registeredWorkspace(workspaceId, name = workspaceId) {
   return {
     id,
     name,
-    createdAt: new Date().toISOString(),
+    createdAt: nowIso(),
   };
 }
 
 function registeredAccount(accountId, displayName = accountId) {
   const id = normalizeWorkspaceId(accountId);
-  const now = new Date().toISOString();
+  const now = nowIso();
   return {
     id,
     userId: id,
@@ -150,7 +160,7 @@ function registeredAccount(accountId, displayName = accountId) {
 function normalizeAccountRecord(account, accountId) {
   const id = normalizeWorkspaceId(account?.id || accountId);
   const provider = account?.authProvider || DEFAULT_AUTH_PROVIDER;
-  const now = new Date().toISOString();
+  const now = nowIso();
   return {
     ...account,
     id,
@@ -197,7 +207,7 @@ function ensureMembershipRecord(registry, accountId, workspaceId, role = "owner"
       accountId,
       workspaceId,
       role,
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso(),
     });
   }
 }
@@ -284,6 +294,104 @@ function publicUserIdentity(account) {
     email: account.email || null,
     authProvider: account.authProvider,
     isDefaultUser: !!account.isDefaultUser,
+  };
+}
+
+function emptySessionRegistry() {
+  return {
+    version: SESSION_REGISTRY_SCHEMA_VERSION,
+    sessions: {},
+  };
+}
+
+function sessionTokenHash(token) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+function sessionExpiresAt(createdAt) {
+  return new Date(new Date(createdAt).getTime() + SESSION_TTL_SECONDS * 1000).toISOString();
+}
+
+function isSessionExpired(session, at = Date.now()) {
+  return !session?.expiresAt || new Date(session.expiresAt).getTime() <= at;
+}
+
+function normalizeSessionRecord(record, tokenHash) {
+  const createdAt = record?.createdAt || nowIso();
+  return {
+    id: record?.id || tokenHash,
+    tokenHash,
+    accountId: record?.accountId || DEFAULT_ACCOUNT_ID,
+    workspaceId: record?.workspaceId || DEFAULT_WORKSPACE_ID,
+    createdAt,
+    lastSeenAt: record?.lastSeenAt || createdAt,
+    expiresAt: record?.expiresAt || sessionExpiresAt(createdAt),
+  };
+}
+
+async function readSessionRegistry() {
+  try {
+    const text = await fs.readFile(SESSION_REGISTRY_PATH, "utf8");
+    const registry = JSON.parse(text);
+    registry.version = registry.version || SESSION_REGISTRY_SCHEMA_VERSION;
+    if (registry.version > SESSION_REGISTRY_SCHEMA_VERSION) {
+      throw new AccountRegistryError("Session registry schema is newer than this server supports.", 500);
+    }
+    registry.sessions = registry.sessions || {};
+    return registry;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  return emptySessionRegistry();
+}
+
+async function writeSessionRegistry() {
+  const registry = emptySessionRegistry();
+  sessions.forEach((session, tokenHash) => {
+    registry.sessions[tokenHash] = {
+      ...session,
+      tokenHash,
+    };
+  });
+  await fs.mkdir(path.dirname(SESSION_REGISTRY_PATH), { recursive: true });
+  await fs.writeFile(SESSION_REGISTRY_PATH, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+}
+
+function scheduleSessionRegistryWrite() {
+  sessionRegistryWriteQueue = sessionRegistryWriteQueue
+    .then(() => writeSessionRegistry())
+    .catch((error) => {
+      console.error("Failed to write session registry", error);
+    });
+  return sessionRegistryWriteQueue;
+}
+
+async function loadSessionRegistry() {
+  const registry = await readSessionRegistry();
+  const now = Date.now();
+  let changed = false;
+  sessions.clear();
+  Object.entries(registry.sessions).forEach(([tokenHash, record]) => {
+    const session = normalizeSessionRecord(record, tokenHash);
+    if (isSessionExpired(session, now)) {
+      changed = true;
+      return;
+    }
+    sessions.set(tokenHash, session);
+    if (JSON.stringify(session) !== JSON.stringify(record)) changed = true;
+  });
+  if (changed || !fsSync.existsSync(SESSION_REGISTRY_PATH)) {
+    await writeSessionRegistry();
+  }
+}
+
+function sessionRegistrySummary() {
+  return {
+    schemaVersion: SESSION_REGISTRY_SCHEMA_VERSION,
+    activeSessionCount: sessions.size,
+    ttlSeconds: SESSION_TTL_SECONDS,
+    tokenStorage: "sha256",
+    persistent: true,
   };
 }
 
@@ -409,7 +517,19 @@ async function createWorkspaceForSession(session, name) {
 function sessionForRequest(req) {
   if (!APP_PASSWORD) return { accountId: DEFAULT_ACCOUNT_ID, workspaceId: DEFAULT_WORKSPACE_ID };
   const token = parseCookies(req)[AUTH_COOKIE];
-  return token ? sessions.get(token) || null : null;
+  if (!token) return null;
+  const tokenHash = sessionTokenHash(token);
+  const session = sessions.get(tokenHash);
+  if (!session) return null;
+  if (isSessionExpired(session)) {
+    sessions.delete(tokenHash);
+    scheduleSessionRegistryWrite();
+    return null;
+  }
+  session.lastSeenAt = nowIso();
+  sessions.set(tokenHash, session);
+  scheduleSessionRegistryWrite();
+  return session;
 }
 
 async function userForSession(session) {
@@ -426,13 +546,13 @@ async function switchSessionWorkspace(req, workspaceId) {
   if (!APP_PASSWORD) {
     return { accountId: DEFAULT_ACCOUNT_ID, workspaceId: DEFAULT_WORKSPACE_ID };
   }
-  const token = parseCookies(req)[AUTH_COOKIE];
-  const session = token ? sessions.get(token) || null : null;
+  const session = sessionForRequest(req);
   if (!session) {
     throw new AccountRegistryError("Authentication required", 401);
   }
   session.workspaceId = await registeredWorkspaceIdForAccount(session.accountId, workspaceId);
-  sessions.set(token, session);
+  session.lastSeenAt = nowIso();
+  scheduleSessionRegistryWrite();
   return session;
 }
 
@@ -531,16 +651,23 @@ function createSessionToken() {
 
 async function createSession(workspaceId) {
   const token = createSessionToken();
+  const tokenHash = sessionTokenHash(token);
+  const createdAt = nowIso();
   const session = {
+    id: tokenHash,
+    tokenHash,
     accountId: DEFAULT_ACCOUNT_ID,
     workspaceId: await registeredWorkspaceIdForAccount(DEFAULT_ACCOUNT_ID, workspaceId),
-    createdAt: new Date().toISOString(),
+    createdAt,
+    lastSeenAt: createdAt,
+    expiresAt: sessionExpiresAt(createdAt),
   };
-  sessions.set(token, session);
+  sessions.set(tokenHash, session);
+  await writeSessionRegistry();
   return { token, session };
 }
 
-function sessionCookie(token, maxAge = 60 * 60 * 24 * 14) {
+function sessionCookie(token, maxAge = SESSION_TTL_SECONDS) {
   const parts = [
     `${AUTH_COOKIE}=${encodeURIComponent(token)}`,
     "Path=/",
@@ -570,6 +697,7 @@ async function serveApi(req, res, pathname) {
       buildTime: BUILD_TIME,
       authEnabled: !!APP_PASSWORD,
       registry: registryHealthSummary(registry),
+      sessions: sessionRegistrySummary(),
       storage: {
         workspaceStoreRootConfigured: !!WORKSPACE_STORE_ROOT,
         defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
@@ -588,6 +716,7 @@ async function serveApi(req, res, pathname) {
     sendJson(res, 200, {
       ok: true,
       registry: registryHealthSummary(registry, session),
+      sessions: sessionRegistrySummary(),
     });
     return true;
   }
@@ -704,7 +833,10 @@ async function serveApi(req, res, pathname) {
 
   if (pathname === "/api/session" && req.method === "DELETE") {
     const token = parseCookies(req)[AUTH_COOKIE];
-    if (token) sessions.delete(token);
+    if (token) {
+      sessions.delete(sessionTokenHash(token));
+      await writeSessionRegistry();
+    }
     sendEmpty(res, 204, {
       "set-cookie": sessionCookie("", 0),
       "cache-control": "no-store",
@@ -824,6 +956,7 @@ const server = http.createServer(REDIRECT_HTTP_TO_HTTPS ? redirectToHttps : hand
 async function start() {
   try {
     await ensureStoreFile();
+    await loadSessionRegistry();
   } catch (error) {
     console.error(error.message || error);
   }
