@@ -215,15 +215,23 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
       workspaceStoreRootConfigured: true,
       defaultWorkspaceId: "e2e-default",
     },
+    sessions: {
+      schemaVersion: 1,
+      tokenStorage: "sha256",
+      persistent: true,
+    },
   });
   expect(health.registry.accountCount).toBeGreaterThanOrEqual(1);
   expect(health.registry.workspaceCount).toBeGreaterThanOrEqual(1);
   expect(health.registry.membershipCount).toBeGreaterThanOrEqual(1);
   expect(health.registry.identityProviderCount).toBeGreaterThanOrEqual(1);
+  expect(health.sessions.ttlSeconds).toBeGreaterThan(0);
+  expect(health.sessions.activeSessionCount).toBeGreaterThanOrEqual(0);
 
   const serialized = JSON.stringify(health);
   expect(serialized).not.toContain("password");
   expect(serialized).not.toContain("authSubject");
+  expect(serialized).not.toContain("tokenHash");
   expect(serialized).not.toContain("accounts");
   expect(serialized).not.toContain("memberships");
 });
@@ -427,12 +435,62 @@ test("registry diagnostics are authenticated and safe", async () => {
     expect(diagnostics.registry.workspaceCount).toBeGreaterThanOrEqual(1);
     expect(diagnostics.registry.membershipCount).toBeGreaterThanOrEqual(1);
     expect(diagnostics.registry.identityProviderCount).toBeGreaterThanOrEqual(1);
+    expect(diagnostics.sessions).toMatchObject({
+      schemaVersion: 1,
+      tokenStorage: "sha256",
+      persistent: true,
+    });
+    expect(diagnostics.sessions.activeSessionCount).toBeGreaterThanOrEqual(1);
 
     const serialized = JSON.stringify(diagnostics);
     expect(serialized).not.toContain("password");
     expect(serialized).not.toContain("authSubject");
+    expect(serialized).not.toContain("tokenHash");
     expect(serialized).not.toContain("accounts");
     expect(serialized).not.toContain("memberships");
+  } finally {
+    await context.dispose();
+  }
+});
+
+test("durable session registry keeps tokens server-side and logout invalidates the session", async () => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  try {
+    const loginResponse = await context.post("/api/session", {
+      data: { password, workspaceId: "e2e-default" },
+    });
+    expect(loginResponse.ok()).toBe(true);
+    const cookie = loginResponse.headers()["set-cookie"] || "";
+    const token = /family_budget_session=([^;]+)/.exec(cookie)?.[1];
+    expect(token).toBeTruthy();
+
+    const diagnosticsResponse = await context.get("/api/admin/registry/diagnostics");
+    expect(diagnosticsResponse.ok()).toBe(true);
+    const diagnostics = await diagnosticsResponse.json();
+    expect(diagnostics.sessions).toMatchObject({
+      schemaVersion: 1,
+      tokenStorage: "sha256",
+      persistent: true,
+    });
+    expect(diagnostics.sessions.activeSessionCount).toBeGreaterThanOrEqual(1);
+
+    const serialized = JSON.stringify(diagnostics);
+    expect(serialized).not.toContain(token);
+    expect(serialized).not.toContain("tokenHash");
+
+    const logoutResponse = await context.delete("/api/session");
+    expect(logoutResponse.status()).toBe(204);
+
+    const meAfterLogout = await context.get("/api/me");
+    expect(meAfterLogout.status()).toBe(401);
+    const sessionAfterLogout = await context.get("/api/session");
+    expect(sessionAfterLogout.ok()).toBe(true);
+    await expect(sessionAfterLogout.json()).resolves.toMatchObject({
+      authenticated: false,
+      user: null,
+    });
   } finally {
     await context.dispose();
   }
