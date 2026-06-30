@@ -685,6 +685,157 @@ test("workspace management API creates account-owned isolated workspaces", async
   }
 });
 
+test("admin account creation creates isolated account-owned workspaces", async () => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const unauthenticated = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  const owner = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  const secondary = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  const secondaryPassword = "e2e-secondary-password";
+  try {
+    const unauthenticatedCreate = await unauthenticated.post("/api/admin/accounts", {
+      data: {
+        accountId: "e2e-secondary-owner",
+        displayName: "E2E Secondary Owner",
+        email: "secondary@example.test",
+        password: secondaryPassword,
+        workspaceName: "E2E Secondary Workspace",
+      },
+    });
+    expect(unauthenticatedCreate.status()).toBe(401);
+
+    const ownerLogin = await owner.post("/api/session", {
+      data: { password: accountPassword, workspaceId: "e2e-default" },
+    });
+    expect(ownerLogin.ok()).toBe(true);
+
+    const invalidCreate = await owner.post("/api/admin/accounts", {
+      data: {
+        accountId: "e2e-invalid-account",
+        displayName: "Invalid Account",
+        password: "short",
+        workspaceName: "Invalid Workspace",
+      },
+    });
+    expect(invalidCreate.status()).toBe(400);
+
+    const createResponse = await owner.post("/api/admin/accounts", {
+      data: {
+        accountId: "e2e-secondary-owner",
+        displayName: "E2E Secondary Owner",
+        email: "secondary@example.test",
+        password: secondaryPassword,
+        workspaceName: "E2E Secondary Workspace",
+      },
+    });
+    expect(createResponse.status()).toBe(201);
+    const created = await createResponse.json();
+    expect(created.account).toEqual({
+      id: "e2e-secondary-owner",
+      userId: "e2e-secondary-owner",
+      displayName: "E2E Secondary Owner",
+      email: "secondary@example.test",
+      authProvider: "password",
+      isDefaultUser: false,
+    });
+    expect(created.workspace).toMatchObject({
+      id: "e2e-secondary-workspace",
+      name: "E2E Secondary Workspace",
+      role: "owner",
+    });
+    expect(JSON.stringify(created)).not.toContain(secondaryPassword);
+    expect(JSON.stringify(created)).not.toContain("passwordHash");
+
+    const duplicateCreate = await owner.post("/api/admin/accounts", {
+      data: {
+        accountId: "e2e-secondary-owner",
+        displayName: "E2E Secondary Owner",
+        password: secondaryPassword,
+        workspaceName: "Duplicate Workspace",
+      },
+    });
+    expect(duplicateCreate.status()).toBe(409);
+
+    const ownerCannotSwitch = await owner.post("/api/session/workspace", {
+      data: { workspaceId: created.workspace.id },
+    });
+    expect(ownerCannotSwitch.status()).toBe(403);
+
+    const secondaryLogin = await secondary.post("/api/session", {
+      data: {
+        accountId: "e2e-secondary-owner",
+        password: secondaryPassword,
+        workspaceId: created.workspace.id,
+      },
+    });
+    expect(secondaryLogin.ok()).toBe(true);
+    await expect(secondaryLogin.json()).resolves.toMatchObject({
+      accountId: "e2e-secondary-owner",
+      user: created.account,
+      workspaceId: created.workspace.id,
+    });
+
+    const secondaryMe = await secondary.get("/api/me");
+    expect(secondaryMe.ok()).toBe(true);
+    const secondaryModel = await secondaryMe.json();
+    expect(secondaryModel.user).toEqual(created.account);
+    expect(secondaryModel.currentWorkspace).toEqual(created.workspace);
+    expect(secondaryModel.workspaces).toEqual([created.workspace]);
+    expect(JSON.stringify(secondaryModel)).not.toContain(secondaryPassword);
+    expect(JSON.stringify(secondaryModel)).not.toContain("passwordHash");
+    expect(JSON.stringify(secondaryModel)).not.toContain("authSubject");
+
+    const secondaryCannotCreateAccounts = await secondary.post("/api/admin/accounts", {
+      data: {
+        accountId: "e2e-third-owner",
+        displayName: "E2E Third Owner",
+        password: "e2e-third-password",
+        workspaceName: "E2E Third Workspace",
+      },
+    });
+    expect(secondaryCannotCreateAccounts.status()).toBe(403);
+
+    const secondaryCannotSwitchToDefault = await secondary.post("/api/session/workspace", {
+      data: { workspaceId: "e2e-default" },
+    });
+    expect(secondaryCannotSwitchToDefault.status()).toBe(403);
+
+    const secondaryStateResponse = await secondary.get("/api/state");
+    expect(secondaryStateResponse.ok()).toBe(true);
+    const secondaryState = await secondaryStateResponse.json();
+    const secondaryMonthId = "e2e-secondary-month";
+    secondaryState.currentMonthId = secondaryMonthId;
+    secondaryState.months[secondaryMonthId] = {
+      id: secondaryMonthId,
+      sortKey: "2099-12",
+      name: "Secondary Account Month",
+      displayName: "Secondary Account Month",
+      creditLimit: 15000,
+      weeks: [
+        {
+          id: "e2e-secondary-month-w1",
+          period: "Period 1",
+          availableBalance: 14888,
+          unpaidPrevious: null,
+          cumulativeSpend: 112,
+          categoryValues: { transport: 112, shoppingDining: 0, incidentals: 0 },
+          notes: "secondary account isolated state",
+        },
+      ],
+    };
+    expect((await secondary.post("/api/state", { data: secondaryState })).ok()).toBe(true);
+
+    const ownerDefaultState = await owner.get("/api/state");
+    expect(ownerDefaultState.ok()).toBe(true);
+    const ownerState = await ownerDefaultState.json();
+    expect(ownerState.months[secondaryMonthId]).toBeUndefined();
+  } finally {
+    await unauthenticated.dispose();
+    await owner.dispose();
+    await secondary.dispose();
+  }
+});
+
 test("session workspace switch changes current state workspace", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 

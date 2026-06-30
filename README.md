@@ -168,6 +168,8 @@ Automatic deploys use the immutable `sha-<commit>` image tag from the upstream b
 
 Production authentication checks the account registry password hash first. If the default account does not yet have a valid `scrypt$<salt>$<key>` `passwordHash`, the server bootstraps it from `DEFAULT_ACCOUNT_PASSWORD_HASH`. `APP_PASSWORD` remains as a fallback during the current development phase so a bad hash secret does not lock out the only user.
 
+Account management currently supports an authenticated default-owner admin API for creating additional password accounts and account-owned workspaces. Public signup and third-party OAuth are not included yet.
+
 ## Terraform infrastructure
 
 Terraform is intentionally split in two parts.
