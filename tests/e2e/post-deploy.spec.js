@@ -5,7 +5,6 @@ const baseUrl = process.env.E2E_BASE_URL || "https://127.0.0.1:18443";
 const password = process.env.E2E_APP_PASSWORD || "";
 const accountPassword = process.env.E2E_ACCOUNT_PASSWORD || password;
 const appUrl = "/app";
-const defaultWorkspaceId = "e2e-default";
 const expectedOwner = {
   id: process.env.E2E_EXPECT_ACCOUNT_ID || "default-owner",
   displayName: process.env.E2E_EXPECT_ACCOUNT_DISPLAY_NAME || "Default Owner",
@@ -21,14 +20,7 @@ const expectedOwnerPublicIdentity = {
   isDefaultUser: true,
 };
 
-async function switchToWorkspace(page, workspaceId = defaultWorkspaceId) {
-  const response = await page.request.post("/api/session/workspace", {
-    data: { workspaceId },
-  });
-  expect(response.ok()).toBe(true);
-}
-
-async function login(page, workspaceId = defaultWorkspaceId) {
+async function login(page) {
   await page.goto(appUrl);
   await expect(page.locator("#authOverlay")).toBeVisible();
   await expect(page.locator(".auth-copy")).toHaveText(
@@ -36,9 +28,6 @@ async function login(page, workspaceId = defaultWorkspaceId) {
   );
   await page.locator("#passwordInput").fill(accountPassword);
   await page.locator("#loginBtn").click();
-  await expect(page.locator("#authOverlay")).toBeHidden();
-  await switchToWorkspace(page, workspaceId);
-  await page.goto(appUrl);
   await expect(page.locator("#authOverlay")).toBeHidden();
 }
 
