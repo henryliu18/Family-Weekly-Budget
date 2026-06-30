@@ -123,10 +123,6 @@ npm run test:e2e -- --project=chromium
 
 If E2E fails, the workflow prints the container logs and then cleans up the isolated deployment.
 
-### Manual E2E workflow
-
-`e2e-deploy-test.yml` is a manual-only version of the same idea. It uses `latest`, creates a separate `e2e-manual-<run_id>` directory, and runs the same Playwright check suite through the localhost tunnel.
-
 ## Production VM deployment
 
 Production deployment uses:
@@ -284,7 +280,7 @@ TF_VAR_instance_shape=VM.Standard.E2.1.Micro
 
 - product work: local Docker on `http://127.0.0.1:5173/`
 - image publishing: `docker-image.yml`
-- isolated VM validation: built-in `e2e` job in `docker-image.yml` or manual `e2e-deploy-test.yml`
+- isolated VM validation: built-in `e2e` job in `docker-image.yml`
 - production deployment: `deploy-vm.yml`
 - state bucket bootstrap: `infra-bootstrap/`
 - main OCI infrastructure: `infra/`
