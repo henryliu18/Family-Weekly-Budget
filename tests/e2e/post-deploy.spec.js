@@ -202,6 +202,12 @@ test("authenticated sessions resolve isolated workspaces", async () => {
       expect(loginResponse.ok()).toBe(true);
       await expect(loginResponse.json()).resolves.toMatchObject({
         accountId: "default-owner",
+        user: {
+          id: "default-owner",
+          displayName: "Default Owner",
+          email: null,
+          authProvider: "password",
+        },
         workspaceId: workspace.workspaceId,
       });
 
@@ -287,6 +293,13 @@ test("account read model returns only current account workspaces", async () => {
 
   const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
   try {
+    const unauthenticatedSession = await context.get("/api/session");
+    expect(unauthenticatedSession.ok()).toBe(true);
+    await expect(unauthenticatedSession.json()).resolves.toMatchObject({
+      authenticated: false,
+      user: null,
+    });
+
     const unauthenticatedResponse = await context.get("/api/me");
     expect(unauthenticatedResponse.status()).toBe(401);
 
@@ -298,9 +311,16 @@ test("account read model returns only current account workspaces", async () => {
     const response = await context.get("/api/me");
     expect(response.ok()).toBe(true);
     const me = await response.json();
+    expect(me.user).toEqual({
+      id: "default-owner",
+      displayName: "Default Owner",
+      email: null,
+      authProvider: "password",
+    });
     expect(me.account).toEqual({
       id: "default-owner",
       displayName: "Default Owner",
+      email: null,
       authProvider: "password",
     });
     expect(me.currentWorkspace).toEqual({
@@ -338,6 +358,29 @@ test("workspace management API creates account-owned isolated workspaces", async
       data: { password, workspaceId: "e2e-default" },
     });
     expect(loginResponse.ok()).toBe(true);
+    await expect(loginResponse.json()).resolves.toMatchObject({
+      accountId: "default-owner",
+      user: {
+        id: "default-owner",
+        displayName: "Default Owner",
+        email: null,
+        authProvider: "password",
+      },
+      workspaceId: "e2e-default",
+    });
+
+    const sessionResponse = await context.get("/api/session");
+    expect(sessionResponse.ok()).toBe(true);
+    await expect(sessionResponse.json()).resolves.toMatchObject({
+      authenticated: true,
+      accountId: "default-owner",
+      user: {
+        id: "default-owner",
+        displayName: "Default Owner",
+        email: null,
+        authProvider: "password",
+      },
+    });
 
     const invalidCreate = await context.post("/api/workspaces", {
       data: { name: "x" },
@@ -452,6 +495,12 @@ test("session workspace switch changes current state workspace", async () => {
     expect(switchToBravo.ok()).toBe(true);
     await expect(switchToBravo.json()).resolves.toMatchObject({
       accountId: "default-owner",
+      user: {
+        id: "default-owner",
+        displayName: "Default Owner",
+        email: null,
+        authProvider: "password",
+      },
       workspaceId: "e2e-session-bravo",
     });
 
