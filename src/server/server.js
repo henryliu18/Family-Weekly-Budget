@@ -103,9 +103,21 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   return `${PASSWORD_HASH_ALGORITHM}$${salt}$${key}`;
 }
 
+function isSupportedPasswordHash(storedHash) {
+  const parts = String(storedHash || "").split("$");
+  if (parts.length !== 3) return false;
+  const [algorithm, salt, expectedKey] = parts;
+  return (
+    algorithm === PASSWORD_HASH_ALGORITHM &&
+    !!salt &&
+    /^[a-fA-F0-9]+$/.test(expectedKey || "") &&
+    Buffer.from(expectedKey, "hex").length > 0
+  );
+}
+
 function verifyPassword(password, storedHash) {
+  if (!isSupportedPasswordHash(storedHash)) return false;
   const [algorithm, salt, expectedKey] = String(storedHash || "").split("$");
-  if (algorithm !== PASSWORD_HASH_ALGORITHM || !salt || !expectedKey) return false;
   const actual = crypto.scryptSync(String(password || ""), salt, Buffer.from(expectedKey, "hex").length);
   const expected = Buffer.from(expectedKey, "hex");
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
@@ -226,7 +238,7 @@ function ensureFirstOwnerBootstrapRecord(registry) {
   if (!account.email && identity.email) updates.email = identity.email;
   if (!account.authProvider) updates.authProvider = identity.authProvider;
   if (!account.authSubject) updates.authSubject = identity.authSubject;
-  if (!account.passwordHash && identity.passwordHash) updates.passwordHash = identity.passwordHash;
+  if (identity.passwordHash && !isSupportedPasswordHash(account.passwordHash)) updates.passwordHash = identity.passwordHash;
   if (account.isDefaultUser === undefined) updates.isDefaultUser = identity.id === FALLBACK_ACCOUNT_ID;
   if (!account.updatedAt) updates.updatedAt = nowIso();
   if (Object.keys(updates).length > 0) {
@@ -350,8 +362,8 @@ function firstOwnerBootstrapSummary(registry) {
     accountExists: !!account.id,
     emailPresent: !!account.email,
     providerSubjectPresent: !!account.authSubject,
-    accountPasswordConfigured: !!account.passwordHash,
-    accountPasswordBootstrapConfigured: !!(DEFAULT_ACCOUNT_PASSWORD_HASH || DEFAULT_ACCOUNT_PASSWORD),
+    accountPasswordConfigured: isSupportedPasswordHash(account.passwordHash),
+    accountPasswordBootstrapConfigured: isSupportedPasswordHash(DEFAULT_ACCOUNT_PASSWORD_HASH) || !!DEFAULT_ACCOUNT_PASSWORD,
     usingFallbackAccountId: DEFAULT_ACCOUNT_ID === FALLBACK_ACCOUNT_ID,
     usingFallbackDisplayName: (account.displayName || DEFAULT_ACCOUNT_DISPLAY_NAME) === FALLBACK_ACCOUNT_DISPLAY_NAME,
     usingFallbackAuthProvider: (account.authProvider || DEFAULT_AUTH_PROVIDER) === FALLBACK_AUTH_PROVIDER,
@@ -361,7 +373,7 @@ function firstOwnerBootstrapSummary(registry) {
 
 function authSummary(registry) {
   return {
-    accountPasswordEnabled: !!registry.accounts[DEFAULT_ACCOUNT_ID]?.passwordHash,
+    accountPasswordEnabled: isSupportedPasswordHash(registry.accounts[DEFAULT_ACCOUNT_ID]?.passwordHash),
     fallbackPasswordEnabled: !!APP_PASSWORD,
   };
 }
