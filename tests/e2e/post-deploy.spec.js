@@ -4,6 +4,20 @@ const httpUrl = process.env.E2E_HTTP_URL || "http://127.0.0.1:18080";
 const baseUrl = process.env.E2E_BASE_URL || "https://127.0.0.1:18443";
 const password = process.env.E2E_APP_PASSWORD || "";
 const appUrl = "/app";
+const expectedOwner = {
+  id: process.env.E2E_EXPECT_ACCOUNT_ID || "default-owner",
+  displayName: process.env.E2E_EXPECT_ACCOUNT_DISPLAY_NAME || "Default Owner",
+  email: process.env.E2E_EXPECT_ACCOUNT_EMAIL || null,
+  authProvider: process.env.E2E_EXPECT_AUTH_PROVIDER || "password",
+};
+const expectedOwnerPublicIdentity = {
+  id: expectedOwner.id,
+  userId: expectedOwner.id,
+  displayName: expectedOwner.displayName,
+  email: expectedOwner.email,
+  authProvider: expectedOwner.authProvider,
+  isDefaultUser: true,
+};
 
 async function login(page) {
   await page.goto(appUrl);
@@ -220,6 +234,20 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
       tokenStorage: "sha256",
       persistent: true,
     },
+    bootstrap: {
+      accountId: expectedOwner.id,
+      configuredDisplayName: true,
+      configuredEmail: !!expectedOwner.email,
+      authProviderConfigured: true,
+      providerSubjectConfigured: true,
+      accountExists: true,
+      emailPresent: !!expectedOwner.email,
+      providerSubjectPresent: true,
+      usingFallbackAccountId: expectedOwner.id === "default-owner",
+      usingFallbackDisplayName: expectedOwner.displayName === "Default Owner",
+      usingFallbackAuthProvider: expectedOwner.authProvider === "password",
+      migrationSafe: true,
+    },
   });
   expect(health.registry.accountCount).toBeGreaterThanOrEqual(1);
   expect(health.registry.workspaceCount).toBeGreaterThanOrEqual(1);
@@ -231,6 +259,7 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
   const serialized = JSON.stringify(health);
   expect(serialized).not.toContain("password");
   expect(serialized).not.toContain("authSubject");
+  expect(serialized).not.toContain("DEFAULT_AUTH_SUBJECT");
   expect(serialized).not.toContain("tokenHash");
   expect(serialized).not.toContain("accounts");
   expect(serialized).not.toContain("memberships");
@@ -253,15 +282,8 @@ test("authenticated sessions resolve isolated workspaces", async () => {
       });
       expect(loginResponse.ok()).toBe(true);
       await expect(loginResponse.json()).resolves.toMatchObject({
-        accountId: "default-owner",
-        user: {
-          id: "default-owner",
-          userId: "default-owner",
-          displayName: "Default Owner",
-          email: null,
-          authProvider: "password",
-          isDefaultUser: true,
-        },
+        accountId: expectedOwner.id,
+        user: expectedOwnerPublicIdentity,
         workspaceId: workspace.workspaceId,
       });
 
@@ -365,22 +387,8 @@ test("account read model returns only current account workspaces", async () => {
     const response = await context.get("/api/me");
     expect(response.ok()).toBe(true);
     const me = await response.json();
-    expect(me.user).toEqual({
-      id: "default-owner",
-      userId: "default-owner",
-      displayName: "Default Owner",
-      email: null,
-      authProvider: "password",
-      isDefaultUser: true,
-    });
-    expect(me.account).toEqual({
-      id: "default-owner",
-      userId: "default-owner",
-      displayName: "Default Owner",
-      email: null,
-      authProvider: "password",
-      isDefaultUser: true,
-    });
+    expect(me.user).toEqual(expectedOwnerPublicIdentity);
+    expect(me.account).toEqual(expectedOwnerPublicIdentity);
     expect(me.currentWorkspace).toEqual({
       id: "e2e-session-alpha",
       name: "e2e-session-alpha",
@@ -422,7 +430,7 @@ test("registry diagnostics are authenticated and safe", async () => {
       ok: true,
       registry: {
         schemaVersion: 1,
-        currentUserId: "default-owner",
+        currentUserId: expectedOwner.id,
         currentWorkspaceId: "e2e-default",
         defaultOwnerExists: true,
         defaultUserIdentityReady: true,
@@ -439,6 +447,18 @@ test("registry diagnostics are authenticated and safe", async () => {
       schemaVersion: 1,
       tokenStorage: "sha256",
       persistent: true,
+    });
+    expect(diagnostics.bootstrap).toMatchObject({
+      accountId: expectedOwner.id,
+      configuredEmail: !!expectedOwner.email,
+      authProviderConfigured: true,
+      accountExists: true,
+      emailPresent: !!expectedOwner.email,
+      providerSubjectPresent: true,
+      usingFallbackAccountId: expectedOwner.id === "default-owner",
+      usingFallbackDisplayName: expectedOwner.displayName === "Default Owner",
+      usingFallbackAuthProvider: expectedOwner.authProvider === "password",
+      migrationSafe: true,
     });
     expect(diagnostics.sessions.activeSessionCount).toBeGreaterThanOrEqual(1);
 
@@ -512,15 +532,8 @@ test("workspace management API creates account-owned isolated workspaces", async
     });
     expect(loginResponse.ok()).toBe(true);
     await expect(loginResponse.json()).resolves.toMatchObject({
-      accountId: "default-owner",
-      user: {
-        id: "default-owner",
-        userId: "default-owner",
-        displayName: "Default Owner",
-        email: null,
-        authProvider: "password",
-        isDefaultUser: true,
-      },
+      accountId: expectedOwner.id,
+      user: expectedOwnerPublicIdentity,
       workspaceId: "e2e-default",
     });
 
@@ -528,15 +541,8 @@ test("workspace management API creates account-owned isolated workspaces", async
     expect(sessionResponse.ok()).toBe(true);
     await expect(sessionResponse.json()).resolves.toMatchObject({
       authenticated: true,
-      accountId: "default-owner",
-      user: {
-        id: "default-owner",
-        userId: "default-owner",
-        displayName: "Default Owner",
-        email: null,
-        authProvider: "password",
-        isDefaultUser: true,
-      },
+      accountId: expectedOwner.id,
+      user: expectedOwnerPublicIdentity,
     });
 
     const invalidCreate = await context.post("/api/workspaces", {
@@ -651,15 +657,8 @@ test("session workspace switch changes current state workspace", async () => {
     });
     expect(switchToBravo.ok()).toBe(true);
     await expect(switchToBravo.json()).resolves.toMatchObject({
-      accountId: "default-owner",
-      user: {
-        id: "default-owner",
-        userId: "default-owner",
-        displayName: "Default Owner",
-        email: null,
-        authProvider: "password",
-        isDefaultUser: true,
-      },
+      accountId: expectedOwner.id,
+      user: expectedOwnerPublicIdentity,
       workspaceId: "e2e-session-bravo",
     });
 

@@ -31,6 +31,9 @@ const DEFAULT_ACCOUNT_DISPLAY_NAME = process.env.DEFAULT_ACCOUNT_DISPLAY_NAME ||
 const DEFAULT_ACCOUNT_EMAIL = process.env.DEFAULT_ACCOUNT_EMAIL || "";
 const DEFAULT_AUTH_PROVIDER = process.env.DEFAULT_AUTH_PROVIDER || "password";
 const DEFAULT_AUTH_SUBJECT = process.env.DEFAULT_AUTH_SUBJECT || DEFAULT_ACCOUNT_ID;
+const FALLBACK_ACCOUNT_ID = "default-owner";
+const FALLBACK_ACCOUNT_DISPLAY_NAME = "Default Owner";
+const FALLBACK_AUTH_PROVIDER = "password";
 const DEFAULT_PORT = 5173;
 const DEFAULT_HTTPS_PORT = 5443;
 const AUTH_COOKIE = "family_budget_session";
@@ -157,6 +160,16 @@ function registeredAccount(accountId, displayName = accountId) {
   };
 }
 
+function configuredFirstOwnerIdentity() {
+  return {
+    id: DEFAULT_ACCOUNT_ID,
+    displayName: DEFAULT_ACCOUNT_DISPLAY_NAME,
+    email: DEFAULT_ACCOUNT_EMAIL || null,
+    authProvider: DEFAULT_AUTH_PROVIDER,
+    authSubject: DEFAULT_AUTH_SUBJECT,
+  };
+}
+
 function normalizeAccountRecord(account, accountId) {
   const id = normalizeWorkspaceId(account?.id || accountId);
   const provider = account?.authProvider || DEFAULT_AUTH_PROVIDER;
@@ -183,6 +196,26 @@ function ensureAccountRecord(registry, accountId, displayName = accountId) {
     registry.accounts[id] = normalizeAccountRecord(registry.accounts[id], id);
   }
   return registry.accounts[id];
+}
+
+function ensureFirstOwnerBootstrapRecord(registry) {
+  const identity = configuredFirstOwnerIdentity();
+  const account = ensureAccountRecord(registry, identity.id, identity.displayName);
+  const updates = {};
+  if (!account.userId) updates.userId = identity.id;
+  if (!account.displayName) updates.displayName = identity.displayName;
+  if (!account.email && identity.email) updates.email = identity.email;
+  if (!account.authProvider) updates.authProvider = identity.authProvider;
+  if (!account.authSubject) updates.authSubject = identity.authSubject;
+  if (account.isDefaultUser === undefined) updates.isDefaultUser = identity.id === FALLBACK_ACCOUNT_ID;
+  if (!account.updatedAt) updates.updatedAt = nowIso();
+  if (Object.keys(updates).length > 0) {
+    registry.accounts[identity.id] = {
+      ...account,
+      ...updates,
+    };
+  }
+  return registry.accounts[identity.id];
 }
 
 function ensureWorkspaceRecord(registry, workspaceId, name = workspaceId) {
@@ -213,7 +246,7 @@ function ensureMembershipRecord(registry, accountId, workspaceId, role = "owner"
 }
 
 function ensureDefaultIdentity(registry) {
-  const account = ensureAccountRecord(registry, DEFAULT_ACCOUNT_ID, DEFAULT_ACCOUNT_DISPLAY_NAME);
+  const account = ensureFirstOwnerBootstrapRecord(registry);
   [DEFAULT_WORKSPACE_ID, ...WORKSPACE_REGISTRY_SEED_IDS].forEach((workspaceId) => {
     const workspace = ensureWorkspaceRecord(
       registry,
@@ -283,6 +316,24 @@ function registryHealthSummary(registry, session = null) {
     workspaceStoreRootConfigured: !!WORKSPACE_STORE_ROOT,
     currentUserId: session?.accountId || null,
     currentWorkspaceId: session?.workspaceId || null,
+  };
+}
+
+function firstOwnerBootstrapSummary(registry) {
+  const account = registry.accounts[DEFAULT_ACCOUNT_ID] || {};
+  return {
+    accountId: DEFAULT_ACCOUNT_ID,
+    configuredDisplayName: !!DEFAULT_ACCOUNT_DISPLAY_NAME,
+    configuredEmail: !!DEFAULT_ACCOUNT_EMAIL,
+    authProviderConfigured: !!DEFAULT_AUTH_PROVIDER,
+    providerSubjectConfigured: !!DEFAULT_AUTH_SUBJECT,
+    accountExists: !!account.id,
+    emailPresent: !!account.email,
+    providerSubjectPresent: !!account.authSubject,
+    usingFallbackAccountId: DEFAULT_ACCOUNT_ID === FALLBACK_ACCOUNT_ID,
+    usingFallbackDisplayName: (account.displayName || DEFAULT_ACCOUNT_DISPLAY_NAME) === FALLBACK_ACCOUNT_DISPLAY_NAME,
+    usingFallbackAuthProvider: (account.authProvider || DEFAULT_AUTH_PROVIDER) === FALLBACK_AUTH_PROVIDER,
+    migrationSafe: true,
   };
 }
 
@@ -697,6 +748,7 @@ async function serveApi(req, res, pathname) {
       buildTime: BUILD_TIME,
       authEnabled: !!APP_PASSWORD,
       registry: registryHealthSummary(registry),
+      bootstrap: firstOwnerBootstrapSummary(registry),
       sessions: sessionRegistrySummary(),
       storage: {
         workspaceStoreRootConfigured: !!WORKSPACE_STORE_ROOT,
@@ -716,6 +768,7 @@ async function serveApi(req, res, pathname) {
     sendJson(res, 200, {
       ok: true,
       registry: registryHealthSummary(registry, session),
+      bootstrap: firstOwnerBootstrapSummary(registry),
       sessions: sessionRegistrySummary(),
     });
     return true;
