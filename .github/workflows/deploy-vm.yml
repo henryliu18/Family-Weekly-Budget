@@ -70,7 +70,7 @@ jobs:
           grep -Ev '^(APP_IMAGE_TAG|APP_PASSWORD|DEFAULT_ACCOUNT_PASSWORD_HASH|APP_BUILD_VERSION|APP_BUILD_TIME)=' .env > .env.tmp || true
           printf 'APP_IMAGE_TAG=%s\n' "$APP_IMAGE_TAG" >> .env.tmp
           printf 'APP_PASSWORD=%s\n' "$(printf '%s' "$APP_PASSWORD_B64" | base64 -d)" >> .env.tmp
-          printf 'DEFAULT_ACCOUNT_PASSWORD_HASH=%s\n' "$(printf '%s' "$DEFAULT_ACCOUNT_PASSWORD_HASH_B64" | base64 -d)" >> .env.tmp
+          printf "DEFAULT_ACCOUNT_PASSWORD_HASH='%s'\n" "$(printf '%s' "$DEFAULT_ACCOUNT_PASSWORD_HASH_B64" | base64 -d)" >> .env.tmp
           mv .env.tmp .env
 
           sudo -n docker compose pull

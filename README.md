@@ -163,7 +163,7 @@ The workflow:
 
 Automatic deploys use the immutable `sha-<commit>` image tag from the upstream build workflow. Manual runs fall back to `latest`.
 
-Production authentication checks the account registry password hash first. If the default account does not yet have a `passwordHash`, the server bootstraps it from `DEFAULT_ACCOUNT_PASSWORD_HASH`. `APP_PASSWORD` remains as a fallback during the current development phase so a bad hash secret does not lock out the only user.
+Production authentication checks the account registry password hash first. If the default account does not yet have a valid `scrypt$<salt>$<key>` `passwordHash`, the server bootstraps it from `DEFAULT_ACCOUNT_PASSWORD_HASH`. `APP_PASSWORD` remains as a fallback during the current development phase so a bad hash secret does not lock out the only user.
 
 ## Terraform infrastructure
 
