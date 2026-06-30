@@ -138,10 +138,35 @@ function normalizeWorkspaceId(workspaceId) {
   return value;
 }
 
+function normalizeAccountId(accountId) {
+  const value = String(accountId || "").trim();
+  if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
+    throw new AccountRegistryError("Account id contains unsupported characters.", 400);
+  }
+  return value;
+}
+
 function normalizeWorkspaceName(name) {
   const value = String(name || "").trim().replace(/\s+/g, " ");
   if (value.length < 2 || value.length > 80) {
     throw new AccountRegistryError("Workspace name must be between 2 and 80 characters.", 400);
+  }
+  return value;
+}
+
+function normalizeEmail(email) {
+  const value = String(email || "").trim().toLowerCase();
+  if (!value) return null;
+  if (value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    throw new AccountRegistryError("Email must be a valid address.", 400);
+  }
+  return value;
+}
+
+function normalizePassword(password) {
+  const value = String(password || "");
+  if (value.length < 8 || value.length > 256) {
+    throw new AccountRegistryError("Password must be between 8 and 256 characters.", 400);
   }
   return value;
 }
@@ -154,6 +179,18 @@ function workspaceSlugFromName(name) {
     .slice(0, 40)
     .replace(/-+$/g, "");
   return slug || "workspace";
+}
+
+function accountSlugFromSeed(seed) {
+  const slug = String(seed || "")
+    .trim()
+    .toLowerCase()
+    .replace(/@.*/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+  return slug || "account";
 }
 
 function emptyAccountRegistry() {
@@ -575,6 +612,17 @@ function uniqueWorkspaceId(registry, name) {
   return normalizeWorkspaceId(candidate);
 }
 
+function uniqueAccountId(registry, seed) {
+  const base = accountSlugFromSeed(seed);
+  let candidate = base;
+  let index = 2;
+  while (registry.accounts[candidate]) {
+    candidate = `${base}-${index}`;
+    index += 1;
+  }
+  return normalizeAccountId(candidate);
+}
+
 async function ensureFreshWorkspaceStore(workspaceId) {
   const storePath = storePathForWorkspace(workspaceId);
   try {
@@ -586,6 +634,59 @@ async function ensureFreshWorkspaceStore(workspaceId) {
   const state = await loadDefaultState();
   await fs.mkdir(path.dirname(storePath), { recursive: true });
   await fs.writeFile(storePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
+function isDefaultOwnerSession(session) {
+  return session?.accountId === DEFAULT_ACCOUNT_ID;
+}
+
+async function createAccountForSession(session, accountInput) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  if (!isDefaultOwnerSession(session)) {
+    throw new AccountRegistryError("Only the default owner can create accounts.", 403);
+  }
+
+  const registry = await ensureAccountRegistry();
+  const displayName = normalizeWorkspaceName(accountInput?.displayName || accountInput?.email || "New Account");
+  const email = normalizeEmail(accountInput?.email);
+  const password = normalizePassword(accountInput?.password);
+  const requestedAccountId = String(accountInput?.accountId || "").trim();
+  const accountId = requestedAccountId ? normalizeAccountId(requestedAccountId) : uniqueAccountId(registry, email || displayName);
+  if (registry.accounts[accountId]) {
+    throw new AccountRegistryError("Account already exists.", 409);
+  }
+
+  const workspaceName = normalizeWorkspaceName(accountInput?.workspaceName || `${displayName} Workspace`);
+  const workspaceId = uniqueWorkspaceId(registry, workspaceName);
+  const now = nowIso();
+  const account = {
+    id: accountId,
+    userId: accountId,
+    displayName,
+    email,
+    authProvider: "password",
+    authSubject: accountId,
+    passwordHash: hashPassword(password),
+    isDefaultUser: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  registry.accounts[account.id] = account;
+  const workspace = ensureWorkspaceRecord(registry, workspaceId, workspaceName);
+  ensureMembershipRecord(registry, account.id, workspace.id, "owner");
+  await ensureFreshWorkspaceStore(workspace.id);
+  await writeAccountRegistry(registry);
+
+  return {
+    account: publicUserIdentity(account),
+    workspace: {
+      id: workspace.id,
+      name: workspace.name,
+      role: "owner",
+    },
+  };
 }
 
 async function createWorkspaceForSession(session, name) {
@@ -747,15 +848,16 @@ function createSessionToken() {
   return crypto.randomBytes(24).toString("hex");
 }
 
-async function createSession(workspaceId) {
+async function createSession(accountId, workspaceId) {
+  const account = normalizeAccountId(accountId || DEFAULT_ACCOUNT_ID);
   const token = createSessionToken();
   const tokenHash = sessionTokenHash(token);
   const createdAt = nowIso();
   const session = {
     id: tokenHash,
     tokenHash,
-    accountId: DEFAULT_ACCOUNT_ID,
-    workspaceId: await registeredWorkspaceIdForAccount(DEFAULT_ACCOUNT_ID, workspaceId),
+    accountId: account,
+    workspaceId: await registeredWorkspaceIdForAccount(account, workspaceId),
     createdAt,
     lastSeenAt: createdAt,
     expiresAt: sessionExpiresAt(createdAt),
@@ -765,11 +867,22 @@ async function createSession(workspaceId) {
   return { token, session };
 }
 
-async function authenticateSessionPassword(password) {
+async function authenticateSessionPassword(password, accountId = "") {
   const registry = await ensureAccountRegistry();
-  const account = registry.accounts[DEFAULT_ACCOUNT_ID];
-  if (account?.passwordHash && verifyPassword(password, account.passwordHash)) {
-    return { ok: true, accountId: account.id, method: "account-password" };
+  const targetAccountId = String(accountId || "").trim();
+  if (targetAccountId) {
+    const account = registry.accounts[normalizeAccountId(targetAccountId)];
+    if (account?.passwordHash && verifyPassword(password, account.passwordHash)) {
+      return { ok: true, accountId: account.id, method: "account-password" };
+    }
+    return { ok: false };
+  }
+
+  const matchingAccount = Object.values(registry.accounts).find(
+    (account) => account?.passwordHash && verifyPassword(password, account.passwordHash),
+  );
+  if (matchingAccount) {
+    return { ok: true, accountId: matchingAccount.id, method: "account-password" };
   }
   if (APP_PASSWORD && (password || "") === APP_PASSWORD) {
     return { ok: true, accountId: DEFAULT_ACCOUNT_ID, method: "fallback-password" };
@@ -835,6 +948,21 @@ async function serveApi(req, res, pathname) {
     return true;
   }
 
+  if (pathname === "/api/admin/accounts" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)) || "{}");
+    try {
+      const created = await createAccountForSession(sessionForRequest(req), body);
+      sendJson(res, 201, { ok: true, ...created });
+    } catch (error) {
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
   if (pathname === "/api/session" && req.method === "GET") {
     const session = sessionForRequest(req);
     const user = await userForSession(session);
@@ -864,14 +992,14 @@ async function serveApi(req, res, pathname) {
       sendJson(res, 200, { ok: true, authEnabled: false });
       return true;
     }
-    const authResult = await authenticateSessionPassword(body.password || "");
-    if (!authResult.ok) {
-      sendJson(res, 401, { error: "Invalid password" });
-      return true;
-    }
     let created;
     try {
-      created = await createSession(body.workspaceId);
+      const authResult = await authenticateSessionPassword(body.password || "", body.accountId || "");
+      if (!authResult.ok) {
+        sendJson(res, 401, { error: "Invalid password" });
+        return true;
+      }
+      created = await createSession(authResult.accountId, body.workspaceId);
     } catch (error) {
       if (error instanceof StorePathError || error instanceof AccountRegistryError) {
         sendJson(res, error.status || 400, { error: error.message });
