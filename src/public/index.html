@@ -27,46 +27,29 @@
           <button class="nav-tab" type="button" data-view="entry">本週輸入</button>
           <button class="nav-tab" type="button" data-view="history">歷史查詢</button>
           <button class="nav-tab" type="button" data-view="settings">分類設定</button>
+          <button id="createWorkspaceBtn" class="nav-tab workspace-create-btn hidden" type="button">New workspace</button>
+          <button id="logoutBtn" class="nav-tab topbar-logout hidden" type="button">登出</button>
         </nav>
 
-        <div class="topbar-menu" aria-label="Workspace and system controls">
-          <section class="topbar-group period-group" aria-label="Period controls">
-            <span class="topbar-group-label" data-i18n="periodControls">Period</span>
-            <label class="field compact-field">
-              <span data-i18n="month">月份</span>
-              <select id="monthSelect"></select>
-            </label>
-            <div class="topbar-actions">
-              <button id="addMonthBtn" class="secondary-btn" type="button">新增月份</button>
-              <button id="deleteMonthBtn" class="danger-btn" type="button">移除目前月份</button>
-            </div>
-          </section>
-
-          <section class="topbar-group workspace-group" aria-label="Workspace controls">
-            <span class="topbar-group-label" data-i18n="workspaceControls">Workspace</span>
-            <label id="workspaceSwitcher" class="field workspace-switcher hidden" for="workspaceSelect">
-              <span data-i18n="workspace">Workspace</span>
-              <select id="workspaceSelect"></select>
-              <small id="workspaceSwitchStatus" class="workspace-switch-status" role="status" aria-live="polite"></small>
-            </label>
-            <button id="createWorkspaceBtn" class="ghost-btn workspace-create-btn hidden" type="button">New workspace</button>
-          </section>
-
-          <section class="topbar-group system-group" aria-label="System controls">
-            <span class="topbar-group-label" data-i18n="systemControls">System</span>
-            <label class="field language-control compact-field">
-              <span data-i18n="language">Language</span>
-              <select id="languageSelect">
-                <option value="zh">中文</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-            <div class="build-version">
-              <span data-i18n="buildVersion">Build version</span>
-              <strong id="buildVersionValue">-</strong>
-            </div>
-            <button id="logoutBtn" class="ghost-btn topbar-logout hidden" type="button">登出</button>
-          </section>
+        <div class="topbar-controls" aria-label="Primary controls">
+          <button id="addMonthBtn" class="secondary-btn month-action-btn" type="button">新增月份</button>
+          <button id="deleteMonthBtn" class="danger-btn month-action-btn" type="button">移除目前月份</button>
+          <label class="field compact-field topbar-control-field">
+            <span data-i18n="month">月份</span>
+            <select id="monthSelect"></select>
+          </label>
+          <label id="workspaceSwitcher" class="field compact-field topbar-control-field workspace-switcher hidden" for="workspaceSelect">
+            <span data-i18n="workspace">Workspace</span>
+            <select id="workspaceSelect"></select>
+            <small id="workspaceSwitchStatus" class="workspace-switch-status" role="status" aria-live="polite"></small>
+          </label>
+          <label class="field language-control compact-field topbar-control-field">
+            <span data-i18n="language">Language</span>
+            <select id="languageSelect">
+              <option value="zh">中文</option>
+              <option value="en">English</option>
+            </select>
+          </label>
         </div>
       </header>
 
@@ -478,6 +461,13 @@
           </section>
         </section>
       </main>
+
+      <footer class="app-footer">
+        <div class="build-version">
+          <span data-i18n="buildVersion">Build version</span>
+          <strong id="buildVersionValue">-</strong>
+        </div>
+      </footer>
     </div>
 
     <dialog id="monthDialog">
