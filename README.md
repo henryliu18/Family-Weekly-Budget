@@ -14,6 +14,8 @@ A small family budget web app with three operational layers:
 - `infra-bootstrap/`: one-time Terraform stack that creates the OCI Object Storage bucket for Terraform state
 - `infra/`: main OCI Terraform stack for networking, VM, NLB, and cloud-init
 
+The local internal Traditional Chinese rebuild and developer runbook is kept in `internal-documentation/system-build-guide.zh-TW.md`. The `internal-documentation/` folder is intentionally local-only and ignored by git.
+
 ## Local Docker development
 
 Create the local runtime data file if it does not already exist:
