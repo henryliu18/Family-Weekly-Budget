@@ -5,6 +5,7 @@ const baseUrl = process.env.E2E_BASE_URL || "https://127.0.0.1:18443";
 const password = process.env.E2E_APP_PASSWORD || "";
 const accountPassword = process.env.E2E_ACCOUNT_PASSWORD || password;
 const appUrl = "/app";
+const defaultWorkspaceId = "e2e-default";
 const expectedOwner = {
   id: process.env.E2E_EXPECT_ACCOUNT_ID || "default-owner",
   displayName: process.env.E2E_EXPECT_ACCOUNT_DISPLAY_NAME || "Default Owner",
@@ -20,7 +21,14 @@ const expectedOwnerPublicIdentity = {
   isDefaultUser: true,
 };
 
-async function login(page) {
+async function switchToWorkspace(page, workspaceId = defaultWorkspaceId) {
+  const response = await page.request.post("/api/session/workspace", {
+    data: { workspaceId },
+  });
+  expect(response.ok()).toBe(true);
+}
+
+async function login(page, workspaceId = defaultWorkspaceId) {
   await page.goto(appUrl);
   await expect(page.locator("#authOverlay")).toBeVisible();
   await expect(page.locator(".auth-copy")).toHaveText(
@@ -29,6 +37,16 @@ async function login(page) {
   await page.locator("#passwordInput").fill(accountPassword);
   await page.locator("#loginBtn").click();
   await expect(page.locator("#authOverlay")).toBeHidden();
+  await switchToWorkspace(page, workspaceId);
+  await page.goto(appUrl);
+  await expect(page.locator("#authOverlay")).toBeHidden();
+}
+
+async function resetCurrentWorkspaceState(page) {
+  const response = await page.request.post("/api/reset");
+  expect(response.ok()).toBe(true);
+  await page.goto(appUrl);
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
 }
 
 async function expectCanvasReady(page, selector) {
@@ -78,6 +96,7 @@ async function restoreState(page, state) {
 }
 
 async function seedTrendMonths(page) {
+  await resetCurrentWorkspaceState(page);
   const base = await page.evaluate(() => structuredClone(appState));
   const limit = 15000;
   const months = [
@@ -877,6 +896,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
+  await resetCurrentWorkspaceState(page);
   await page.locator("#languageSelect").selectOption("en");
 
   await expect(page.locator("#monthSelect")).toBeVisible();
