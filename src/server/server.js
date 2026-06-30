@@ -131,8 +131,21 @@ function registeredAccount(accountId, displayName = accountId) {
   return {
     id,
     displayName,
+    email: null,
     authProvider: "password",
     createdAt: new Date().toISOString(),
+  };
+}
+
+function normalizeAccountRecord(account, accountId) {
+  const id = normalizeWorkspaceId(account?.id || accountId);
+  return {
+    ...account,
+    id,
+    displayName: account?.displayName || id,
+    email: account?.email || null,
+    authProvider: account?.authProvider || "password",
+    createdAt: account?.createdAt || new Date().toISOString(),
   };
 }
 
@@ -140,6 +153,8 @@ function ensureAccountRecord(registry, accountId, displayName = accountId) {
   const id = normalizeWorkspaceId(accountId);
   if (!registry.accounts[id]) {
     registry.accounts[id] = registeredAccount(id, displayName);
+  } else {
+    registry.accounts[id] = normalizeAccountRecord(registry.accounts[id], id);
   }
   return registry.accounts[id];
 }
@@ -196,6 +211,9 @@ async function readAccountRegistry() {
     const registry = JSON.parse(text);
     registry.version = registry.version || 1;
     registry.accounts = registry.accounts || {};
+    Object.entries(registry.accounts).forEach(([accountId, account]) => {
+      registry.accounts[accountId] = normalizeAccountRecord(account, accountId);
+    });
     registry.workspaces = registry.workspaces || {};
     registry.memberships = Array.isArray(registry.memberships) ? registry.memberships : [];
     return registry;
@@ -264,12 +282,17 @@ async function accountReadModelForSession(session) {
     .filter(Boolean);
   const currentWorkspace =
     workspaces.find((workspace) => workspace.id === session.workspaceId) || null;
+  const user = {
+    id: account.id,
+    displayName: account.displayName,
+    email: account.email || null,
+    authProvider: account.authProvider,
+  };
 
   return {
+    user,
     account: {
-      id: account.id,
-      displayName: account.displayName,
-      authProvider: account.authProvider,
+      ...user,
     },
     currentWorkspace,
     workspaces,
@@ -328,6 +351,19 @@ function sessionForRequest(req) {
   if (!APP_PASSWORD) return { accountId: DEFAULT_ACCOUNT_ID, workspaceId: DEFAULT_WORKSPACE_ID };
   const token = parseCookies(req)[AUTH_COOKIE];
   return token ? sessions.get(token) || null : null;
+}
+
+async function userForSession(session) {
+  if (!session) return null;
+  const registry = await ensureAccountRegistry();
+  const account = registry.accounts[session.accountId];
+  if (!account) return null;
+  return {
+    id: account.id,
+    displayName: account.displayName,
+    email: account.email || null,
+    authProvider: account.authProvider,
+  };
 }
 
 async function switchSessionWorkspace(req, workspaceId) {
@@ -483,10 +519,12 @@ async function serveApi(req, res, pathname) {
 
   if (pathname === "/api/session" && req.method === "GET") {
     const session = sessionForRequest(req);
+    const user = await userForSession(session);
     sendJson(res, 200, {
       authenticated: !APP_PASSWORD || !!session,
       authEnabled: !!APP_PASSWORD,
       accountId: session?.accountId || DEFAULT_ACCOUNT_ID,
+      user,
       workspaceId: session?.workspaceId || DEFAULT_WORKSPACE_ID,
     });
     return true;
@@ -529,6 +567,7 @@ async function serveApi(req, res, pathname) {
         ok: true,
         authEnabled: true,
         accountId: created.session.accountId,
+        user: await userForSession(created.session),
         workspaceId: created.session.workspaceId,
       },
       sessionCookie(created.token),
@@ -543,6 +582,7 @@ async function serveApi(req, res, pathname) {
       sendJson(res, 200, {
         ok: true,
         accountId: session.accountId,
+        user: await userForSession(session),
         workspaceId: session.workspaceId,
       });
     } catch (error) {
