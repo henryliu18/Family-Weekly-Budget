@@ -1060,6 +1060,61 @@ test("workspace create button adds and switches to a new workspace", async ({ pa
   expect(me.workspaces.map((workspace) => workspace.id)).toContain(selectedWorkspaceId);
 });
 
+test("account admin UI creates secondary account with isolated workspace", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const suffix = Date.now().toString(36);
+  const accountId = `e2e-ui-account-${suffix}`;
+  const displayName = `E2E UI Account ${suffix}`;
+  const workspaceName = `E2E UI Account Workspace ${suffix}`;
+  const secondaryPassword = `e2e-ui-password-${suffix}`;
+
+  await login(page);
+  await page.locator("#languageSelect").selectOption("en");
+  await page.locator('.nav-tab[data-view="settings"]').click();
+
+  await expect(page.locator("#accountAdminPanel")).toBeVisible();
+  await page.locator("#newAccountIdInput").fill(accountId);
+  await page.locator("#newAccountDisplayNameInput").fill(displayName);
+  await page.locator("#newAccountEmailInput").fill(`${accountId}@example.test`);
+  await page.locator("#newAccountWorkspaceInput").fill(workspaceName);
+  await page.locator("#newAccountPasswordInput").fill(secondaryPassword);
+  await page.locator("#createAccountBtn").click();
+
+  await expect(page.locator("#accountAdminStatus")).toHaveText(
+    `Created ${displayName} with workspace ${workspaceName}.`,
+  );
+  await expect(page.locator("#accountAdminResult")).toContainText(accountId);
+  await expect(page.locator("#accountAdminResult")).toContainText(workspaceName);
+  await expect(page.locator("#newAccountPasswordInput")).toHaveValue("");
+
+  await page.locator("#logoutBtn").click();
+  await expect(page.locator("#authOverlay")).toBeVisible();
+  await page.locator("#loginAccountIdInput").fill(accountId);
+  await page.locator("#passwordInput").fill(secondaryPassword);
+  await page.locator("#loginBtn").click();
+
+  await expect(page.locator("#authOverlay")).toBeHidden();
+  await expect(page.locator("#accountAdminPanel")).toBeHidden();
+  await expect(page.locator("#workspaceSelect option")).toHaveCount(1);
+  await expect(page.locator("#workspaceSelect option:checked")).toHaveText(workspaceName);
+
+  const secondaryMeResponse = await page.request.get("/api/me");
+  expect(secondaryMeResponse.ok()).toBe(true);
+  const secondaryMe = await secondaryMeResponse.json();
+  expect(secondaryMe.account).toMatchObject({
+    id: accountId,
+    displayName,
+    email: `${accountId}@example.test`,
+    isDefaultUser: false,
+  });
+  expect(secondaryMe.currentWorkspace).toMatchObject({
+    name: workspaceName,
+    role: "owner",
+  });
+  expect(secondaryMe.workspaces).toHaveLength(1);
+});
+
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
