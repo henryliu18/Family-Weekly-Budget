@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "hash-password": "node scripts/hash-password.js",
     "test:e2e": "playwright test tests/e2e/post-deploy.spec.js"
   },
   "devDependencies": {
