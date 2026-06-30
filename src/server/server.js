@@ -21,6 +21,7 @@ const WORKSPACE_REGISTRY_UNOWNED_SEED_IDS = (process.env.WORKSPACE_REGISTRY_UNOW
   .split(",")
   .map((workspaceId) => workspaceId.trim())
   .filter(Boolean);
+const ACCOUNT_REGISTRY_SCHEMA_VERSION = 1;
 const DEFAULT_ACCOUNT_ID = process.env.DEFAULT_ACCOUNT_ID || "default-owner";
 const DEFAULT_PORT = 5173;
 const DEFAULT_HTTPS_PORT = 5443;
@@ -110,7 +111,7 @@ function workspaceSlugFromName(name) {
 
 function emptyAccountRegistry() {
   return {
-    version: 1,
+    version: ACCOUNT_REGISTRY_SCHEMA_VERSION,
     accounts: {},
     workspaces: {},
     memberships: [],
@@ -209,7 +210,10 @@ async function readAccountRegistry() {
   try {
     const text = await fs.readFile(ACCOUNT_REGISTRY_PATH, "utf8");
     const registry = JSON.parse(text);
-    registry.version = registry.version || 1;
+    registry.version = registry.version || ACCOUNT_REGISTRY_SCHEMA_VERSION;
+    if (registry.version > ACCOUNT_REGISTRY_SCHEMA_VERSION) {
+      throw new AccountRegistryError("Account registry schema is newer than this server supports.", 500);
+    }
     registry.accounts = registry.accounts || {};
     Object.entries(registry.accounts).forEach(([accountId, account]) => {
       registry.accounts[accountId] = normalizeAccountRecord(account, accountId);
@@ -221,6 +225,25 @@ async function readAccountRegistry() {
     if (error.code !== "ENOENT") throw error;
   }
   return buildDefaultAccountRegistry();
+}
+
+function registryHealthSummary(registry, session = null) {
+  const defaultOwnerExists = !!registry.accounts[DEFAULT_ACCOUNT_ID];
+  const defaultWorkspaceExists = !!registry.workspaces[DEFAULT_WORKSPACE_ID];
+  const defaultMembershipExists = hasMembership(registry, DEFAULT_ACCOUNT_ID, DEFAULT_WORKSPACE_ID);
+
+  return {
+    schemaVersion: registry.version,
+    accountCount: Object.keys(registry.accounts).length,
+    workspaceCount: Object.keys(registry.workspaces).length,
+    membershipCount: registry.memberships.length,
+    defaultOwnerExists,
+    defaultWorkspaceExists,
+    defaultMembershipExists,
+    workspaceStoreRootConfigured: !!WORKSPACE_STORE_ROOT,
+    currentUserId: session?.accountId || null,
+    currentWorkspaceId: session?.workspaceId || null,
+  };
 }
 
 async function writeAccountRegistry(registry) {
@@ -506,13 +529,32 @@ async function serveApi(req, res, pathname) {
   }
 
   if (pathname === "/api/health" && req.method === "GET") {
-    await ensureAccountRegistry();
+    const registry = await ensureAccountRegistry();
     await ensureStoreFile();
     sendJson(res, 200, {
       ok: true,
       buildVersion: BUILD_VERSION,
       buildTime: BUILD_TIME,
       authEnabled: !!APP_PASSWORD,
+      registry: registryHealthSummary(registry),
+      storage: {
+        workspaceStoreRootConfigured: !!WORKSPACE_STORE_ROOT,
+        defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
+      },
+    });
+    return true;
+  }
+
+  if (pathname === "/api/admin/registry/diagnostics" && req.method === "GET") {
+    const session = sessionForRequest(req);
+    if (!session) {
+      authRequired(res);
+      return true;
+    }
+    const registry = await ensureAccountRegistry();
+    sendJson(res, 200, {
+      ok: true,
+      registry: registryHealthSummary(registry, session),
     });
     return true;
   }

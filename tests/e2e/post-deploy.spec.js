@@ -184,6 +184,35 @@ test("authenticated state API persists current workspace data", async ({ page })
   }
 });
 
+test("health exposes safe registry and storage diagnostics", async ({ request }) => {
+  const response = await request.get("/api/health");
+  expect(response.ok()).toBe(true);
+  const health = await response.json();
+
+  expect(health).toMatchObject({
+    ok: true,
+    registry: {
+      schemaVersion: 1,
+      defaultOwnerExists: true,
+      defaultWorkspaceExists: true,
+      defaultMembershipExists: true,
+      workspaceStoreRootConfigured: true,
+    },
+    storage: {
+      workspaceStoreRootConfigured: true,
+      defaultWorkspaceId: "e2e-default",
+    },
+  });
+  expect(health.registry.accountCount).toBeGreaterThanOrEqual(1);
+  expect(health.registry.workspaceCount).toBeGreaterThanOrEqual(1);
+  expect(health.registry.membershipCount).toBeGreaterThanOrEqual(1);
+
+  const serialized = JSON.stringify(health);
+  expect(serialized).not.toContain("password");
+  expect(serialized).not.toContain("accounts");
+  expect(serialized).not.toContain("memberships");
+});
+
 test("authenticated sessions resolve isolated workspaces", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
@@ -338,6 +367,47 @@ test("account read model returns only current account workspaces", async () => {
     expect(me.workspaces.map((workspace) => workspace.id)).not.toContain("e2e-unowned-workspace");
     expect(JSON.stringify(me)).not.toContain("memberships");
     expect(JSON.stringify(me)).not.toContain("accounts");
+  } finally {
+    await context.dispose();
+  }
+});
+
+test("registry diagnostics are authenticated and safe", async () => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  try {
+    const unauthenticatedResponse = await context.get("/api/admin/registry/diagnostics");
+    expect(unauthenticatedResponse.status()).toBe(401);
+
+    const loginResponse = await context.post("/api/session", {
+      data: { password, workspaceId: "e2e-default" },
+    });
+    expect(loginResponse.ok()).toBe(true);
+
+    const response = await context.get("/api/admin/registry/diagnostics");
+    expect(response.ok()).toBe(true);
+    const diagnostics = await response.json();
+    expect(diagnostics).toMatchObject({
+      ok: true,
+      registry: {
+        schemaVersion: 1,
+        currentUserId: "default-owner",
+        currentWorkspaceId: "e2e-default",
+        defaultOwnerExists: true,
+        defaultWorkspaceExists: true,
+        defaultMembershipExists: true,
+        workspaceStoreRootConfigured: true,
+      },
+    });
+    expect(diagnostics.registry.accountCount).toBeGreaterThanOrEqual(1);
+    expect(diagnostics.registry.workspaceCount).toBeGreaterThanOrEqual(1);
+    expect(diagnostics.registry.membershipCount).toBeGreaterThanOrEqual(1);
+
+    const serialized = JSON.stringify(diagnostics);
+    expect(serialized).not.toContain("password");
+    expect(serialized).not.toContain("accounts");
+    expect(serialized).not.toContain("memberships");
   } finally {
     await context.dispose();
   }
