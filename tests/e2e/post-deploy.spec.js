@@ -3,6 +3,7 @@ const { expect, test, request: apiRequest } = require("@playwright/test");
 const httpUrl = process.env.E2E_HTTP_URL || "http://127.0.0.1:18080";
 const baseUrl = process.env.E2E_BASE_URL || "https://127.0.0.1:18443";
 const password = process.env.E2E_APP_PASSWORD || "";
+const accountPassword = process.env.E2E_ACCOUNT_PASSWORD || password;
 const appUrl = "/app";
 const expectedOwner = {
   id: process.env.E2E_EXPECT_ACCOUNT_ID || "default-owner",
@@ -25,7 +26,7 @@ async function login(page) {
   await expect(page.locator(".auth-copy")).toHaveText(
     "This family budget is password-protected. Ask the household budget owner for access.",
   );
-  await page.locator("#passwordInput").fill(password);
+  await page.locator("#passwordInput").fill(accountPassword);
   await page.locator("#loginBtn").click();
   await expect(page.locator("#authOverlay")).toBeHidden();
 }
@@ -217,6 +218,10 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
 
   expect(health).toMatchObject({
     ok: true,
+    auth: {
+      accountPasswordEnabled: true,
+      fallbackPasswordEnabled: true,
+    },
     registry: {
       schemaVersion: 1,
       defaultOwnerExists: true,
@@ -243,6 +248,8 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
       accountExists: true,
       emailPresent: !!expectedOwner.email,
       providerSubjectPresent: true,
+      accountPasswordConfigured: true,
+      accountPasswordBootstrapConfigured: true,
       usingFallbackAccountId: expectedOwner.id === "default-owner",
       usingFallbackDisplayName: expectedOwner.displayName === "Default Owner",
       usingFallbackAuthProvider: expectedOwner.authProvider === "password",
@@ -256,9 +263,11 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
   expect(health.sessions.ttlSeconds).toBeGreaterThan(0);
   expect(health.sessions.activeSessionCount).toBeGreaterThanOrEqual(0);
 
-  const serialized = JSON.stringify(health);
+  const serialized = JSON.stringify({ ...health, buildVersion: "", buildTime: "" });
   expect(serialized).not.toContain("password");
   expect(serialized).not.toContain("authSubject");
+  expect(serialized).not.toContain("passwordHash");
+  expect(serialized).not.toContain(accountPassword);
   expect(serialized).not.toContain("DEFAULT_AUTH_SUBJECT");
   expect(serialized).not.toContain("tokenHash");
   expect(serialized).not.toContain("accounts");
@@ -278,7 +287,7 @@ test("authenticated sessions resolve isolated workspaces", async () => {
   try {
     for (const workspace of workspaces) {
       const loginResponse = await workspace.context.post("/api/session", {
-        data: { password, workspaceId: workspace.workspaceId },
+        data: { password: accountPassword, workspaceId: workspace.workspaceId },
       });
       expect(loginResponse.ok()).toBe(true);
       await expect(loginResponse.json()).resolves.toMatchObject({
@@ -338,7 +347,7 @@ test("session login rejects unregistered workspaces", async () => {
   const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
   try {
     const response = await context.post("/api/session", {
-      data: { password, workspaceId: "e2e-unregistered-workspace" },
+      data: { password: accountPassword, workspaceId: "e2e-unregistered-workspace" },
     });
     expect(response.status()).toBe(403);
     await expect(response.json()).resolves.toMatchObject({ error: "Workspace is not registered." });
@@ -353,7 +362,7 @@ test("session login rejects workspaces without account membership", async () => 
   const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
   try {
     const response = await context.post("/api/session", {
-      data: { password, workspaceId: "e2e-unowned-workspace" },
+      data: { password: accountPassword, workspaceId: "e2e-unowned-workspace" },
     });
     expect(response.status()).toBe(403);
     await expect(response.json()).resolves.toMatchObject({
@@ -380,7 +389,7 @@ test("account read model returns only current account workspaces", async () => {
     expect(unauthenticatedResponse.status()).toBe(401);
 
     const loginResponse = await context.post("/api/session", {
-      data: { password, workspaceId: "e2e-session-alpha" },
+      data: { password: accountPassword, workspaceId: "e2e-session-alpha" },
     });
     expect(loginResponse.ok()).toBe(true);
 
@@ -410,6 +419,26 @@ test("account read model returns only current account workspaces", async () => {
   }
 });
 
+test("fallback app password remains accepted beside account password", async () => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+  test.skip(accountPassword === password, "Distinct E2E_ACCOUNT_PASSWORD is required for fallback coverage.");
+
+  const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  try {
+    const response = await context.post("/api/session", {
+      data: { password, workspaceId: "e2e-default" },
+    });
+    expect(response.ok()).toBe(true);
+    await expect(response.json()).resolves.toMatchObject({
+      accountId: expectedOwner.id,
+      user: expectedOwnerPublicIdentity,
+      workspaceId: "e2e-default",
+    });
+  } finally {
+    await context.dispose();
+  }
+});
+
 test("registry diagnostics are authenticated and safe", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
@@ -419,7 +448,7 @@ test("registry diagnostics are authenticated and safe", async () => {
     expect(unauthenticatedResponse.status()).toBe(401);
 
     const loginResponse = await context.post("/api/session", {
-      data: { password, workspaceId: "e2e-default" },
+      data: { password: accountPassword, workspaceId: "e2e-default" },
     });
     expect(loginResponse.ok()).toBe(true);
 
@@ -428,6 +457,10 @@ test("registry diagnostics are authenticated and safe", async () => {
     const diagnostics = await response.json();
     expect(diagnostics).toMatchObject({
       ok: true,
+      auth: {
+        accountPasswordEnabled: true,
+        fallbackPasswordEnabled: true,
+      },
       registry: {
         schemaVersion: 1,
         currentUserId: expectedOwner.id,
@@ -455,6 +488,8 @@ test("registry diagnostics are authenticated and safe", async () => {
       accountExists: true,
       emailPresent: !!expectedOwner.email,
       providerSubjectPresent: true,
+      accountPasswordConfigured: true,
+      accountPasswordBootstrapConfigured: true,
       usingFallbackAccountId: expectedOwner.id === "default-owner",
       usingFallbackDisplayName: expectedOwner.displayName === "Default Owner",
       usingFallbackAuthProvider: expectedOwner.authProvider === "password",
@@ -465,6 +500,8 @@ test("registry diagnostics are authenticated and safe", async () => {
     const serialized = JSON.stringify(diagnostics);
     expect(serialized).not.toContain("password");
     expect(serialized).not.toContain("authSubject");
+    expect(serialized).not.toContain("passwordHash");
+    expect(serialized).not.toContain(accountPassword);
     expect(serialized).not.toContain("tokenHash");
     expect(serialized).not.toContain("accounts");
     expect(serialized).not.toContain("memberships");
@@ -479,7 +516,7 @@ test("durable session registry keeps tokens server-side and logout invalidates t
   const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
   try {
     const loginResponse = await context.post("/api/session", {
-      data: { password, workspaceId: "e2e-default" },
+      data: { password: accountPassword, workspaceId: "e2e-default" },
     });
     expect(loginResponse.ok()).toBe(true);
     const cookie = loginResponse.headers()["set-cookie"] || "";
@@ -528,7 +565,7 @@ test("workspace management API creates account-owned isolated workspaces", async
     expect(unauthenticatedCreate.status()).toBe(401);
 
     const loginResponse = await context.post("/api/session", {
-      data: { password, workspaceId: "e2e-default" },
+      data: { password: accountPassword, workspaceId: "e2e-default" },
     });
     expect(loginResponse.ok()).toBe(true);
     await expect(loginResponse.json()).resolves.toMatchObject({
@@ -624,7 +661,7 @@ test("session workspace switch changes current state workspace", async () => {
     expect(unauthenticatedSwitch.status()).toBe(401);
 
     const loginResponse = await context.post("/api/session", {
-      data: { password, workspaceId: "e2e-session-alpha" },
+      data: { password: accountPassword, workspaceId: "e2e-session-alpha" },
     });
     expect(loginResponse.ok()).toBe(true);
 
