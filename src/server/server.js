@@ -23,6 +23,10 @@ const WORKSPACE_REGISTRY_UNOWNED_SEED_IDS = (process.env.WORKSPACE_REGISTRY_UNOW
   .filter(Boolean);
 const ACCOUNT_REGISTRY_SCHEMA_VERSION = 1;
 const DEFAULT_ACCOUNT_ID = process.env.DEFAULT_ACCOUNT_ID || "default-owner";
+const DEFAULT_ACCOUNT_DISPLAY_NAME = process.env.DEFAULT_ACCOUNT_DISPLAY_NAME || "Default Owner";
+const DEFAULT_ACCOUNT_EMAIL = process.env.DEFAULT_ACCOUNT_EMAIL || "";
+const DEFAULT_AUTH_PROVIDER = process.env.DEFAULT_AUTH_PROVIDER || "password";
+const DEFAULT_AUTH_SUBJECT = process.env.DEFAULT_AUTH_SUBJECT || DEFAULT_ACCOUNT_ID;
 const DEFAULT_PORT = 5173;
 const DEFAULT_HTTPS_PORT = 5443;
 const AUTH_COOKIE = "family_budget_session";
@@ -129,24 +133,35 @@ function registeredWorkspace(workspaceId, name = workspaceId) {
 
 function registeredAccount(accountId, displayName = accountId) {
   const id = normalizeWorkspaceId(accountId);
+  const now = new Date().toISOString();
   return {
     id,
+    userId: id,
     displayName,
-    email: null,
-    authProvider: "password",
-    createdAt: new Date().toISOString(),
+    email: id === DEFAULT_ACCOUNT_ID ? DEFAULT_ACCOUNT_EMAIL || null : null,
+    authProvider: DEFAULT_AUTH_PROVIDER,
+    authSubject: id === DEFAULT_ACCOUNT_ID ? DEFAULT_AUTH_SUBJECT : id,
+    isDefaultUser: id === DEFAULT_ACCOUNT_ID,
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
 function normalizeAccountRecord(account, accountId) {
   const id = normalizeWorkspaceId(account?.id || accountId);
+  const provider = account?.authProvider || DEFAULT_AUTH_PROVIDER;
+  const now = new Date().toISOString();
   return {
     ...account,
     id,
+    userId: account?.userId || id,
     displayName: account?.displayName || id,
     email: account?.email || null,
-    authProvider: account?.authProvider || "password",
-    createdAt: account?.createdAt || new Date().toISOString(),
+    authProvider: provider,
+    authSubject: account?.authSubject || (id === DEFAULT_ACCOUNT_ID ? DEFAULT_AUTH_SUBJECT : id),
+    isDefaultUser: account?.isDefaultUser ?? id === DEFAULT_ACCOUNT_ID,
+    createdAt: account?.createdAt || now,
+    updatedAt: account?.updatedAt || now,
   };
 }
 
@@ -188,7 +203,7 @@ function ensureMembershipRecord(registry, accountId, workspaceId, role = "owner"
 }
 
 function ensureDefaultIdentity(registry) {
-  const account = ensureAccountRecord(registry, DEFAULT_ACCOUNT_ID, "Default Owner");
+  const account = ensureAccountRecord(registry, DEFAULT_ACCOUNT_ID, DEFAULT_ACCOUNT_DISPLAY_NAME);
   [DEFAULT_WORKSPACE_ID, ...WORKSPACE_REGISTRY_SEED_IDS].forEach((workspaceId) => {
     const workspace = ensureWorkspaceRecord(
       registry,
@@ -229,20 +244,46 @@ async function readAccountRegistry() {
 
 function registryHealthSummary(registry, session = null) {
   const defaultOwnerExists = !!registry.accounts[DEFAULT_ACCOUNT_ID];
+  const defaultAccount = registry.accounts[DEFAULT_ACCOUNT_ID] || {};
   const defaultWorkspaceExists = !!registry.workspaces[DEFAULT_WORKSPACE_ID];
   const defaultMembershipExists = hasMembership(registry, DEFAULT_ACCOUNT_ID, DEFAULT_WORKSPACE_ID);
+  const identityProviderCount = new Set(
+    Object.values(registry.accounts)
+      .map((account) => account.authProvider)
+      .filter(Boolean),
+  ).size;
 
   return {
     schemaVersion: registry.version,
     accountCount: Object.keys(registry.accounts).length,
     workspaceCount: Object.keys(registry.workspaces).length,
     membershipCount: registry.memberships.length,
+    identityProviderCount,
     defaultOwnerExists,
+    defaultUserIdentityReady: !!(
+      defaultAccount.userId &&
+      defaultAccount.displayName &&
+      defaultAccount.authProvider &&
+      defaultAccount.authSubject &&
+      defaultAccount.createdAt &&
+      defaultAccount.updatedAt
+    ),
     defaultWorkspaceExists,
     defaultMembershipExists,
     workspaceStoreRootConfigured: !!WORKSPACE_STORE_ROOT,
     currentUserId: session?.accountId || null,
     currentWorkspaceId: session?.workspaceId || null,
+  };
+}
+
+function publicUserIdentity(account) {
+  return {
+    id: account.id,
+    userId: account.userId || account.id,
+    displayName: account.displayName,
+    email: account.email || null,
+    authProvider: account.authProvider,
+    isDefaultUser: !!account.isDefaultUser,
   };
 }
 
@@ -305,12 +346,7 @@ async function accountReadModelForSession(session) {
     .filter(Boolean);
   const currentWorkspace =
     workspaces.find((workspace) => workspace.id === session.workspaceId) || null;
-  const user = {
-    id: account.id,
-    displayName: account.displayName,
-    email: account.email || null,
-    authProvider: account.authProvider,
-  };
+  const user = publicUserIdentity(account);
 
   return {
     user,
@@ -382,10 +418,7 @@ async function userForSession(session) {
   const account = registry.accounts[session.accountId];
   if (!account) return null;
   return {
-    id: account.id,
-    displayName: account.displayName,
-    email: account.email || null,
-    authProvider: account.authProvider,
+    ...publicUserIdentity(account),
   };
 }
 
