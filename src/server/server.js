@@ -31,6 +31,8 @@ const DEFAULT_ACCOUNT_DISPLAY_NAME = process.env.DEFAULT_ACCOUNT_DISPLAY_NAME ||
 const DEFAULT_ACCOUNT_EMAIL = process.env.DEFAULT_ACCOUNT_EMAIL || "";
 const DEFAULT_AUTH_PROVIDER = process.env.DEFAULT_AUTH_PROVIDER || "password";
 const DEFAULT_AUTH_SUBJECT = process.env.DEFAULT_AUTH_SUBJECT || DEFAULT_ACCOUNT_ID;
+const DEFAULT_ACCOUNT_PASSWORD = process.env.DEFAULT_ACCOUNT_PASSWORD || "";
+const DEFAULT_ACCOUNT_PASSWORD_HASH = process.env.DEFAULT_ACCOUNT_PASSWORD_HASH || "";
 const FALLBACK_ACCOUNT_ID = "default-owner";
 const FALLBACK_ACCOUNT_DISPLAY_NAME = "Default Owner";
 const FALLBACK_AUTH_PROVIDER = "password";
@@ -44,6 +46,8 @@ const SSL_CERT_PATH = process.env.SSL_CERT_PATH || "";
 const SSL_KEY_PATH = process.env.SSL_KEY_PATH || "";
 const REDIRECT_HTTP_TO_HTTPS = process.env.REDIRECT_HTTP_TO_HTTPS === "true";
 const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 60 * 60 * 24 * 14);
+const PASSWORD_HASH_ALGORITHM = "scrypt";
+const PASSWORD_HASH_KEY_LENGTH = 64;
 const sessions = new Map();
 let sessionRegistryWriteQueue = Promise.resolve();
 
@@ -92,6 +96,19 @@ function sendEmpty(res, status, headers = {}) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
+  const key = crypto.scryptSync(String(password || ""), salt, PASSWORD_HASH_KEY_LENGTH).toString("hex");
+  return `${PASSWORD_HASH_ALGORITHM}$${salt}$${key}`;
+}
+
+function verifyPassword(password, storedHash) {
+  const [algorithm, salt, expectedKey] = String(storedHash || "").split("$");
+  if (algorithm !== PASSWORD_HASH_ALGORITHM || !salt || !expectedKey) return false;
+  const actual = crypto.scryptSync(String(password || ""), salt, Buffer.from(expectedKey, "hex").length);
+  const expected = Buffer.from(expectedKey, "hex");
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
 
 async function readBody(req) {
@@ -167,6 +184,7 @@ function configuredFirstOwnerIdentity() {
     email: DEFAULT_ACCOUNT_EMAIL || null,
     authProvider: DEFAULT_AUTH_PROVIDER,
     authSubject: DEFAULT_AUTH_SUBJECT,
+    passwordHash: DEFAULT_ACCOUNT_PASSWORD_HASH || (DEFAULT_ACCOUNT_PASSWORD ? hashPassword(DEFAULT_ACCOUNT_PASSWORD) : null),
   };
 }
 
@@ -182,6 +200,7 @@ function normalizeAccountRecord(account, accountId) {
     email: account?.email || null,
     authProvider: provider,
     authSubject: account?.authSubject || (id === DEFAULT_ACCOUNT_ID ? DEFAULT_AUTH_SUBJECT : id),
+    passwordHash: account?.passwordHash || null,
     isDefaultUser: account?.isDefaultUser ?? id === DEFAULT_ACCOUNT_ID,
     createdAt: account?.createdAt || now,
     updatedAt: account?.updatedAt || now,
@@ -207,6 +226,7 @@ function ensureFirstOwnerBootstrapRecord(registry) {
   if (!account.email && identity.email) updates.email = identity.email;
   if (!account.authProvider) updates.authProvider = identity.authProvider;
   if (!account.authSubject) updates.authSubject = identity.authSubject;
+  if (!account.passwordHash && identity.passwordHash) updates.passwordHash = identity.passwordHash;
   if (account.isDefaultUser === undefined) updates.isDefaultUser = identity.id === FALLBACK_ACCOUNT_ID;
   if (!account.updatedAt) updates.updatedAt = nowIso();
   if (Object.keys(updates).length > 0) {
@@ -330,10 +350,19 @@ function firstOwnerBootstrapSummary(registry) {
     accountExists: !!account.id,
     emailPresent: !!account.email,
     providerSubjectPresent: !!account.authSubject,
+    accountPasswordConfigured: !!account.passwordHash,
+    accountPasswordBootstrapConfigured: !!(DEFAULT_ACCOUNT_PASSWORD_HASH || DEFAULT_ACCOUNT_PASSWORD),
     usingFallbackAccountId: DEFAULT_ACCOUNT_ID === FALLBACK_ACCOUNT_ID,
     usingFallbackDisplayName: (account.displayName || DEFAULT_ACCOUNT_DISPLAY_NAME) === FALLBACK_ACCOUNT_DISPLAY_NAME,
     usingFallbackAuthProvider: (account.authProvider || DEFAULT_AUTH_PROVIDER) === FALLBACK_AUTH_PROVIDER,
     migrationSafe: true,
+  };
+}
+
+function authSummary(registry) {
+  return {
+    accountPasswordEnabled: !!registry.accounts[DEFAULT_ACCOUNT_ID]?.passwordHash,
+    fallbackPasswordEnabled: !!APP_PASSWORD,
   };
 }
 
@@ -718,6 +747,18 @@ async function createSession(workspaceId) {
   return { token, session };
 }
 
+async function authenticateSessionPassword(password) {
+  const registry = await ensureAccountRegistry();
+  const account = registry.accounts[DEFAULT_ACCOUNT_ID];
+  if (account?.passwordHash && verifyPassword(password, account.passwordHash)) {
+    return { ok: true, accountId: account.id, method: "account-password" };
+  }
+  if (APP_PASSWORD && (password || "") === APP_PASSWORD) {
+    return { ok: true, accountId: DEFAULT_ACCOUNT_ID, method: "fallback-password" };
+  }
+  return { ok: false };
+}
+
 function sessionCookie(token, maxAge = SESSION_TTL_SECONDS) {
   const parts = [
     `${AUTH_COOKIE}=${encodeURIComponent(token)}`,
@@ -747,6 +788,7 @@ async function serveApi(req, res, pathname) {
       buildVersion: BUILD_VERSION,
       buildTime: BUILD_TIME,
       authEnabled: !!APP_PASSWORD,
+      auth: authSummary(registry),
       registry: registryHealthSummary(registry),
       bootstrap: firstOwnerBootstrapSummary(registry),
       sessions: sessionRegistrySummary(),
@@ -767,6 +809,7 @@ async function serveApi(req, res, pathname) {
     const registry = await ensureAccountRegistry();
     sendJson(res, 200, {
       ok: true,
+      auth: authSummary(registry),
       registry: registryHealthSummary(registry, session),
       bootstrap: firstOwnerBootstrapSummary(registry),
       sessions: sessionRegistrySummary(),
@@ -803,7 +846,8 @@ async function serveApi(req, res, pathname) {
       sendJson(res, 200, { ok: true, authEnabled: false });
       return true;
     }
-    if ((body.password || "") !== APP_PASSWORD) {
+    const authResult = await authenticateSessionPassword(body.password || "");
+    if (!authResult.ok) {
       sendJson(res, 401, { error: "Invalid password" });
       return true;
     }

@@ -72,9 +72,10 @@ jobs:
             DEFAULT_ACCOUNT_ID='e2e-owner' \
             DEFAULT_ACCOUNT_DISPLAY_NAME='E2E Owner' \
             DEFAULT_ACCOUNT_EMAIL='owner@example.test' \
+            DEFAULT_ACCOUNT_PASSWORD='e2e-owner-password' \
             DEFAULT_AUTH_PROVIDER='password' \
             DEFAULT_AUTH_SUBJECT='e2e-owner-subject' \
-            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME,DEFAULT_ACCOUNT_ID,DEFAULT_ACCOUNT_DISPLAY_NAME,DEFAULT_ACCOUNT_EMAIL,DEFAULT_AUTH_PROVIDER,DEFAULT_AUTH_SUBJECT docker compose \
+            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME,DEFAULT_ACCOUNT_ID,DEFAULT_ACCOUNT_DISPLAY_NAME,DEFAULT_ACCOUNT_EMAIL,DEFAULT_ACCOUNT_PASSWORD,DEFAULT_AUTH_PROVIDER,DEFAULT_AUTH_SUBJECT docker compose \
               -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' \
               --project-directory '${{ steps.e2e.outputs.app_path }}' \
               -p family-budget-e2e pull && \
@@ -85,9 +86,10 @@ jobs:
             DEFAULT_ACCOUNT_ID='e2e-owner' \
             DEFAULT_ACCOUNT_DISPLAY_NAME='E2E Owner' \
             DEFAULT_ACCOUNT_EMAIL='owner@example.test' \
+            DEFAULT_ACCOUNT_PASSWORD='e2e-owner-password' \
             DEFAULT_AUTH_PROVIDER='password' \
             DEFAULT_AUTH_SUBJECT='e2e-owner-subject' \
-            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME,DEFAULT_ACCOUNT_ID,DEFAULT_ACCOUNT_DISPLAY_NAME,DEFAULT_ACCOUNT_EMAIL,DEFAULT_AUTH_PROVIDER,DEFAULT_AUTH_SUBJECT docker compose \
+            sudo -n --preserve-env=APP_PASSWORD,APP_IMAGE_TAG,APP_BUILD_VERSION,APP_BUILD_TIME,DEFAULT_ACCOUNT_ID,DEFAULT_ACCOUNT_DISPLAY_NAME,DEFAULT_ACCOUNT_EMAIL,DEFAULT_ACCOUNT_PASSWORD,DEFAULT_AUTH_PROVIDER,DEFAULT_AUTH_SUBJECT docker compose \
               -f '${{ steps.e2e.outputs.app_path }}/docker-compose.yml' \
               --project-directory '${{ steps.e2e.outputs.app_path }}' \
               -p family-budget-e2e up -d"
@@ -118,6 +120,7 @@ jobs:
           E2E_BASE_URL: https://127.0.0.1:18443
           E2E_HTTP_URL: http://127.0.0.1:18080
           E2E_APP_PASSWORD: ${{ steps.e2e.outputs.password }}
+          E2E_ACCOUNT_PASSWORD: e2e-owner-password
           E2E_EXPECT_ACCOUNT_ID: e2e-owner
           E2E_EXPECT_ACCOUNT_DISPLAY_NAME: E2E Owner
           E2E_EXPECT_ACCOUNT_EMAIL: owner@example.test
