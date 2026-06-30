@@ -113,11 +113,23 @@ async function seedTrendMonths(page) {
 
   const response = await page.request.post("/api/state", { data: base });
   expect(response.ok()).toBe(true);
+  const seededMonthIds = months.map((month) => month.id);
+  await expect
+    .poll(async () => {
+      const stateResponse = await page.request.get("/api/state");
+      if (!stateResponse.ok()) return 0;
+      const state = await stateResponse.json();
+      return seededMonthIds.filter((id) => state.months?.[id]).length;
+    })
+    .toBe(seededMonthIds.length);
+
   await page.goto(appUrl);
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  await expect
+    .poll(async () => page.evaluate((ids) => ids.filter((id) => appState.months?.[id]).length, seededMonthIds))
+    .toBe(seededMonthIds.length);
   await expectCanvasReady(page, "#monthlyTrendChart");
 
-  const seededMonthIds = months.map((month) => month.id);
   await expect
     .poll(async () => page.evaluate((ids) => monthlyTrendRows().filter((row) => ids.includes(row.id)).length, seededMonthIds))
     .toBe(seededMonthIds.length);
