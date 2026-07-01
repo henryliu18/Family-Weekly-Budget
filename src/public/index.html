@@ -22,14 +22,18 @@
           </div>
         </div>
 
-        <nav class="nav-tabs topbar-nav" aria-label="主要檢視">
-          <button class="nav-tab active" type="button" data-view="overview">總覽</button>
-          <button class="nav-tab" type="button" data-view="entry">本週輸入</button>
-          <button class="nav-tab" type="button" data-view="history">歷史查詢</button>
-          <button class="nav-tab" type="button" data-view="settings">分類設定</button>
-          <button id="createWorkspaceBtn" class="nav-tab workspace-create-btn hidden" type="button">New workspace</button>
-          <button id="logoutBtn" class="nav-tab topbar-logout hidden" type="button">登出</button>
-        </nav>
+        <div class="topbar-primary-row">
+          <nav class="nav-tabs topbar-nav" aria-label="主要檢視">
+            <button class="nav-tab active" type="button" data-view="overview" aria-current="page">總覽</button>
+            <button class="nav-tab" type="button" data-view="entry">本週輸入</button>
+            <button class="nav-tab" type="button" data-view="history">歷史查詢</button>
+            <button class="nav-tab" type="button" data-view="settings">分類設定</button>
+          </nav>
+          <div class="topbar-account" aria-label="Account actions">
+            <button id="createWorkspaceBtn" class="ghost-btn workspace-create-btn hidden" type="button">New workspace</button>
+            <button id="logoutBtn" class="ghost-btn topbar-logout hidden" type="button">登出</button>
+          </div>
+        </div>
 
         <div class="topbar-controls" aria-label="Primary controls">
           <button id="addMonthBtn" class="secondary-btn month-action-btn" type="button">新增月份</button>
@@ -124,7 +128,7 @@
               </div>
             </div>
             <div class="chart-wrap">
-              <canvas id="weeklyChart" width="960" height="360" aria-label="每週支出長條圖"></canvas>
+              <canvas id="weeklyChart" width="960" height="360" role="img" aria-label="每週支出長條圖"></canvas>
               <div id="weeklyChartEmpty" class="chart-empty hidden" data-i18n="emptyChartCopy">Enter your first completed weekly balance to build this chart.</div>
               <div id="chartTooltip" class="chart-tooltip hidden"></div>
             </div>
@@ -138,9 +142,12 @@
               </div>
             </div>
             <div class="chart-wrap">
-              <canvas id="monthlyTrendChart" width="960" height="340" aria-label="月支出趨勢線圖"></canvas>
+              <canvas id="monthlyTrendChart" width="960" height="340" role="img" aria-label="月支出趨勢線圖"></canvas>
               <div id="monthlyTrendEmpty" class="chart-empty hidden" data-i18n="emptyChartCopy">Enter your first completed weekly balance to build this chart.</div>
               <div id="trendTooltip" class="chart-tooltip hidden"></div>
+            </div>
+            <div class="visually-hidden">
+              <table id="monthlyTrendTable"></table>
             </div>
           </section>
 
@@ -320,11 +327,11 @@
               <div id="importWarning" class="import-warning hidden" aria-live="polite"></div>
               <div id="importReview" class="import-review hidden">
                 <div class="import-tabs" role="tablist" aria-label="Transaction import review">
-                  <button class="import-tab active" type="button" data-import-tab="included">Included</button>
-                  <button class="import-tab" type="button" data-import-tab="review">Needs review</button>
-                  <button class="import-tab" type="button" data-import-tab="excluded">Excluded</button>
+                  <button id="importTabIncluded" class="import-tab active" type="button" role="tab" aria-selected="true" aria-controls="importRows" data-import-tab="included">Included</button>
+                  <button id="importTabReview" class="import-tab" type="button" role="tab" aria-selected="false" aria-controls="importRows" tabindex="-1" data-import-tab="review">Needs review</button>
+                  <button id="importTabExcluded" class="import-tab" type="button" role="tab" aria-selected="false" aria-controls="importRows" tabindex="-1" data-import-tab="excluded">Excluded</button>
                 </div>
-                <div id="importRows" class="import-rows"></div>
+                <div id="importRows" class="import-rows" role="tabpanel" aria-labelledby="importTabIncluded" tabindex="0"></div>
               </div>
             </section>
           </div>
@@ -506,6 +513,21 @@
         <div class="dialog-actions">
           <button id="cancelMonthBtn" class="ghost-btn" value="cancel" type="button" data-i18n="cancel">取消</button>
           <button id="confirmMonthBtn" class="primary-btn" value="default" type="button">新增</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="appModal" class="app-modal" aria-labelledby="appModalTitle" aria-describedby="appModalMessage">
+      <form method="dialog" class="dialog-card">
+        <h3 id="appModalTitle"></h3>
+        <p id="appModalMessage" class="dialog-message"></p>
+        <label id="appModalFieldWrap" class="field app-modal-field hidden">
+          <span id="appModalFieldLabel"></span>
+          <input id="appModalInput" type="text" autocomplete="off" />
+        </label>
+        <div class="dialog-actions">
+          <button id="appModalCancel" class="ghost-btn" type="button"></button>
+          <button id="appModalConfirm" class="primary-btn" type="submit"></button>
         </div>
       </form>
     </dialog>
