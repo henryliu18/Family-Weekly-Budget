@@ -244,6 +244,7 @@ VM_SSH_KNOWN_HOSTS
 APP_PASSWORD
 SESSION_SECRET
 DEFAULT_ACCOUNT_PASSWORD_HASH
+GOOGLE_OAUTH_CLIENT_SECRET
 APP_SSL_CERT
 APP_SSL_KEY
 ```
@@ -254,6 +255,8 @@ Generate `SESSION_SECRET` as a long random value, for example `openssl rand -hex
 
 `DEFAULT_ACCOUNT_PASSWORD_HASH` is a secret, not a variable. It should contain the `scrypt$<salt>$<key>` output from `npm.cmd run hash-password`. Keep `APP_PASSWORD` during the transition; it remains the fallback password if the account hash is missing or invalid.
 
+`GOOGLE_OAUTH_CLIENT_SECRET` is a secret, not a variable. It is reserved for the Google OAuth server-side authorization-code flow. The app does not expose this value through health checks, diagnostics, or frontend JavaScript. Google OAuth remains disabled unless `GOOGLE_OAUTH_ENABLED=true` and the required client configuration is also present.
+
 ### Variables used by image / E2E / deploy workflows
 
 ```text
@@ -262,7 +265,21 @@ VM_SSH_HOST
 VM_SSH_USER
 VM_APP_PATH
 VM_DOMAIN
+GOOGLE_OAUTH_ENABLED
+GOOGLE_OAUTH_CLIENT_ID
+GOOGLE_OAUTH_APP_BASE_URL
+GOOGLE_OAUTH_REDIRECT_PATH
+GOOGLE_OAUTH_ALLOWED_DOMAIN
 ```
+
+Google OAuth is currently foundation-only. Set `GOOGLE_OAUTH_ENABLED=false` or leave it empty until the Google sign-in and account-linking PRs are merged. When enabled in a future PR, use:
+
+- `GOOGLE_OAUTH_CLIENT_ID`: Google OAuth web client ID.
+- `GOOGLE_OAUTH_APP_BASE_URL`: public app origin, for example `https://money.example.com`.
+- `GOOGLE_OAUTH_REDIRECT_PATH`: callback path, default `/auth/google/callback`.
+- `GOOGLE_OAUTH_ALLOWED_DOMAIN`: optional Google Workspace hosted-domain restriction.
+
+The full redirect URI registered in Google Cloud Console should be `${GOOGLE_OAUTH_APP_BASE_URL}${GOOGLE_OAUTH_REDIRECT_PATH}`.
 
 ### Secrets used by Terraform workflow
 

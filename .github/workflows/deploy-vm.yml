@@ -58,22 +58,40 @@ jobs:
           APP_PASSWORD_SECRET: ${{ secrets.APP_PASSWORD }}
           SESSION_SECRET_SECRET: ${{ secrets.SESSION_SECRET }}
           DEFAULT_ACCOUNT_PASSWORD_HASH_SECRET: ${{ secrets.DEFAULT_ACCOUNT_PASSWORD_HASH }}
+          GOOGLE_OAUTH_CLIENT_SECRET_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_ENABLED_VAR: ${{ vars.GOOGLE_OAUTH_ENABLED }}
+          GOOGLE_OAUTH_CLIENT_ID_VAR: ${{ vars.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_APP_BASE_URL_VAR: ${{ vars.GOOGLE_OAUTH_APP_BASE_URL }}
+          GOOGLE_OAUTH_REDIRECT_PATH_VAR: ${{ vars.GOOGLE_OAUTH_REDIRECT_PATH }}
+          GOOGLE_OAUTH_ALLOWED_DOMAIN_VAR: ${{ vars.GOOGLE_OAUTH_ALLOWED_DOMAIN }}
         run: |
           APP_PASSWORD_B64="$(printf '%s' "$APP_PASSWORD_SECRET" | base64 -w0)"
           SESSION_SECRET_B64="$(printf '%s' "$SESSION_SECRET_SECRET" | base64 -w0)"
           DEFAULT_ACCOUNT_PASSWORD_HASH_B64="$(printf '%s' "$DEFAULT_ACCOUNT_PASSWORD_HASH_SECRET" | base64 -w0)"
-          ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" "APP_PASSWORD_B64=$APP_PASSWORD_B64 SESSION_SECRET_B64=$SESSION_SECRET_B64 DEFAULT_ACCOUNT_PASSWORD_HASH_B64=$DEFAULT_ACCOUNT_PASSWORD_HASH_B64 bash -seuo pipefail" <<'REMOTE'
+          GOOGLE_OAUTH_CLIENT_SECRET_B64="$(printf '%s' "$GOOGLE_OAUTH_CLIENT_SECRET_SECRET" | base64 -w0)"
+          GOOGLE_OAUTH_ENABLED_B64="$(printf '%s' "$GOOGLE_OAUTH_ENABLED_VAR" | base64 -w0)"
+          GOOGLE_OAUTH_CLIENT_ID_B64="$(printf '%s' "$GOOGLE_OAUTH_CLIENT_ID_VAR" | base64 -w0)"
+          GOOGLE_OAUTH_APP_BASE_URL_B64="$(printf '%s' "$GOOGLE_OAUTH_APP_BASE_URL_VAR" | base64 -w0)"
+          GOOGLE_OAUTH_REDIRECT_PATH_B64="$(printf '%s' "$GOOGLE_OAUTH_REDIRECT_PATH_VAR" | base64 -w0)"
+          GOOGLE_OAUTH_ALLOWED_DOMAIN_B64="$(printf '%s' "$GOOGLE_OAUTH_ALLOWED_DOMAIN_VAR" | base64 -w0)"
+          ssh -o BatchMode=yes "${{ vars.VM_SSH_USER }}@${{ vars.VM_SSH_HOST }}" "APP_PASSWORD_B64=$APP_PASSWORD_B64 SESSION_SECRET_B64=$SESSION_SECRET_B64 DEFAULT_ACCOUNT_PASSWORD_HASH_B64=$DEFAULT_ACCOUNT_PASSWORD_HASH_B64 GOOGLE_OAUTH_CLIENT_SECRET_B64=$GOOGLE_OAUTH_CLIENT_SECRET_B64 GOOGLE_OAUTH_ENABLED_B64=$GOOGLE_OAUTH_ENABLED_B64 GOOGLE_OAUTH_CLIENT_ID_B64=$GOOGLE_OAUTH_CLIENT_ID_B64 GOOGLE_OAUTH_APP_BASE_URL_B64=$GOOGLE_OAUTH_APP_BASE_URL_B64 GOOGLE_OAUTH_REDIRECT_PATH_B64=$GOOGLE_OAUTH_REDIRECT_PATH_B64 GOOGLE_OAUTH_ALLOWED_DOMAIN_B64=$GOOGLE_OAUTH_ALLOWED_DOMAIN_B64 bash -seuo pipefail" <<'REMOTE'
           cd '${{ vars.VM_APP_PATH }}'
           sudo -n docker --version
           sudo -n docker compose version
 
           APP_IMAGE_TAG='${{ github.event_name == 'workflow_dispatch' && 'latest' || format('sha-{0}', github.event.workflow_run.head_sha) }}'
           touch .env
-          grep -Ev '^(APP_IMAGE_TAG|APP_PASSWORD|SESSION_SECRET|DEFAULT_ACCOUNT_PASSWORD_HASH|APP_BUILD_VERSION|APP_BUILD_TIME)=' .env > .env.tmp || true
+          grep -Ev '^(APP_IMAGE_TAG|APP_PASSWORD|SESSION_SECRET|DEFAULT_ACCOUNT_PASSWORD_HASH|GOOGLE_OAUTH_ENABLED|GOOGLE_OAUTH_CLIENT_ID|GOOGLE_OAUTH_CLIENT_SECRET|GOOGLE_OAUTH_APP_BASE_URL|GOOGLE_OAUTH_REDIRECT_PATH|GOOGLE_OAUTH_ALLOWED_DOMAIN|APP_BUILD_VERSION|APP_BUILD_TIME)=' .env > .env.tmp || true
           printf 'APP_IMAGE_TAG=%s\n' "$APP_IMAGE_TAG" >> .env.tmp
           printf 'APP_PASSWORD=%s\n' "$(printf '%s' "$APP_PASSWORD_B64" | base64 -d)" >> .env.tmp
           printf "SESSION_SECRET='%s'\n" "$(printf '%s' "$SESSION_SECRET_B64" | base64 -d)" >> .env.tmp
           printf "DEFAULT_ACCOUNT_PASSWORD_HASH='%s'\n" "$(printf '%s' "$DEFAULT_ACCOUNT_PASSWORD_HASH_B64" | base64 -d)" >> .env.tmp
+          printf 'GOOGLE_OAUTH_ENABLED=%s\n' "$(printf '%s' "$GOOGLE_OAUTH_ENABLED_B64" | base64 -d)" >> .env.tmp
+          printf 'GOOGLE_OAUTH_CLIENT_ID=%s\n' "$(printf '%s' "$GOOGLE_OAUTH_CLIENT_ID_B64" | base64 -d)" >> .env.tmp
+          printf "GOOGLE_OAUTH_CLIENT_SECRET='%s'\n" "$(printf '%s' "$GOOGLE_OAUTH_CLIENT_SECRET_B64" | base64 -d)" >> .env.tmp
+          printf 'GOOGLE_OAUTH_APP_BASE_URL=%s\n' "$(printf '%s' "$GOOGLE_OAUTH_APP_BASE_URL_B64" | base64 -d)" >> .env.tmp
+          printf 'GOOGLE_OAUTH_REDIRECT_PATH=%s\n' "$(printf '%s' "$GOOGLE_OAUTH_REDIRECT_PATH_B64" | base64 -d)" >> .env.tmp
+          printf 'GOOGLE_OAUTH_ALLOWED_DOMAIN=%s\n' "$(printf '%s' "$GOOGLE_OAUTH_ALLOWED_DOMAIN_B64" | base64 -d)" >> .env.tmp
           mv .env.tmp .env
 
           sudo -n docker compose pull
