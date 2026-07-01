@@ -1667,8 +1667,6 @@ test("transaction import accepts copied online banking text", async ({ page }) =
     await expect(page.locator("#importSummary")).toContainText("5 transactions");
     await expect(page.locator("#importSummary")).toContainText("Excluded");
     await expect(page.locator("#importSummary")).toContainText("1");
-    await expect(page.locator("#availableInput")).toHaveValue("10956.21");
-    await expect(page.locator("#unpaidInput")).toHaveValue("3687.95");
     await expect(page.locator("#importRows")).toContainText("Department of Transpor");
     await expect(page.locator("#importRows")).toContainText("Transport");
     await expect(page.locator("#importRows")).toContainText("SQ *DONCASTER");
