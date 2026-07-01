@@ -251,6 +251,16 @@ const i18n = {
     accountCreateFailed: "\u7121\u6cd5\u5efa\u7acb\u5e33\u865f\uff0c\u8acb\u6aa2\u67e5\u8f38\u5165\u5167\u5bb9\u5f8c\u518d\u8a66\u4e00\u6b21\u3002",
     accountCreateDuplicate: "\u9019\u500b\u5e33\u865f ID \u5df2\u5b58\u5728\uff0c\u8acb\u6539\u7528\u5176\u4ed6 ID\u3002",
     accountLoginHint: "\u8acb\u5c07\u81e8\u6642\u5bc6\u78bc\u4ee5\u5b89\u5168\u9014\u5f91\u4ea4\u7d66\u4f7f\u7528\u8005\uff1b\u7cfb\u7d71\u4e0d\u6703\u986f\u793a\u6216\u5132\u5b58\u660e\u78bc\u3002",
+    accountResetTitle: "\u7ba1\u7406\u54e1\u5bc6\u78bc\u91cd\u8a2d",
+    accountResetSub: "\u7576\u4f7f\u7528\u8005\u9700\u8981\u6062\u5fa9\u5b58\u53d6\u6642\uff0c\u66ff\u5bc6\u78bc\u5e33\u865f\u8a2d\u5b9a\u65b0\u7684\u81e8\u6642\u5bc6\u78bc\u3002",
+    accountToReset: "\u8981\u91cd\u8a2d\u7684\u5e33\u865f",
+    newTemporaryPassword: "\u65b0\u81e8\u6642\u5bc6\u78bc",
+    confirmTemporaryPassword: "\u78ba\u8a8d\u81e8\u6642\u5bc6\u78bc",
+    resetAccountPassword: "\u91cd\u8a2d\u5bc6\u78bc",
+    accountResetNoAccounts: "\u76ee\u524d\u6c92\u6709\u53ef\u91cd\u8a2d\u7684\u5176\u4ed6\u5bc6\u78bc\u5e33\u865f\u3002",
+    accountResetSaving: "\u91cd\u8a2d\u4e2d...",
+    accountResetSuccess: (account) => `\u5df2\u66ff ${account} \u91cd\u8a2d\u5bc6\u78bc\u3002`,
+    accountResetFailed: "\u7121\u6cd5\u91cd\u8a2d\u5bc6\u78bc\uff0c\u8acb\u78ba\u8a8d\u5e33\u865f\u8207\u65b0\u5bc6\u78bc\u3002",
     accountSecurityTitle: "\u5e33\u865f\u5b89\u5168",
     accountSecuritySub: "\u8b8a\u66f4\u76ee\u524d\u767b\u5165\u5e33\u865f\u7684\u5bc6\u78bc\u3002",
     currentPassword: "\u76ee\u524d\u5bc6\u78bc",
@@ -506,6 +516,16 @@ const i18n = {
     accountCreateFailed: "Unable to create account. Check the details and try again.",
     accountCreateDuplicate: "This account ID already exists. Choose another ID.",
     accountLoginHint: "Share the temporary password securely. The app will not show or store plaintext passwords.",
+    accountResetTitle: "Admin password reset",
+    accountResetSub: "Set a new temporary password when a password account needs recovery access.",
+    accountToReset: "Account to reset",
+    newTemporaryPassword: "New temporary password",
+    confirmTemporaryPassword: "Confirm temporary password",
+    resetAccountPassword: "Reset password",
+    accountResetNoAccounts: "No other password accounts are available to reset.",
+    accountResetSaving: "Resetting...",
+    accountResetSuccess: (account) => `Reset password for ${account}.`,
+    accountResetFailed: "Unable to reset password. Check the account and new password.",
     accountSecurityTitle: "Account security",
     accountSecuritySub: "Change the password for the account currently signed in.",
     currentPassword: "Current password",
@@ -522,6 +542,7 @@ let currentLanguage = localStorage.getItem(LANGUAGE_KEY) || DEFAULT_LANGUAGE;
 let appMeta = META_FALLBACK;
 let authState = { authEnabled: false, authenticated: true };
 let accountState = null;
+let adminAccounts = [];
 
 const money = new Intl.NumberFormat("en-AU", {
   style: "currency",
@@ -802,20 +823,39 @@ async function loadSession() {
 async function loadAccountState() {
   if (authState.authEnabled && !authState.authenticated) {
     accountState = null;
+    adminAccounts = [];
     return;
   }
   try {
     const response = await fetch("/api/me", { cache: "no-store" });
     if (response.status === 401) {
       accountState = null;
+      adminAccounts = [];
       authState = { ...authState, authenticated: false };
       updateAuthUi();
       return;
     }
     if (!response.ok) throw new Error("Account request failed");
     accountState = await response.json();
+    if (accountState?.account?.isDefaultUser === true) {
+      await loadAdminAccounts();
+    } else {
+      adminAccounts = [];
+    }
   } catch {
     accountState = null;
+    adminAccounts = [];
+  }
+}
+
+async function loadAdminAccounts() {
+  try {
+    const response = await fetch("/api/admin/accounts", { cache: "no-store" });
+    if (!response.ok) throw new Error("Admin account request failed");
+    const result = await response.json();
+    adminAccounts = Array.isArray(result.accounts) ? result.accounts : [];
+  } catch {
+    adminAccounts = [];
   }
 }
 
@@ -1002,6 +1042,13 @@ function bindElements() {
     "createAccountBtn",
     "accountAdminStatus",
     "accountAdminResult",
+    "accountResetPanel",
+    "accountResetForm",
+    "resetAccountSelect",
+    "resetAccountPasswordInput",
+    "resetAccountConfirmInput",
+    "resetAccountPasswordBtn",
+    "accountResetStatus",
     "workspaceManagementPanel",
     "workspaceManagementForm",
     "workspaceManageSelect",
@@ -1143,6 +1190,7 @@ function bindEvents() {
   els.logoutBtn?.addEventListener("click", logout);
   els.accountSecurityForm?.addEventListener("submit", changePasswordFromForm);
   els.accountAdminForm?.addEventListener("submit", createAccountFromForm);
+  els.accountResetForm?.addEventListener("submit", resetAccountPasswordFromForm);
   els.workspaceManagementForm?.addEventListener("submit", renameWorkspaceFromForm);
   els.workspaceManageSelect?.addEventListener("change", syncWorkspaceManagementForm);
   els.deleteWorkspaceBtn?.addEventListener("click", deleteWorkspaceFromForm);
@@ -1335,6 +1383,7 @@ function renderAll() {
   renderWorkspaceSwitcher();
   renderWorkspaceManagementPanel();
   renderAccountAdminPanel();
+  renderAccountResetPanel();
   renderPersonalTitle();
   renderMonthOptions();
   renderOverview();
@@ -1437,6 +1486,7 @@ function applyLanguage() {
   renderWorkspaceManagementPanel();
   renderAccountSecurityPanel();
   renderAccountAdminPanel();
+  renderAccountResetPanel();
   renderPersonalTitle();
   renderImportDraft();
 }
@@ -1467,6 +1517,7 @@ function updateAuthUi() {
   renderWorkspaceManagementPanel();
   renderAccountSecurityPanel();
   renderAccountAdminPanel();
+  renderAccountResetPanel();
   renderPersonalTitle();
   document.body.classList.toggle("landing-open", shouldShowOverlay);
   document.body.classList.toggle("auth-locked", isAuthLocked());
@@ -1642,6 +1693,44 @@ function renderAccountAdminPanel() {
   }
 }
 
+function renderAccountResetPanel() {
+  if (!els.accountResetPanel) return;
+  const shouldShow = !isAuthLocked() && accountState?.account?.isDefaultUser === true;
+  els.accountResetPanel.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow) {
+    clearAccountResetStatus();
+    clearAccountResetFields();
+    if (els.resetAccountSelect) els.resetAccountSelect.innerHTML = "";
+    return;
+  }
+
+  const currentAccountId = accountState?.account?.id || "";
+  const resettableAccounts = adminAccounts.filter((account) => {
+    return account.id && account.id !== currentAccountId && (account.authProvider || "password") === "password";
+  });
+  const selectedValue = els.resetAccountSelect?.value || "";
+  if (els.resetAccountSelect) {
+    els.resetAccountSelect.innerHTML = "";
+    resettableAccounts.forEach((account) => {
+      const option = document.createElement("option");
+      option.value = account.id;
+      option.textContent = `${account.displayName || account.id} (${account.id})`;
+      els.resetAccountSelect.append(option);
+    });
+    els.resetAccountSelect.value = resettableAccounts.some((account) => account.id === selectedValue)
+      ? selectedValue
+      : resettableAccounts[0]?.id || "";
+  }
+  if (els.resetAccountPasswordBtn) {
+    els.resetAccountPasswordBtn.disabled = resettableAccounts.length === 0;
+  }
+  if (resettableAccounts.length === 0) {
+    setAccountResetStatus("accountResetNoAccounts", true);
+  } else if (els.accountResetStatus?.dataset.key === "accountResetNoAccounts") {
+    clearAccountResetStatus();
+  }
+}
+
 async function changePasswordFromForm(event) {
   event.preventDefault();
   clearAccountSecurityStatus();
@@ -1671,6 +1760,47 @@ async function changePasswordFromForm(event) {
     setAccountSecurityStatus("passwordChangeFailed", true);
   } finally {
     setButtonLoading(els.changePasswordBtn, false);
+  }
+}
+
+async function resetAccountPasswordFromForm(event) {
+  event.preventDefault();
+  clearAccountResetStatus();
+
+  const accountId = els.resetAccountSelect?.value || "";
+  const newPassword = els.resetAccountPasswordInput?.value || "";
+  const confirmPassword = els.resetAccountConfirmInput?.value || "";
+  if (!accountId) {
+    setAccountResetStatus("accountResetNoAccounts", true);
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    setAccountResetStatus("passwordMismatch", true);
+    return;
+  }
+
+  setAccountResetStatus("accountResetSaving");
+  setButtonLoading(els.resetAccountPasswordBtn, true);
+  try {
+    const response = await fetch(`/api/admin/accounts/${encodeURIComponent(accountId)}/password`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ newPassword, confirmPassword }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setAccountResetStatus("accountResetFailed", true);
+      return;
+    }
+    clearAccountResetFields();
+    await loadAdminAccounts();
+    renderAccountResetPanel();
+    setAccountResetStatus("accountResetSuccess", false, result.account?.displayName || result.account?.id || accountId);
+  } catch {
+    setAccountResetStatus("accountResetFailed", true);
+  } finally {
+    setButtonLoading(els.resetAccountPasswordBtn, false);
+    renderAccountResetPanel();
   }
 }
 
@@ -1768,6 +1898,8 @@ async function createAccountFromForm(event) {
       result.workspace?.name || result.workspace?.id || payload.workspaceName,
     );
     renderAccountAdminResult(result);
+    await loadAdminAccounts();
+    renderAccountResetPanel();
   } catch {
     setAccountAdminStatus("accountCreateFailed", true);
   } finally {
@@ -1811,6 +1943,28 @@ function clearAccountAdminResult() {
   if (!els.accountAdminResult) return;
   els.accountAdminResult.innerHTML = "";
   els.accountAdminResult.classList.add("hidden");
+}
+
+function setAccountResetStatus(key, isError = false, ...args) {
+  if (!els.accountResetStatus) return;
+  els.accountResetStatus.dataset.key = key;
+  els.accountResetStatus.dataset.status = isError ? "error" : "ok";
+  els.accountResetStatus.textContent = t(key, ...args);
+  els.accountResetStatus.classList.remove("hidden");
+}
+
+function clearAccountResetStatus() {
+  if (!els.accountResetStatus) return;
+  delete els.accountResetStatus.dataset.key;
+  delete els.accountResetStatus.dataset.status;
+  els.accountResetStatus.textContent = "";
+  els.accountResetStatus.classList.add("hidden");
+}
+
+function clearAccountResetFields() {
+  [els.resetAccountPasswordInput, els.resetAccountConfirmInput].forEach((input) => {
+    if (input) input.value = "";
+  });
 }
 
 function setAccountSecurityStatus(key, isError = false) {
@@ -1971,6 +2125,8 @@ function clearSensitiveUi() {
     els.currentPasswordInput,
     els.changePasswordInput,
     els.confirmPasswordInput,
+    els.resetAccountPasswordInput,
+    els.resetAccountConfirmInput,
   ].forEach((element) => {
     if (element) element.value = "";
   });

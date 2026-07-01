@@ -1361,6 +1361,7 @@ tr:hover td {
 }
 
 .account-admin-panel,
+.account-reset-panel,
 .account-security-panel,
 .workspace-management-panel {
   border-color: rgba(36, 113, 93, 0.22);
@@ -1369,6 +1370,7 @@ tr:hover td {
 }
 
 .account-admin-form,
+.account-reset-form,
 .account-security-form,
 .workspace-management-form {
   display: grid;
@@ -1376,6 +1378,7 @@ tr:hover td {
 }
 
 .account-admin-actions,
+.account-reset-actions,
 .account-security-actions,
 .workspace-management-actions {
   display: flex;
@@ -1385,6 +1388,7 @@ tr:hover td {
 }
 
 .account-admin-actions .save-status[data-status="error"],
+.account-reset-actions .save-status[data-status="error"],
 .account-security-actions .save-status[data-status="error"],
 .workspace-management-actions .save-status[data-status="error"] {
   color: var(--danger);

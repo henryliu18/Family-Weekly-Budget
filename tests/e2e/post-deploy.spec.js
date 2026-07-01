@@ -1293,6 +1293,87 @@ test("account security UI changes the signed-in account password", async ({ page
   await expect(page.locator("#userIdentityLabel")).toHaveText(displayName);
 });
 
+test("default owner can reset a secondary account password", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const suffix = Date.now().toString(36);
+  const accountId = `e2e-reset-account-${suffix}`;
+  const displayName = `E2E Reset Account ${suffix}`;
+  const workspaceName = `E2E Reset Workspace ${suffix}`;
+  const oldPassword = `e2e-reset-old-${suffix}`;
+  const newPassword = `e2e-reset-new-${suffix}`;
+
+  await login(page);
+  await page.locator("#languageSelect").selectOption("en");
+  const createResponse = await page.request.post("/api/admin/accounts", {
+    data: {
+      accountId,
+      displayName,
+      email: `${accountId}@example.test`,
+      password: oldPassword,
+      workspaceName,
+    },
+  });
+  expect(createResponse.ok()).toBe(true);
+
+  const listResponse = await page.request.get("/api/admin/accounts");
+  expect(listResponse.ok()).toBe(true);
+  const listedAccounts = await listResponse.json();
+  expect(JSON.stringify(listedAccounts)).not.toContain("passwordHash");
+  expect(listedAccounts.accounts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: accountId,
+        displayName,
+        authProvider: "password",
+        isDefaultUser: false,
+      }),
+    ]),
+  );
+
+  await page.reload();
+  await expect(page.locator("#authOverlay")).toBeHidden();
+  await page.locator("#languageSelect").selectOption("en");
+  await page.locator('.nav-tab[data-view="settings"]').click();
+  await expect(page.locator("#accountResetPanel")).toBeVisible();
+  await page.locator("#resetAccountSelect").selectOption(accountId);
+  await page.locator("#resetAccountPasswordInput").fill(newPassword);
+  await page.locator("#resetAccountConfirmInput").fill("not-the-same-password");
+  await page.locator("#resetAccountPasswordBtn").click();
+  await expect(page.locator("#accountResetStatus")).toHaveText("New password and confirmation do not match.");
+
+  await page.locator("#resetAccountConfirmInput").fill(newPassword);
+  await page.locator("#resetAccountPasswordBtn").click();
+  await expect(page.locator("#accountResetStatus")).toHaveText(`Reset password for ${displayName}.`);
+  await expect(page.locator("#resetAccountPasswordInput")).toHaveValue("");
+  await expect(page.locator("#resetAccountConfirmInput")).toHaveValue("");
+
+  await page.locator("#logoutBtn").click();
+  await expect(page.locator("#authOverlay")).toBeVisible();
+  await page.locator("#loginAccountIdInput").fill(accountId);
+  await page.locator("#passwordInput").fill(oldPassword);
+  await page.locator("#loginBtn").click();
+  await expect(page.locator("#authOverlay")).toBeVisible();
+  await expect(page.locator("#loginError")).toHaveText("Incorrect password. Please try again.");
+
+  await page.locator("#loginAccountIdInput").fill(accountId);
+  await page.locator("#passwordInput").fill(newPassword);
+  await page.locator("#loginBtn").click();
+  await expect(page.locator("#authOverlay")).toBeHidden();
+  await expect(page.locator("#userIdentityLabel")).toHaveText(displayName);
+  await page.locator("#languageSelect").selectOption("en");
+  await page.locator('.nav-tab[data-view="settings"]').click();
+  await expect(page.locator("#accountResetPanel")).toBeHidden();
+
+  const secondaryCannotReset = await page.request.patch(`/api/admin/accounts/${accountId}/password`, {
+    data: {
+      newPassword: `e2e-reset-denied-${suffix}`,
+      confirmPassword: `e2e-reset-denied-${suffix}`,
+    },
+  });
+  expect(secondaryCannotReset.status()).toBe(403);
+});
+
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
