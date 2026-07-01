@@ -111,6 +111,13 @@ async function restoreState(page, state) {
   expect(response.ok()).toBe(true);
 }
 
+async function apiLogin(page) {
+  const resp = await page.request.post("/api/session", {
+    data: { password: accountPassword },
+  });
+  expect(resp.ok()).toBe(true);
+}
+
 async function seedTrendMonths(page) {
   const apiContext = await createDefaultWorkspaceApiContext();
   const limit = 15000;
@@ -215,7 +222,7 @@ test("landing page serves standalone entry", async ({ page }) => {
 test("authenticated state API persists current workspace data", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
-  await login(page);
+  await apiLogin(page);
 
   const originalResponse = await page.request.get("/api/state");
   expect(originalResponse.ok()).toBe(true);
@@ -1620,12 +1627,12 @@ test("transaction import accepts copied online banking text", async ({ page }) =
   const originalState = await readState(page);
 
   try {
-    await addMonth(page, "2026-06");
+    await addMonth(page, "2099-06");
     await page.locator('.nav-tab[data-view="entry"]').click();
     await expect(page.locator("#entryView")).toHaveClass(/active/);
 
-    await page.locator("#periodStartInput").fill("2026-06-22");
-    await page.locator("#periodEndInput").fill("2026-06-23");
+    await page.locator("#periodStartInput").fill("2099-06-22");
+    await page.locator("#periodEndInput").fill("2099-06-23");
     await page.locator("#availableInput").fill("14800");
     await page.locator("#unpaidInput").fill("0");
 
@@ -1634,22 +1641,22 @@ test("transaction import accepts copied online banking text", async ({ page }) =
       "+$10,956.21",
       "",
       "Total owing$3,687.95",
-      "23 Jun 2026",
+      "23 Jun 2099",
       "Open transaction detailsPENDING - Department of Transpor Melbourne AUS",
       "-$20.00",
-      "23 Jun 2026",
+      "23 Jun 2099",
       "Open transaction detailsPENDING - Public Transport Victo Melbourne AUS",
       "",
-      "23 Jun 2026",
+      "23 Jun 2099",
       "Open transaction detailsPENDING - SQ *DONCASTER Doncaster Eas AUS",
       "-$26.50",
-      "23 Jun 2026",
+      "23 Jun 2099",
       "Open transaction detailsPENDING - ALDI STORES THE PINES AUS",
       "-$42.55",
-      "22 Jun 2026",
+      "22 Jun 2099",
       "Open transaction detailsPENDING - POINT PARKING Dandenong Rd AUS",
       "-$4.06",
-      "22 Jun 2026",
+      "22 Jun 2099",
       "Open transaction detailsPENDING - Daiso (Chadstone SC) Chadstone AUS",
       "-$3.30",
     ].join("\n");
