@@ -77,6 +77,7 @@ const i18n = {
     monthlyTrendSub: "以月份比較採買、非採買與意外支出",
     needTwoMonths: "需要至少兩個月份才有趨勢",
     monthlyTotal: "月總支出",
+    total: "總計",
     monthWeeks: "月份週紀錄",
     period: "週期",
     to: "至",
@@ -198,6 +199,11 @@ const i18n = {
     deleteOnlyMonth: "至少需要保留一個月份。",
     deleteConfirm: (name) => `確定要移除「${name}」嗎？這會刪除該月份的所有週紀錄。`,
     importFailed: "匯入失敗，請確認 JSON 格式正確。",
+    dialogNoticeTitle: "提示",
+    dialogConfirmTitle: "請確認",
+    dialogOk: "確定",
+    dialogConfirm: "確定",
+    createWorkspaceTitle: "新增工作區",
     firstPeriod: "Period 1",
     secondPeriod: "Period 2",
     thirdPeriod: "Period 3",
@@ -316,6 +322,7 @@ const i18n = {
     monthlyTrendSub: "Compare grocery, non-grocery, and incidental spending by month",
     needTwoMonths: "At least two months are needed for a trend",
     monthlyTotal: "Monthly total",
+    total: "Total",
     monthWeeks: "Month Period Records",
     period: "Period",
     to: "to",
@@ -437,6 +444,11 @@ const i18n = {
     deleteOnlyMonth: "Keep at least one month.",
     deleteConfirm: (name) => `Delete "${name}" and all period records in it?`,
     importFailed: "Import failed. Please check the JSON format.",
+    dialogNoticeTitle: "Notice",
+    dialogConfirmTitle: "Please confirm",
+    dialogOk: "OK",
+    dialogConfirm: "Confirm",
+    createWorkspaceTitle: "New workspace",
     firstPeriod: "Period 1",
     secondPeriod: "Period 2",
     thirdPeriod: "Period 3",
@@ -884,6 +896,7 @@ function bindElements() {
     "chartTooltip",
     "monthlyTrendChart",
     "monthlyTrendEmpty",
+    "monthlyTrendTable",
     "trendTooltip",
     "weeksTable",
     "weeksTableEmpty",
@@ -935,6 +948,14 @@ function bindElements() {
     "newMonthPicker",
     "cancelMonthBtn",
     "confirmMonthBtn",
+    "appModal",
+    "appModalTitle",
+    "appModalMessage",
+    "appModalFieldWrap",
+    "appModalFieldLabel",
+    "appModalInput",
+    "appModalCancel",
+    "appModalConfirm",
     "brandHome",
     "userIdentityLabel",
     "personalTitleSuffix",
@@ -1005,6 +1026,32 @@ function bindEvents() {
   els.monthDialog?.addEventListener("click", (event) => {
     if (event.target === els.monthDialog) closeMonthDialog();
   });
+  els.monthDialog?.querySelector("form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    addMonth();
+  });
+  els.monthDialog?.addEventListener("close", () => finalizeDialogCleanup(els.monthDialog));
+
+  // Reusable styled modal (confirm / alert / prompt)
+  els.appModal?.querySelector("form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    settleModal(isModalPrompting() ? els.appModalInput.value : true);
+  });
+  els.appModalCancel?.addEventListener("click", () => settleModal(isModalPrompting() ? null : false));
+  els.appModal?.addEventListener("click", (event) => {
+    if (event.target === els.appModal) settleModal(isModalPrompting() ? null : false);
+  });
+  els.appModal?.addEventListener("close", () => {
+    if (modalResolver) {
+      const resolve = modalResolver;
+      modalResolver = null;
+      finalizeDialogCleanup(els.appModal);
+      resolve(isModalPrompting() ? null : false);
+    } else {
+      finalizeDialogCleanup(els.appModal);
+    }
+  });
+
   els.brandHome?.addEventListener("click", () => switchView("overview"));
 
   els.weekSelect.addEventListener("change", () => {
@@ -1027,11 +1074,28 @@ function bindEvents() {
   els.saveWeekBtn.addEventListener("click", saveWeekFromForm);
   els.parseImportBtn?.addEventListener("click", parseTransactionImport);
   els.applyImportBtn?.addEventListener("click", applyTransactionImport);
-  document.querySelectorAll(".import-tab").forEach((button) => {
-    button.addEventListener("click", () => {
-      importDraft.activeTab = button.dataset.importTab;
-      renderImportDraft();
-    });
+  const importTabButtons = Array.from(document.querySelectorAll(".import-tab"));
+  const activateImportTab = (button, { focus = false } = {}) => {
+    if (!button) return;
+    importDraft.activeTab = button.dataset.importTab;
+    renderImportDraft();
+    if (focus) button.focus();
+  };
+  importTabButtons.forEach((button) => {
+    button.addEventListener("click", () => activateImportTab(button));
+  });
+  document.querySelector(".import-tabs")?.addEventListener("keydown", (event) => {
+    const currentIndex = importTabButtons.indexOf(document.activeElement);
+    if (currentIndex === -1) return;
+    let nextIndex = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") nextIndex = currentIndex + 1;
+    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") nextIndex = currentIndex - 1;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = importTabButtons.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const count = importTabButtons.length;
+    activateImportTab(importTabButtons[((nextIndex % count) + count) % count], { focus: true });
   });
   els.importRows?.addEventListener("click", handleImportRowAction);
   els.importRows?.addEventListener("change", handleImportCategoryChange);
@@ -1068,7 +1132,12 @@ function bindEvents() {
 
 function switchView(view) {
   document.querySelectorAll(".nav-tab").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === view);
+    const isActive = button.dataset.view === view;
+    button.classList.toggle("active", isActive);
+    if (button.dataset.view) {
+      if (isActive) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    }
   });
   document.querySelectorAll(".view").forEach((section) => {
     section.classList.toggle("active", section.id === `${view}View`);
@@ -1382,12 +1451,26 @@ function updateAuthUi() {
   }
 }
 
+function setButtonLoading(button, loading) {
+  if (!button) return;
+  if (loading) {
+    button.setAttribute("aria-busy", "true");
+    button.classList.add("is-loading");
+    button.disabled = true;
+  } else {
+    button.removeAttribute("aria-busy");
+    button.classList.remove("is-loading");
+    button.disabled = false;
+  }
+}
+
 async function handleLogin(event) {
   event.preventDefault();
   clearLoginError();
   const password = els.passwordInput.value;
   const accountId = els.loginAccountIdInput?.value.trim();
   const payload = accountId ? { accountId, password } : { password };
+  setButtonLoading(els.loginBtn, true);
   try {
     const response = await fetch("/api/session", {
       method: "POST",
@@ -1407,6 +1490,8 @@ async function handleLogin(event) {
     renderAll();
   } catch {
     showLoginError("loginFailed");
+  } finally {
+    setButtonLoading(els.loginBtn, false);
   }
 }
 
@@ -1508,7 +1593,7 @@ async function renameWorkspaceFromForm(event) {
   const name = els.workspaceRenameInput?.value.trim();
   if (!workspace || !name) return;
   clearWorkspaceManagementStatus();
-  if (els.renameWorkspaceBtn) els.renameWorkspaceBtn.disabled = true;
+  setButtonLoading(els.renameWorkspaceBtn, true);
   try {
     const response = await fetch(`/api/workspaces/${encodeURIComponent(workspace.id)}`, {
       method: "PATCH",
@@ -1523,7 +1608,7 @@ async function renameWorkspaceFromForm(event) {
   } catch {
     setWorkspaceManagementStatus("workspaceRenameFailed", true);
   } finally {
-    if (els.renameWorkspaceBtn) els.renameWorkspaceBtn.disabled = false;
+    setButtonLoading(els.renameWorkspaceBtn, false);
     syncWorkspaceManagementForm();
   }
 }
@@ -1532,10 +1617,11 @@ async function deleteWorkspaceFromForm() {
   const workspace = selectedManagedWorkspace();
   if (!workspace) return;
   const name = workspace.name || workspace.id;
-  if (!window.confirm(t("workspaceDeleteConfirm", name))) return;
+  const confirmed = await confirmDialog(t("workspaceDeleteConfirm", name));
+  if (!confirmed) return;
   clearWorkspaceManagementStatus();
   const previousWorkspaceId = accountState?.currentWorkspace?.id || "";
-  if (els.deleteWorkspaceBtn) els.deleteWorkspaceBtn.disabled = true;
+  setButtonLoading(els.deleteWorkspaceBtn, true);
   try {
     const response = await fetch(`/api/workspaces/${encodeURIComponent(workspace.id)}`, {
       method: "DELETE",
@@ -1551,7 +1637,7 @@ async function deleteWorkspaceFromForm() {
   } catch {
     setWorkspaceManagementStatus("workspaceDeleteFailed", true);
   } finally {
-    if (els.deleteWorkspaceBtn) els.deleteWorkspaceBtn.disabled = false;
+    setButtonLoading(els.deleteWorkspaceBtn, false);
     syncWorkspaceManagementForm();
   }
 }
@@ -1574,7 +1660,7 @@ async function createAccountFromForm(event) {
   });
 
   setAccountAdminStatus("accountCreateSaving");
-  if (els.createAccountBtn) els.createAccountBtn.disabled = true;
+  setButtonLoading(els.createAccountBtn, true);
   try {
     const response = await fetch("/api/admin/accounts", {
       method: "POST",
@@ -1598,7 +1684,7 @@ async function createAccountFromForm(event) {
   } catch {
     setAccountAdminStatus("accountCreateFailed", true);
   } finally {
-    if (els.createAccountBtn) els.createAccountBtn.disabled = false;
+    setButtonLoading(els.createAccountBtn, false);
   }
 }
 
@@ -1657,10 +1743,13 @@ function clearWorkspaceManagementStatus() {
 }
 
 async function createWorkspace() {
-  const name = window.prompt(t("createWorkspacePrompt"));
+  const name = await promptDialog(t("createWorkspacePrompt"), {
+    title: t("createWorkspaceTitle"),
+    fieldLabel: t("workspaceName"),
+  });
   if (!name || !name.trim()) return;
   if (els.workspaceSwitchStatus) els.workspaceSwitchStatus.textContent = t("workspaceSwitching");
-  if (els.createWorkspaceBtn) els.createWorkspaceBtn.disabled = true;
+  setButtonLoading(els.createWorkspaceBtn, true);
   try {
     const response = await fetch("/api/workspaces", {
       method: "POST",
@@ -1681,7 +1770,7 @@ async function createWorkspace() {
   } catch {
     if (els.workspaceSwitchStatus) els.workspaceSwitchStatus.textContent = t("createWorkspaceFailed");
   } finally {
-    if (els.createWorkspaceBtn) els.createWorkspaceBtn.disabled = false;
+    setButtonLoading(els.createWorkspaceBtn, false);
   }
 }
 
@@ -2694,7 +2783,13 @@ function renderImportTabs() {
           ? "needsReviewRows"
           : "excludedRows";
     button.textContent = t(key);
-    button.classList.toggle("active", button.dataset.importTab === importDraft.activeTab);
+    const isActive = button.dataset.importTab === importDraft.activeTab;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+    button.tabIndex = isActive ? 0 : -1;
+    if (isActive && els.importRows && button.id) {
+      els.importRows.setAttribute("aria-labelledby", button.id);
+    }
   });
 }
 
@@ -2942,11 +3037,8 @@ function showSaveFeedback(feedback = {}) {
     feedback.period && feedback.total && feedback.grocery
       ? t("saveSuccessDetailed", feedback.period, feedback.total, feedback.grocery)
       : t("saveSuccess");
-  if (els.saveStatus) {
-    els.saveStatus.textContent = message;
-    els.saveStatus.classList.remove("hidden");
-    setTimeout(() => els.saveStatus?.classList.add("hidden"), 2200);
-  }
+  // Single confirmation: the fixed toast (always visible) is the source of truth,
+  // avoiding a duplicate aria-live announcement from the inline status line.
   if (!els.saveToast) return;
   els.saveToast.textContent = message;
   els.saveToast.classList.remove("hidden");
@@ -2960,6 +3052,173 @@ function supportsModalDialog(dialog) {
   return !!dialog && typeof dialog.showModal === "function" && typeof dialog.close === "function";
 }
 
+// ---- Shared dialog + focus management -----------------------------------
+
+let lastFocusedBeforeModal = null;
+let activeFallbackModal = null;
+
+function getFocusableElements(container) {
+  if (!container) return [];
+  const selector =
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  return Array.from(container.querySelectorAll(selector)).filter(
+    (el) => !el.hasAttribute("hidden") && el.offsetParent !== null,
+  );
+}
+
+function focusFirstElement(container) {
+  const focusable = getFocusableElements(container);
+  (focusable[0] || container)?.focus?.();
+}
+
+function restoreFocusAfterModal() {
+  const target = lastFocusedBeforeModal;
+  lastFocusedBeforeModal = null;
+  if (target && typeof target.focus === "function" && document.contains(target)) {
+    target.focus();
+  }
+}
+
+function handleFallbackModalKeydown(event) {
+  if (!activeFallbackModal) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    activeFallbackModal.onEscape?.();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = getFocusableElements(activeFallbackModal.element);
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function finalizeDialogCleanup(dialog) {
+  if (!dialog) return;
+  dialog.classList.remove("dialog-fallback-open");
+  dialog.removeAttribute("open");
+  document.body.classList.remove("dialog-open");
+  if (activeFallbackModal && activeFallbackModal.element === dialog) {
+    document.removeEventListener("keydown", handleFallbackModalKeydown, true);
+    activeFallbackModal = null;
+  }
+  restoreFocusAfterModal();
+}
+
+function openDialogElement(dialog, { onEscape } = {}) {
+  if (!dialog) return;
+  lastFocusedBeforeModal = document.activeElement;
+  if (supportsModalDialog(dialog)) {
+    try {
+      dialog.showModal();
+      focusFirstElement(dialog);
+      return;
+    } catch (error) {
+      console.warn("Falling back to non-modal dialog.", error);
+    }
+  }
+  dialog.setAttribute("open", "open");
+  dialog.classList.add("dialog-fallback-open");
+  document.body.classList.add("dialog-open");
+  activeFallbackModal = { element: dialog, onEscape: onEscape || (() => closeDialogElement(dialog)) };
+  document.addEventListener("keydown", handleFallbackModalKeydown, true);
+  focusFirstElement(dialog);
+}
+
+function closeDialogElement(dialog) {
+  if (!dialog) return;
+  if (supportsModalDialog(dialog) && dialog.open) {
+    try {
+      dialog.close();
+      return; // native "close" event runs finalizeDialogCleanup
+    } catch (error) {
+      console.warn("Closing dialog via fallback.", error);
+    }
+  }
+  finalizeDialogCleanup(dialog);
+}
+
+// ---- Promise-based styled modal (confirm / alert / prompt) ---------------
+
+let modalResolver = null;
+
+function isModalPrompting() {
+  return !!els.appModalFieldWrap && !els.appModalFieldWrap.classList.contains("hidden");
+}
+
+function settleModal(value) {
+  const resolve = modalResolver;
+  modalResolver = null;
+  closeDialogElement(els.appModal);
+  if (resolve) resolve(value);
+}
+
+function openModal({
+  title = "",
+  message = "",
+  tone = "default",
+  confirmLabel = "",
+  cancelLabel = "",
+  showCancel = true,
+  prompt = false,
+  fieldLabel = "",
+  defaultValue = "",
+} = {}) {
+  return new Promise((resolve) => {
+    if (!els.appModal || !supportsModalDialog(els.appModal)) {
+      // Graceful degradation if the styled dialog is unavailable.
+      if (prompt) return resolve(window.prompt(message || title || "", defaultValue));
+      if (showCancel) return resolve(window.confirm(message || title || ""));
+      window.alert(message || title || "");
+      return resolve(true);
+    }
+    modalResolver = resolve;
+    const card = els.appModal.querySelector(".dialog-card");
+    card?.classList.toggle("dialog-danger", tone === "danger");
+    setText(els.appModalTitle, title);
+    els.appModalTitle.classList.toggle("hidden", !title);
+    setText(els.appModalMessage, message);
+    els.appModalMessage.classList.toggle("hidden", !message);
+    els.appModalFieldWrap.classList.toggle("hidden", !prompt);
+    if (prompt) {
+      setText(els.appModalFieldLabel, fieldLabel);
+      els.appModalFieldLabel.classList.toggle("hidden", !fieldLabel);
+      els.appModalInput.value = defaultValue || "";
+    }
+    setText(els.appModalConfirm, confirmLabel || t("dialogConfirm"));
+    setText(els.appModalCancel, cancelLabel || t("cancel"));
+    els.appModalCancel.classList.toggle("hidden", !showCancel);
+    openDialogElement(els.appModal, { onEscape: () => settleModal(prompt ? null : showCancel ? false : true) });
+    if (prompt) setTimeout(() => els.appModalInput?.focus(), 0);
+  });
+}
+
+function confirmDialog(message, { title, tone = "danger", confirmLabel } = {}) {
+  return openModal({ title: title || t("dialogConfirmTitle"), message, tone, confirmLabel, showCancel: true });
+}
+
+function alertDialog(message, { title } = {}) {
+  return openModal({ title: title || t("dialogNoticeTitle"), message, showCancel: false, confirmLabel: t("dialogOk") });
+}
+
+function promptDialog(message, { title, fieldLabel, defaultValue = "" } = {}) {
+  return openModal({
+    title: title || t("dialogNoticeTitle"),
+    message,
+    prompt: true,
+    fieldLabel,
+    defaultValue,
+    confirmLabel: t("dialogConfirm"),
+  });
+}
+
 function openMonthDialog() {
   if (!els.monthDialog) return;
   const selectedSortKey = inferMonthSortKey(currentMonth());
@@ -2969,32 +3228,11 @@ function openMonthDialog() {
       ? selectedSortKey
       : formatMonthSortKey(today.getFullYear(), today.getMonth() + 1);
   }
-  if (supportsModalDialog(els.monthDialog)) {
-    try {
-      els.monthDialog.showModal();
-      return;
-    } catch (error) {
-      console.warn("Falling back to non-modal month dialog.", error);
-    }
-  }
-
-  els.monthDialog.setAttribute("open", "open");
-  els.monthDialog.classList.add("dialog-fallback-open");
-  document.body.classList.add("dialog-open");
+  openDialogElement(els.monthDialog, { onEscape: () => closeMonthDialog() });
 }
 
 function closeMonthDialog() {
-  if (!els.monthDialog) return;
-  if (supportsModalDialog(els.monthDialog) && els.monthDialog.open) {
-    try {
-      els.monthDialog.close();
-    } catch (error) {
-      console.warn("Closing month dialog via fallback.", error);
-    }
-  }
-  els.monthDialog.classList.remove("dialog-fallback-open");
-  els.monthDialog.removeAttribute("open");
-  document.body.classList.remove("dialog-open");
+  closeDialogElement(els.monthDialog);
 }
 
 function addMonth() {
@@ -3029,15 +3267,15 @@ function addMonth() {
   renderAll();
 }
 
-function deleteCurrentMonth() {
+async function deleteCurrentMonth() {
   const monthIds = orderedMonths().map((month) => month.id);
   if (monthIds.length <= 1) {
-    alert(t("deleteOnlyMonth"));
+    await alertDialog(t("deleteOnlyMonth"));
     return;
   }
 
   const month = currentMonth();
-  const ok = confirm(t("deleteConfirm", monthDisplayName(month)));
+  const ok = await confirmDialog(t("deleteConfirm", monthDisplayName(month)));
   if (!ok) return;
 
   const currentIndex = monthIds.indexOf(currentMonthId);
@@ -3097,7 +3335,7 @@ function importData(event) {
       currentWeekId = currentMonth().weeks[0]?.id;
       renderAll();
     } catch {
-      alert(t("importFailed"));
+      alertDialog(t("importFailed"));
     } finally {
       event.target.value = "";
     }
@@ -3342,12 +3580,51 @@ function monthlyStatusKind(month) {
   return "good";
 }
 
+function renderMonthlyTrendAccessibleView(rows) {
+  const canvas = els.monthlyTrendChart;
+  if (canvas) {
+    const summary = rows
+      .map(
+        (row) =>
+          `${row.name}: ${t("nonGrocery")} ${formatMoney(row.nonGrocery)}, ${t("grocery")} ${formatMoney(
+            row.grocery,
+          )}, ${t("incidentals")} ${formatMoney(row.incidentals)}`,
+      )
+      .join("; ");
+    canvas.setAttribute("aria-label", `${t("monthlyTrend")}. ${summary}`);
+  }
+  const table = els.monthlyTrendTable;
+  if (!table) return;
+  if (!rows.length) {
+    table.innerHTML = "";
+    return;
+  }
+  const head = `<caption>${escapeHtml(t("monthlyTrend"))}</caption>
+    <thead><tr>
+      <th scope="col">${escapeHtml(t("month"))}</th>
+      <th scope="col">${escapeHtml(t("nonGrocery"))}</th>
+      <th scope="col">${escapeHtml(t("grocery"))}</th>
+      <th scope="col">${escapeHtml(t("incidentals"))}</th>
+      <th scope="col">${escapeHtml(t("total"))}</th>
+    </tr></thead>`;
+  const body = rows
+    .map(
+      (row) =>
+        `<tr><th scope="row">${escapeHtml(row.name)}</th><td>${escapeHtml(formatMoney(row.nonGrocery))}</td><td>${escapeHtml(
+          formatMoney(row.grocery),
+        )}</td><td>${escapeHtml(formatMoney(row.incidentals))}</td><td>${escapeHtml(formatMoney(row.total))}</td></tr>`,
+    )
+    .join("");
+  table.innerHTML = `${head}<tbody>${body}</tbody>`;
+}
+
 function drawMonthlyTrendChart() {
   const canvas = els.monthlyTrendChart;
   if (!canvas) return;
   const { ctx, width, height } = prepareCanvas(canvas, 340);
   if (!ctx) return;
   const rows = monthlyTrendRows();
+  renderMonthlyTrendAccessibleView(rows);
   const top = 34;
   const compact = width < 460;
   const right = compact ? 12 : 24;

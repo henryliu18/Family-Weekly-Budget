@@ -5,3 +5,5 @@ certs/
 .vscode/
 internal-documentation
 android-app
+.tmp-workspaces/
+.codex*/
