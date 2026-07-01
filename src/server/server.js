@@ -820,7 +820,13 @@ async function deleteWorkspaceForSession(session, workspaceId) {
   delete registry.workspaces[id];
   registry.memberships = registry.memberships.filter((membership) => membership.workspaceId !== id);
   await writeAccountRegistry(registry);
-  const storeDeleted = await deleteWorkspaceStore(id);
+  let storeDeleted = false;
+  let storeCleanupWarning = null;
+  try {
+    storeDeleted = await deleteWorkspaceStore(id);
+  } catch {
+    storeCleanupWarning = "Workspace registry was updated, but store cleanup failed.";
+  }
 
   for (const activeSession of sessions.values()) {
     if (activeSession.accountId === account.id && activeSession.workspaceId === id) {
@@ -834,6 +840,7 @@ async function deleteWorkspaceForSession(session, workspaceId) {
     deletedWorkspaceId: id,
     currentWorkspaceId: session.workspaceId,
     storeDeleted,
+    storeCleanupWarning,
   };
 }
 

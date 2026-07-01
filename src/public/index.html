@@ -130,32 +130,6 @@
             </div>
           </section>
 
-          <section id="workspaceManagementPanel" class="panel workspace-management-panel hidden">
-            <div class="panel-head">
-              <div>
-                <h3 data-i18n="workspaceManagementTitle">Workspace management</h3>
-                <p data-i18n="workspaceManagementSub">Rename or delete workspaces owned by this account.</p>
-              </div>
-            </div>
-            <form id="workspaceManagementForm" class="workspace-management-form">
-              <div class="form-grid">
-                <label class="field">
-                  <span data-i18n="workspace">Workspace</span>
-                  <select id="workspaceManageSelect"></select>
-                </label>
-                <label class="field">
-                  <span data-i18n="workspaceName">Workspace name</span>
-                  <input id="workspaceRenameInput" type="text" autocomplete="off" />
-                </label>
-              </div>
-              <div class="workspace-management-actions">
-                <button id="renameWorkspaceBtn" class="primary-btn" type="submit" data-i18n="renameWorkspace">Rename workspace</button>
-                <button id="deleteWorkspaceBtn" class="danger-btn" type="button" data-i18n="deleteWorkspace">Delete workspace</button>
-                <p id="workspaceManagementStatus" class="save-status hidden" role="status" aria-live="polite"></p>
-              </div>
-            </form>
-          </section>
-
           <section class="panel">
             <div class="panel-head">
               <div>
@@ -417,6 +391,32 @@
                 <input id="creditLimitInput" type="number" min="0" step="0.01" />
               </label>
             </div>
+          </section>
+
+          <section id="workspaceManagementPanel" class="panel workspace-management-panel hidden">
+            <div class="panel-head">
+              <div>
+                <h3 data-i18n="workspaceManagementTitle">Workspace management</h3>
+                <p data-i18n="workspaceManagementSub">Rename or delete workspaces owned by this account.</p>
+              </div>
+            </div>
+            <form id="workspaceManagementForm" class="workspace-management-form">
+              <div class="form-grid">
+                <label class="field">
+                  <span data-i18n="workspace">Workspace</span>
+                  <select id="workspaceManageSelect"></select>
+                </label>
+                <label class="field">
+                  <span data-i18n="workspaceName">Workspace name</span>
+                  <input id="workspaceRenameInput" type="text" autocomplete="off" />
+                </label>
+              </div>
+              <div class="workspace-management-actions">
+                <button id="renameWorkspaceBtn" class="primary-btn" type="submit" data-i18n="renameWorkspace">Rename workspace</button>
+                <button id="deleteWorkspaceBtn" class="danger-btn" type="button" data-i18n="deleteWorkspace">Delete workspace</button>
+                <p id="workspaceManagementStatus" class="save-status hidden" role="status" aria-live="polite"></p>
+              </div>
+            </form>
           </section>
 
           <section id="accountAdminPanel" class="panel account-admin-panel hidden">
