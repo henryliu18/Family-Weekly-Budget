@@ -83,6 +83,23 @@ async function addMonth(page, monthValue) {
   await expect(page.locator("#monthDialog")).toBeHidden();
 }
 
+async function fillAppPrompt(page, value, { title, message } = {}) {
+  await expect(page.locator("#appModal")).toBeVisible();
+  if (title) await expect(page.locator("#appModalTitle")).toHaveText(title);
+  if (message) await expect(page.locator("#appModalMessage")).toHaveText(message);
+  await page.locator("#appModalInput").fill(value);
+  await page.locator("#appModalConfirm").click();
+  await expect(page.locator("#appModal")).toBeHidden();
+}
+
+async function confirmAppModal(page, { title, message } = {}) {
+  await expect(page.locator("#appModal")).toBeVisible();
+  if (title) await expect(page.locator("#appModalTitle")).toHaveText(title);
+  if (message) await expect(page.locator("#appModalMessage")).toHaveText(message);
+  await page.locator("#appModalConfirm").click();
+  await expect(page.locator("#appModal")).toBeHidden();
+}
+
 async function readState(page) {
   const response = await page.request.get("/api/state");
   expect(response.ok()).toBe(true);
@@ -1090,12 +1107,11 @@ test("workspace create button adds and switches to a new workspace", async ({ pa
   await page.locator("#languageSelect").selectOption("en");
   await expect(page.locator("#createWorkspaceBtn")).toBeVisible();
 
-  page.once("dialog", async (dialog) => {
-    expect(dialog.type()).toBe("prompt");
-    expect(dialog.message()).toBe("Enter a name for the new workspace");
-    await dialog.accept("E2E UI Workspace");
-  });
   await page.locator("#createWorkspaceBtn").click();
+  await fillAppPrompt(page, "E2E UI Workspace", {
+    title: "New workspace",
+    message: "Enter a name for the new workspace",
+  });
   await expect(page.locator("#workspaceSwitchStatus")).toHaveText("Workspace switched");
   await expect(page.locator("#workspaceSelect option:checked")).toHaveText("E2E UI Workspace");
   const selectedWorkspaceId = await page.locator("#workspaceSelect").inputValue();
@@ -1119,12 +1135,11 @@ test("workspace create button adds and switches to a new workspace", async ({ pa
   await expect(page.locator("#workspaceManagementStatus")).toHaveText("Workspace renamed.");
   await expect(page.locator("#workspaceSelect option:checked")).toHaveText("E2E UI Workspace Renamed");
 
-  page.once("dialog", async (dialog) => {
-    expect(dialog.type()).toBe("confirm");
-    expect(dialog.message()).toBe('Delete "E2E UI Workspace Renamed"? This permanently removes this workspace\'s data.');
-    await dialog.accept();
-  });
   await page.locator("#deleteWorkspaceBtn").click();
+  await confirmAppModal(page, {
+    title: "Please confirm",
+    message: 'Delete "E2E UI Workspace Renamed"? This permanently removes this workspace\'s data.',
+  });
   await expect(page.locator("#workspaceManagementStatus")).toHaveText("Workspace deleted.");
   await expect(page.locator("#workspaceSelect")).toHaveValue("e2e-default");
   const workspaceValuesAfterDelete = await page.locator("#workspaceSelect option").evaluateAll((options) =>
@@ -1313,11 +1328,11 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await expect(page.locator("#monthlyTrendEmpty")).toBeVisible();
   await expect(page.locator("#weeksTableEmpty")).toBeVisible();
 
-  page.on("dialog", async (dialog) => {
-    expect(dialog.type()).toBe("confirm");
-    await dialog.accept();
-  });
   await page.locator("#deleteMonthBtn").click();
+  await confirmAppModal(page, {
+    title: "Please confirm",
+    message: 'Delete "2030 January" and all period records in it?',
+  });
   await expect(page.locator("#overviewTitle")).not.toHaveText("2030 January");
 
   await page.locator("#logoutBtn").click();
