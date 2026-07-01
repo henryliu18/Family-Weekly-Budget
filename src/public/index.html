@@ -426,6 +426,36 @@
             </form>
           </section>
 
+          <section id="accountSecurityPanel" class="panel account-security-panel hidden">
+            <div class="panel-head">
+              <div>
+                <h3 data-i18n="accountSecurityTitle">Account security</h3>
+                <p data-i18n="accountSecuritySub">Change the password for the account currently signed in.</p>
+              </div>
+            </div>
+            <div id="accountSecurityIdentity" class="account-security-identity"></div>
+            <form id="accountSecurityForm" class="account-security-form">
+              <div class="form-grid">
+                <label class="field">
+                  <span data-i18n="currentPassword">Current password</span>
+                  <input id="currentPasswordInput" type="password" autocomplete="current-password" />
+                </label>
+                <label class="field">
+                  <span data-i18n="newPassword">New password</span>
+                  <input id="changePasswordInput" type="password" autocomplete="new-password" />
+                </label>
+                <label class="field">
+                  <span data-i18n="confirmNewPassword">Confirm new password</span>
+                  <input id="confirmPasswordInput" type="password" autocomplete="new-password" />
+                </label>
+              </div>
+              <div class="account-security-actions">
+                <button id="changePasswordBtn" class="primary-btn" type="submit" data-i18n="changePassword">Change password</button>
+                <p id="accountSecurityStatus" class="save-status hidden" role="status" aria-live="polite"></p>
+              </div>
+            </form>
+          </section>
+
           <section id="accountAdminPanel" class="panel account-admin-panel hidden">
             <div class="panel-head">
               <div>
