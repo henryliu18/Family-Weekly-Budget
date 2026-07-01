@@ -1987,3 +1987,142 @@ test("bar colors scale with spending via /api/state", async ({ page }) => {
     expect(kinds.good.kind).toBe("good");
   }
 });
+
+test("signed-in user can edit display name in Settings", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+
+  await page.locator('.nav-tab[data-view="settings"]').click();
+  await expect(page.locator("#settingsView")).toHaveClass(/active/);
+  await expect(page.locator("#profilePanel")).not.toBeHidden();
+
+  const newName = `E2E User ${Date.now()}`;
+  await page.locator("#profileDisplayNameInput").fill(newName);
+  await page.locator("#saveProfileBtn").click();
+  await expect(page.locator("#profileStatus")).toContainText("Profile saved.");
+
+  // Verify persisted via /api/me
+  const meResp = await page.request.get("/api/me");
+  expect(meResp.ok()).toBe(true);
+  const meData = await meResp.json();
+  expect(meData.user.displayName).toBe(newName);
+  expect(meData.account.id).toBeTruthy();
+  expect(meData.account.id).not.toBe(newName);
+});
+
+test("display name persists after reload", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const originalName = `E2E Persist ${Date.now()}`;
+  await login(page);
+  await page.locator('.nav-tab[data-view="settings"]').click();
+  await page.locator("#profileDisplayNameInput").fill(originalName);
+  await page.locator("#saveProfileBtn").click();
+  await expect(page.locator("#profileStatus")).toContainText("Profile saved.");
+
+  await page.reload();
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  await page.locator('.nav-tab[data-view="settings"]').click();
+  await expect(page.locator("#profileDisplayNameInput")).toHaveValue(originalName);
+
+  // Verify via API
+  const meResp = await page.request.get("/api/me");
+  expect(meResp.ok()).toBe(true);
+  const meData = await meResp.json();
+  expect(meData.user.displayName).toBe(originalName);
+});
+
+test("visitor can submit trial access request from landing page", async ({ page }) => {
+  await page.goto("/");
+
+  await page.locator("#trialRequestNameInput").fill("E2E Tester");
+  await page.locator("#trialRequestEmailInput").fill("e2e@example.test");
+  await page.locator("#trialRequestNoteInput").fill("E2E test note");
+  await page.locator("#trialRequestBtn").click();
+
+  await expect(page.locator("#trialRequestStatus")).toContainText("Your request has been submitted");
+  await expect(page.locator("#trialRequestNameInput")).toHaveValue("");
+  await expect(page.locator("#trialRequestEmailInput")).toHaveValue("");
+});
+
+test("invalid trial request is rejected", async ({ page }) => {
+  await page.goto("/");
+
+  // Empty name
+  await page.locator("#trialRequestEmailInput").fill("e2e@example.test");
+  await page.locator("#trialRequestBtn").click();
+  await expect(page.locator("#trialRequestStatus")).not.toContainText("Your request has been submitted");
+
+  // Invalid email
+  await page.locator("#trialRequestNameInput").fill("E2E Tester");
+  await page.locator("#trialRequestEmailInput").fill("not-an-email");
+  await page.locator("#trialRequestBtn").click();
+  await expect(page.locator("#trialRequestStatus")).not.toContainText("Your request has been submitted");
+});
+
+test("default owner can see pending trial requests in Settings", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  // Submit a request on landing page
+  await page.goto("/");
+  await page.locator("#trialRequestNameInput").fill("Owner See Test");
+  await page.locator("#trialRequestEmailInput").fill("owner-see@example.test");
+  await page.locator("#trialRequestNoteInput").fill("Testing owner view");
+  await page.locator("#trialRequestBtn").click();
+  await expect(page.locator("#trialRequestStatus")).toContainText("Your request has been submitted");
+
+  // Login as owner and check Settings
+  await login(page);
+  await page.locator('.nav-tab[data-view="settings"]').click();
+  await expect(page.locator("#trialRequestsPanel")).not.toBeHidden();
+  await expect(page.locator(".trial-request-item")).toContainText("Owner See Test");
+});
+
+test("secondary account cannot see trial requests", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  // Login as owner via page.request (shares cookies with page context)
+  await apiLogin(page);
+  const secondaryId = `e2e-secondary-${Date.now()}`;
+  const createResp = await page.request.post("/api/admin/accounts", {
+    data: {
+      accountId: secondaryId,
+      displayName: "Secondary Tester",
+      email: "secondary@example.test",
+      password: "testpassword123",
+      workspaceName: "Secondary WS",
+    },
+  });
+  expect(createResp.ok()).toBe(true);
+
+  // Login as secondary via page.request (shares cookies with page context)
+  const loginResp = await page.request.post("/api/session", {
+    data: { password: "testpassword123", accountId: secondaryId },
+  });
+  expect(loginResp.ok()).toBe(true);
+
+  // Navigate to app - cookies are shared via page.request
+  await page.goto("/app");
+  await expect(page.locator("#overviewView")).toHaveClass(/active/);
+  await page.locator('.nav-tab[data-view="settings"]').click();
+  await expect(page.locator("#trialRequestsPanel")).toHaveClass(/hidden/);
+});
+
+test("trial request API does not expose sensitive auth data", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  const response = await page.request.get("/api/admin/trial-requests");
+  expect(response.ok()).toBe(true);
+  const data = await response.json();
+  expect(data.ok).toBe(true);
+  expect(Array.isArray(data.requests)).toBe(true);
+
+  const body = JSON.stringify(data);
+  expect(body).not.toContain("passwordHash");
+  expect(body).not.toContain("authSubject");
+  expect(body).not.toContain("token");
+  expect(body).not.toContain("secret");
+});

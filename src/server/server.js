@@ -461,8 +461,11 @@ async function readTrialRequests() {
   try {
     const text = await fs.readFile(TRIAL_REQUESTS_PATH, "utf8");
     return JSON.parse(text);
-  } catch {
-    return { version: 1, requests: [] };
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return { version: 1, requests: [] };
+    }
+    throw error;
   }
 }
 
