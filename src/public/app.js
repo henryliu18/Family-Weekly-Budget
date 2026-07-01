@@ -1064,6 +1064,14 @@ function bindElements() {
     "confirmPasswordInput",
     "changePasswordBtn",
     "accountSecurityStatus",
+    "profilePanel",
+    "profileForm",
+    "profileIdentity",
+    "profileDisplayNameInput",
+    "saveProfileBtn",
+    "profileStatus",
+    "trialRequestsPanel",
+    "trialRequestsList",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -1188,7 +1196,8 @@ function bindEvents() {
   els.resetLocalDataBtn.addEventListener("click", resetLocalData);
   els.loginForm?.addEventListener("submit", handleLogin);
   els.logoutBtn?.addEventListener("click", logout);
-  els.accountSecurityForm?.addEventListener("submit", changePasswordFromForm);
+    els.profileForm?.addEventListener("submit", saveProfileFromForm);
+els.accountSecurityForm?.addEventListener("submit", changePasswordFromForm);
   els.accountAdminForm?.addEventListener("submit", createAccountFromForm);
   els.accountResetForm?.addEventListener("submit", resetAccountPasswordFromForm);
   els.workspaceManagementForm?.addEventListener("submit", renameWorkspaceFromForm);
