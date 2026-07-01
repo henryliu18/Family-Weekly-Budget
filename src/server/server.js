@@ -16,6 +16,9 @@ const ACCOUNT_REGISTRY_PATH =
 const SESSION_REGISTRY_PATH =
   process.env.SESSION_REGISTRY_PATH ||
   path.join(WORKSPACE_STORE_ROOT || path.dirname(STORE_PATH), "session-registry.json");
+const TRIAL_REQUESTS_PATH =
+  process.env.TRIAL_REQUESTS_PATH ||
+  path.join(WORKSPACE_STORE_ROOT || path.dirname(STORE_PATH), "trial-requests.json");
 const WORKSPACE_REGISTRY_SEED_IDS = (process.env.WORKSPACE_REGISTRY_SEED_IDS || "")
   .split(",")
   .map((workspaceId) => workspaceId.trim())
@@ -434,6 +437,70 @@ function publicUserIdentity(account) {
     authProvider: account.authProvider,
     isDefaultUser: !!account.isDefaultUser,
   };
+}
+
+async function updateProfileForSession(session, input) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  const registry = await ensureAccountRegistry();
+  const account = registry.accounts[session.accountId];
+  if (!account) {
+    throw new AccountRegistryError("Account is not registered.", 403);
+  }
+
+  const displayName = normalizeWorkspaceName(input?.displayName);
+  account.displayName = displayName;
+  account.updatedAt = nowIso();
+  await writeAccountRegistry(registry);
+
+  return publicUserIdentity(account);
+}
+
+async function readTrialRequests() {
+  try {
+    const text = await fs.readFile(TRIAL_REQUESTS_PATH, "utf8");
+    return JSON.parse(text);
+  } catch {
+    return { version: 1, requests: [] };
+  }
+}
+
+async function writeTrialRequests(store) {
+  await fs.mkdir(path.dirname(TRIAL_REQUESTS_PATH), { recursive: true });
+  await fs.writeFile(TRIAL_REQUESTS_PATH, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+}
+
+function submitTrialRequest(input) {
+  const name = String(input?.name || "").trim().replace(/\s+/g, " ");
+  const email = normalizeEmail(input?.email);
+  const note = String(input?.note || "").trim();
+  if (!name || name.length < 2 || name.length > 80) {
+    throw new AccountRegistryError("Name must be between 2 and 80 characters.", 400);
+  }
+  if (note.length > 500) {
+    throw new AccountRegistryError("Note must be 500 characters or fewer.", 400);
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    name,
+    email,
+    note,
+    status: "pending",
+    createdAt: nowIso(),
+  };
+}
+
+async function listTrialRequestsForSession(session) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  if (!isDefaultOwnerSession(session)) {
+    throw new AccountRegistryError("Only the default owner can list trial requests.", 403);
+  }
+  const store = await readTrialRequests();
+  return store.requests;
 }
 
 function emptySessionRegistry() {
@@ -1210,6 +1277,43 @@ async function serveApi(req, res, pathname) {
     return true;
   }
 
+  if (pathname === "/api/trial-requests" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)) || "{}");
+    try {
+      const request = submitTrialRequest(body);
+      const store = await readTrialRequests();
+      store.requests.push(request);
+      await writeTrialRequests(store);
+      sendJson(res, 201, { ok: true, id: request.id });
+    } catch (error) {
+      if (error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
+  if (pathname === "/api/admin/trial-requests" && req.method === "GET") {
+    const session = sessionForRequest(req);
+    if (!session) {
+      authRequired(res);
+      return true;
+    }
+    try {
+      const requests = await listTrialRequestsForSession(session);
+      sendJson(res, 200, { ok: true, requests });
+    } catch (error) {
+      if (error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
   if (pathname === "/api/session" && req.method === "GET") {
     const session = sessionForRequest(req);
     const user = await userForSession(session);
@@ -1230,6 +1334,26 @@ async function serveApi(req, res, pathname) {
       return true;
     }
     sendJson(res, 200, await accountReadModelForSession(session));
+    return true;
+  }
+
+  if (pathname === "/api/me/profile" && req.method === "PATCH") {
+    const session = sessionForRequest(req);
+    if (!session) {
+      authRequired(res);
+      return true;
+    }
+    const body = JSON.parse((await readBody(req)) || "{}");
+    try {
+      const result = await updateProfileForSession(session, body);
+      sendJson(res, 200, { ok: true, user: result });
+    } catch (error) {
+      if (error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
     return true;
   }
 

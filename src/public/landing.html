@@ -95,6 +95,30 @@
               </div>
             </section>
 
+            <section id="trialRequestCard" class="trial-card trial-card-request">
+              <p class="eyebrow">Request trial access</p>
+              <h3>Get started</h3>
+              <p class="trial-card-copy">Leave your details and the service owner will follow up with temporary access.</p>
+              <form id="trialRequestForm" class="trial-request-form">
+                <div class="trial-request-fields">
+                  <label class="field trial-field">
+                    <span>Name</span>
+                    <input id="trialRequestNameInput" type="text" placeholder="Your name" required />
+                  </label>
+                  <label class="field trial-field">
+                    <span>Email</span>
+                    <input id="trialRequestEmailInput" type="email" placeholder="you@example.com" required />
+                  </label>
+                  <label class="field trial-field">
+                    <span>Note <small>(optional)</small></span>
+                    <textarea id="trialRequestNoteInput" rows="2" maxlength="500" placeholder="Any context for the owner…"></textarea>
+                  </label>
+                </div>
+                <p id="trialRequestStatus" class="trial-request-status" role="status" aria-live="polite"></p>
+                <button id="trialRequestBtn" class="primary-btn trial-request-cta" type="submit">Request trial access →</button>
+              </form>
+            </section>
+
             <section id="trialAccessCard" class="auth-card auth-card--landing">
               <div>
                 <p class="eyebrow">Login required</p>

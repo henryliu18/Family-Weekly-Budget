@@ -1064,6 +1064,14 @@ function bindElements() {
     "confirmPasswordInput",
     "changePasswordBtn",
     "accountSecurityStatus",
+    "profilePanel",
+    "profileForm",
+    "profileIdentity",
+    "profileDisplayNameInput",
+    "saveProfileBtn",
+    "profileStatus",
+    "trialRequestsPanel",
+    "trialRequestsList",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -1191,6 +1199,7 @@ function bindEvents() {
   els.accountSecurityForm?.addEventListener("submit", changePasswordFromForm);
   els.accountAdminForm?.addEventListener("submit", createAccountFromForm);
   els.accountResetForm?.addEventListener("submit", resetAccountPasswordFromForm);
+  els.profileForm?.addEventListener("submit", saveProfileFromForm);
   els.workspaceManagementForm?.addEventListener("submit", renameWorkspaceFromForm);
   els.workspaceManageSelect?.addEventListener("change", syncWorkspaceManagementForm);
   els.deleteWorkspaceBtn?.addEventListener("click", deleteWorkspaceFromForm);
@@ -1384,6 +1393,8 @@ function renderAll() {
   renderWorkspaceManagementPanel();
   renderAccountAdminPanel();
   renderAccountResetPanel();
+  renderProfilePanel();
+  renderTrialRequestsPanel();
   renderPersonalTitle();
   renderMonthOptions();
   renderOverview();
@@ -1487,6 +1498,8 @@ function applyLanguage() {
   renderAccountSecurityPanel();
   renderAccountAdminPanel();
   renderAccountResetPanel();
+  renderProfilePanel();
+  renderTrialRequestsPanel();
   renderPersonalTitle();
   renderImportDraft();
 }
@@ -1518,6 +1531,8 @@ function updateAuthUi() {
   renderAccountSecurityPanel();
   renderAccountAdminPanel();
   renderAccountResetPanel();
+  renderProfilePanel();
+  renderTrialRequestsPanel();
   renderPersonalTitle();
   document.body.classList.toggle("landing-open", shouldShowOverlay);
   document.body.classList.toggle("auth-locked", isAuthLocked());
@@ -1619,6 +1634,77 @@ function selectedManagedWorkspace() {
   const workspaceId = els.workspaceManageSelect?.value;
   const workspaces = Array.isArray(accountState?.workspaces) ? accountState.workspaces : [];
   return workspaces.find((workspace) => workspace.id === workspaceId) || null;
+}
+
+function renderProfilePanel() {
+  if (!els.profilePanel) return;
+  const shouldShow = !!authState.authenticated;
+  els.profilePanel.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow) return;
+
+  const identity = accountState?.account || accountState?.user || null;
+  if (!identity) return;
+  els.profileIdentity.textContent = `${identity.displayName || identity.id}`;
+  els.profileDisplayNameInput.value = identity.displayName || "";
+}
+
+function renderTrialRequestsPanel() {
+  if (!els.trialRequestsPanel) return;
+  const identity = accountState?.account || accountState?.user || null;
+  const shouldShow = !!(identity?.isDefaultUser);
+  els.trialRequestsPanel.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow) return;
+
+  loadTrialRequests();
+}
+
+async function loadTrialRequests() {
+  if (!els.trialRequestsList) return;
+  els.trialRequestsList.innerHTML = "<p>Loading...</p>";
+
+  try {
+    const response = await fetch("/api/admin/trial-requests");
+    if (!response.ok) {
+      els.trialRequestsList.innerHTML = '<p class="empty-state">Could not load requests.</p>';
+      return;
+    }
+    const data = await response.json();
+    const requests = data.requests || [];
+    if (requests.length === 0) {
+      els.trialRequestsList.innerHTML = '<p class="empty-state">No pending requests.</p>';
+      return;
+    }
+    els.trialRequestsList.innerHTML = requests.map((r) => {
+      const note = r.note ? ` &mdash; ${escapeHtml(r.note)}` : "";
+      const date = new Date(r.createdAt).toLocaleDateString();
+      return `<article class="trial-request-item">
+        <div class="trial-request-info">
+          <strong>${escapeHtml(r.name)}</strong>
+          <span>${escapeHtml(r.email)}</span>
+          <small>${date}${note}</small>
+        </div>
+        <button class="ghost-btn use-request-btn" type="button" data-name="${escapeHtml(r.name)}" data-email="${escapeHtml(r.email)}">Use for account</button>
+      </article>`;
+    }).join("");
+
+    els.trialRequestsList.querySelectorAll(".use-request-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const name = btn.getAttribute("data-name");
+        const email = btn.getAttribute("data-email");
+        if (els.newAccountDisplayNameInput) els.newAccountDisplayNameInput.value = name;
+        if (els.newAccountEmailInput) els.newAccountEmailInput.value = email;
+        document.querySelector('[data-view="settings"]')?.click();
+      });
+    });
+  } catch {
+    els.trialRequestsList.innerHTML = '<p class="empty-state">Could not load requests.</p>';
+  }
+}
+
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = value;
+  return div.innerHTML;
 }
 
 function renderWorkspaceManagementPanel() {
@@ -1728,6 +1814,63 @@ function renderAccountResetPanel() {
     setAccountResetStatus("accountResetNoAccounts", true);
   } else if (els.accountResetStatus?.dataset.key === "accountResetNoAccounts") {
     clearAccountResetStatus();
+  }
+}
+
+async function saveProfileFromForm(event) {
+  event.preventDefault();
+  if (!els.profileStatus) return;
+
+  const displayName = els.profileDisplayNameInput?.value?.trim() || "";
+  if (displayName.length < 2 || displayName.length > 80) {
+    els.profileStatus.textContent = "Display name must be between 2 and 80 characters.";
+    els.profileStatus.className = "save-status";
+    els.profileStatus.classList.remove("hidden");
+    return;
+  }
+
+  els.profileStatus.textContent = "Saving...";
+  els.profileStatus.className = "save-status";
+  els.profileStatus.classList.remove("hidden");
+  els.saveProfileBtn?.setAttribute("disabled", "disabled");
+
+  try {
+    const response = await fetch("/api/me/profile", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      els.profileStatus.textContent = data.error || "Failed to save profile.";
+      els.profileStatus.style.color = "var(--danger, #b9413d)";
+      return;
+    }
+
+    const data = await response.json();
+    if (data.user) {
+      if (accountState) {
+        if (accountState.account) accountState.account.displayName = data.user.displayName;
+        if (accountState.user) accountState.user.displayName = data.user.displayName;
+      }
+      if (authState.me) {
+        if (authState.me.account) authState.me.account.displayName = data.user.displayName;
+        if (authState.me.user) authState.me.user.displayName = data.user.displayName;
+      }
+      renderAll();
+    }
+
+    els.profileStatus.textContent = "Profile saved.";
+    els.profileStatus.style.color = "var(--accent, #24715d)";
+  } catch {
+    els.profileStatus.textContent = "Failed to save profile. Please try again.";
+    els.profileStatus.style.color = "var(--danger, #b9413d)";
+  } finally {
+    els.saveProfileBtn?.removeAttribute("disabled");
+    setTimeout(() => {
+      if (els.profileStatus) els.profileStatus.classList.add("hidden");
+    }, 3000);
   }
 }
 
