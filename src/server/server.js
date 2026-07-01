@@ -16,6 +16,9 @@ const ACCOUNT_REGISTRY_PATH =
 const SESSION_REGISTRY_PATH =
   process.env.SESSION_REGISTRY_PATH ||
   path.join(WORKSPACE_STORE_ROOT || path.dirname(STORE_PATH), "session-registry.json");
+const OAUTH_STATE_REGISTRY_PATH =
+  process.env.OAUTH_STATE_REGISTRY_PATH ||
+  path.join(WORKSPACE_STORE_ROOT || path.dirname(STORE_PATH), "oauth-state-registry.json");
 const TRIAL_REQUESTS_PATH =
   process.env.TRIAL_REQUESTS_PATH ||
   path.join(WORKSPACE_STORE_ROOT || path.dirname(STORE_PATH), "trial-requests.json");
@@ -29,6 +32,7 @@ const WORKSPACE_REGISTRY_UNOWNED_SEED_IDS = (process.env.WORKSPACE_REGISTRY_UNOW
   .filter(Boolean);
 const ACCOUNT_REGISTRY_SCHEMA_VERSION = 1;
 const SESSION_REGISTRY_SCHEMA_VERSION = 1;
+const OAUTH_STATE_REGISTRY_SCHEMA_VERSION = 1;
 const DEFAULT_ACCOUNT_ID = process.env.DEFAULT_ACCOUNT_ID || "default-owner";
 const DEFAULT_ACCOUNT_DISPLAY_NAME = process.env.DEFAULT_ACCOUNT_DISPLAY_NAME || "Default Owner";
 const DEFAULT_ACCOUNT_EMAIL = process.env.DEFAULT_ACCOUNT_EMAIL || "";
@@ -44,6 +48,13 @@ const DEFAULT_HTTPS_PORT = 5443;
 const AUTH_COOKIE = "family_budget_session";
 const APP_PASSWORD = process.env.APP_PASSWORD || "";
 const SESSION_SECRET = process.env.SESSION_SECRET || "";
+const GOOGLE_OAUTH_ENABLED = process.env.GOOGLE_OAUTH_ENABLED === "true";
+const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || "";
+const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || "";
+const GOOGLE_OAUTH_REDIRECT_PATH = process.env.GOOGLE_OAUTH_REDIRECT_PATH || "/auth/google/callback";
+const GOOGLE_OAUTH_APP_BASE_URL = process.env.GOOGLE_OAUTH_APP_BASE_URL || process.env.APP_BASE_URL || "";
+const GOOGLE_OAUTH_ALLOWED_DOMAIN = process.env.GOOGLE_OAUTH_ALLOWED_DOMAIN || "";
+const GOOGLE_OAUTH_STATE_TTL_SECONDS = Math.max(60, Number(process.env.GOOGLE_OAUTH_STATE_TTL_SECONDS || 10 * 60) || 10 * 60);
 const BUILD_VERSION = process.env.APP_BUILD_VERSION || "";
 const BUILD_TIME = process.env.APP_BUILD_TIME || new Date().toISOString();
 const SSL_CERT_PATH = process.env.SSL_CERT_PATH || "";
@@ -53,7 +64,9 @@ const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 60 * 60 * 
 const PASSWORD_HASH_ALGORITHM = "scrypt";
 const PASSWORD_HASH_KEY_LENGTH = 64;
 const sessions = new Map();
+const oauthStates = new Map();
 let sessionRegistryWriteQueue = Promise.resolve();
+let oauthStateRegistryWriteQueue = Promise.resolve();
 
 class StorePathError extends Error {
   constructor(message) {
@@ -428,6 +441,53 @@ function authSummary(registry) {
   };
 }
 
+function normalizeGoogleOAuthRedirectPath() {
+  const value = String(GOOGLE_OAUTH_REDIRECT_PATH || "/auth/google/callback").trim();
+  if (!value.startsWith("/") || value.includes("?") || value.includes("#") || value.includes("..")) {
+    return "/auth/google/callback";
+  }
+  return value;
+}
+
+function googleOAuthConfigSummary() {
+  const redirectPath = normalizeGoogleOAuthRedirectPath();
+  const clientIdConfigured = !!GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecretConfigured = !!GOOGLE_OAUTH_CLIENT_SECRET;
+  const appBaseUrlConfigured = !!GOOGLE_OAUTH_APP_BASE_URL;
+  return {
+    enabled: GOOGLE_OAUTH_ENABLED,
+    configured: !!(GOOGLE_OAUTH_ENABLED && clientIdConfigured && clientSecretConfigured),
+    clientIdConfigured,
+    clientSecretConfigured,
+    appBaseUrlConfigured,
+    redirectPath,
+    allowedDomainConfigured: !!GOOGLE_OAUTH_ALLOWED_DOMAIN,
+    stateTtlSeconds: GOOGLE_OAUTH_STATE_TTL_SECONDS,
+  };
+}
+
+function googleOAuthRedirectUri(req = null) {
+  const redirectPath = normalizeGoogleOAuthRedirectPath();
+  const configuredBaseUrl = GOOGLE_OAUTH_APP_BASE_URL.trim();
+  if (configuredBaseUrl) {
+    try {
+      return new URL(redirectPath, configuredBaseUrl).toString();
+    } catch {
+      return null;
+    }
+  }
+  if (!req) return null;
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  const protocol = forwardedProto || (SSL_CERT_PATH && SSL_KEY_PATH ? "https" : "http");
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  if (!host) return null;
+  try {
+    return new URL(redirectPath, `${protocol}://${host}`).toString();
+  } catch {
+    return null;
+  }
+}
+
 function publicUserIdentity(account) {
   return {
     id: account.id,
@@ -513,6 +573,13 @@ function emptySessionRegistry() {
   };
 }
 
+function emptyOAuthStateRegistry() {
+  return {
+    version: OAUTH_STATE_REGISTRY_SCHEMA_VERSION,
+    states: {},
+  };
+}
+
 function sessionTokenHash(token) {
   if (SESSION_SECRET) {
     return crypto.createHmac("sha256", SESSION_SECRET).update(String(token || "")).digest("hex");
@@ -520,12 +587,28 @@ function sessionTokenHash(token) {
   return crypto.createHash("sha256").update(String(token || "")).digest("hex");
 }
 
+function oauthStateHash(value) {
+  const input = String(value || "");
+  if (SESSION_SECRET) {
+    return crypto.createHmac("sha256", SESSION_SECRET).update(input).digest("hex");
+  }
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
+
 function sessionExpiresAt(createdAt) {
   return new Date(new Date(createdAt).getTime() + SESSION_TTL_SECONDS * 1000).toISOString();
 }
 
+function oauthStateExpiresAt(createdAt) {
+  return new Date(new Date(createdAt).getTime() + GOOGLE_OAUTH_STATE_TTL_SECONDS * 1000).toISOString();
+}
+
 function isSessionExpired(session, at = Date.now()) {
   return !session?.expiresAt || new Date(session.expiresAt).getTime() <= at;
+}
+
+function isOAuthStateExpired(state, at = Date.now()) {
+  return !state?.expiresAt || new Date(state.expiresAt).getTime() <= at;
 }
 
 function normalizeSessionRecord(record, tokenHash) {
@@ -538,6 +621,18 @@ function normalizeSessionRecord(record, tokenHash) {
     createdAt,
     lastSeenAt: record?.lastSeenAt || createdAt,
     expiresAt: record?.expiresAt || sessionExpiresAt(createdAt),
+  };
+}
+
+function normalizeOAuthStateRecord(record, stateHash) {
+  const createdAt = record?.createdAt || nowIso();
+  return {
+    id: record?.id || stateHash,
+    stateHash,
+    nonceHash: record?.nonceHash || "",
+    returnTo: record?.returnTo || "/app",
+    createdAt,
+    expiresAt: record?.expiresAt || oauthStateExpiresAt(createdAt),
   };
 }
 
@@ -557,6 +652,22 @@ async function readSessionRegistry() {
   return emptySessionRegistry();
 }
 
+async function readOAuthStateRegistry() {
+  try {
+    const text = await fs.readFile(OAUTH_STATE_REGISTRY_PATH, "utf8");
+    const registry = JSON.parse(text);
+    registry.version = registry.version || OAUTH_STATE_REGISTRY_SCHEMA_VERSION;
+    if (registry.version > OAUTH_STATE_REGISTRY_SCHEMA_VERSION) {
+      throw new AccountRegistryError("OAuth state registry schema is newer than this server supports.", 500);
+    }
+    registry.states = registry.states || {};
+    return registry;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  return emptyOAuthStateRegistry();
+}
+
 async function writeSessionRegistry() {
   const registry = emptySessionRegistry();
   sessions.forEach((session, tokenHash) => {
@@ -569,6 +680,18 @@ async function writeSessionRegistry() {
   await fs.writeFile(SESSION_REGISTRY_PATH, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
 }
 
+async function writeOAuthStateRegistry() {
+  const registry = emptyOAuthStateRegistry();
+  oauthStates.forEach((state, stateHash) => {
+    registry.states[stateHash] = {
+      ...state,
+      stateHash,
+    };
+  });
+  await fs.mkdir(path.dirname(OAUTH_STATE_REGISTRY_PATH), { recursive: true });
+  await fs.writeFile(OAUTH_STATE_REGISTRY_PATH, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+}
+
 function scheduleSessionRegistryWrite() {
   sessionRegistryWriteQueue = sessionRegistryWriteQueue
     .then(() => writeSessionRegistry())
@@ -576,6 +699,15 @@ function scheduleSessionRegistryWrite() {
       console.error("Failed to write session registry", error);
     });
   return sessionRegistryWriteQueue;
+}
+
+function scheduleOAuthStateRegistryWrite() {
+  oauthStateRegistryWriteQueue = oauthStateRegistryWriteQueue
+    .then(() => writeOAuthStateRegistry())
+    .catch((error) => {
+      console.error("Failed to write OAuth state registry", error);
+    });
+  return oauthStateRegistryWriteQueue;
 }
 
 async function loadSessionRegistry() {
@@ -597,6 +729,25 @@ async function loadSessionRegistry() {
   }
 }
 
+async function loadOAuthStateRegistry() {
+  const registry = await readOAuthStateRegistry();
+  const now = Date.now();
+  let changed = false;
+  oauthStates.clear();
+  Object.entries(registry.states).forEach(([stateHash, record]) => {
+    const state = normalizeOAuthStateRecord(record, stateHash);
+    if (isOAuthStateExpired(state, now)) {
+      changed = true;
+      return;
+    }
+    oauthStates.set(stateHash, state);
+    if (JSON.stringify(state) !== JSON.stringify(record)) changed = true;
+  });
+  if (changed) {
+    await writeOAuthStateRegistry();
+  }
+}
+
 function sessionRegistrySummary() {
   return {
     schemaVersion: SESSION_REGISTRY_SCHEMA_VERSION,
@@ -606,6 +757,50 @@ function sessionRegistrySummary() {
     sessionSecretConfigured: !!SESSION_SECRET,
     persistent: true,
   };
+}
+
+function oauthStateRegistrySummary() {
+  return {
+    schemaVersion: OAUTH_STATE_REGISTRY_SCHEMA_VERSION,
+    activeStateCount: oauthStates.size,
+    ttlSeconds: GOOGLE_OAUTH_STATE_TTL_SECONDS,
+    stateStorage: SESSION_SECRET ? "hmac-sha256" : "sha256",
+    sessionSecretConfigured: !!SESSION_SECRET,
+    persistent: true,
+  };
+}
+
+async function createOAuthState(returnTo = "/app") {
+  const state = crypto.randomBytes(24).toString("hex");
+  const nonce = crypto.randomBytes(24).toString("hex");
+  const createdAt = nowIso();
+  const stateHash = oauthStateHash(state);
+  oauthStates.set(stateHash, {
+    id: stateHash,
+    stateHash,
+    nonceHash: oauthStateHash(nonce),
+    returnTo: String(returnTo || "/app"),
+    createdAt,
+    expiresAt: oauthStateExpiresAt(createdAt),
+  });
+  await writeOAuthStateRegistry();
+  return { state, nonce };
+}
+
+async function consumeOAuthState(state, nonce = "") {
+  const stateHash = oauthStateHash(state);
+  const record = oauthStates.get(stateHash);
+  if (!record || isOAuthStateExpired(record)) {
+    oauthStates.delete(stateHash);
+    scheduleOAuthStateRegistryWrite();
+    return null;
+  }
+  if (nonce && record.nonceHash !== oauthStateHash(nonce)) {
+    return null;
+  }
+  oauthStates.delete(stateHash);
+  await writeOAuthStateRegistry();
+  return record;
 }
 
 async function writeAccountRegistry(registry) {
@@ -1203,6 +1398,10 @@ async function serveApi(req, res, pathname) {
       buildTime: BUILD_TIME,
       authEnabled: !!APP_PASSWORD,
       auth: authSummary(registry),
+      oauth: {
+        google: googleOAuthConfigSummary(),
+        states: oauthStateRegistrySummary(),
+      },
       registry: registryHealthSummary(registry),
       bootstrap: firstOwnerBootstrapSummary(registry),
       sessions: sessionRegistrySummary(),
@@ -1210,6 +1409,16 @@ async function serveApi(req, res, pathname) {
         workspaceStoreRootConfigured: !!WORKSPACE_STORE_ROOT,
         defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
       },
+    });
+    return true;
+  }
+
+  if (pathname === "/api/auth/google/status" && req.method === "GET") {
+    sendJson(res, 200, {
+      ok: true,
+      provider: "google",
+      ...googleOAuthConfigSummary(),
+      redirectUri: googleOAuthRedirectUri(req),
     });
     return true;
   }
@@ -1224,6 +1433,10 @@ async function serveApi(req, res, pathname) {
     sendJson(res, 200, {
       ok: true,
       auth: authSummary(registry),
+      oauth: {
+        google: googleOAuthConfigSummary(),
+        states: oauthStateRegistrySummary(),
+      },
       registry: registryHealthSummary(registry, session),
       bootstrap: firstOwnerBootstrapSummary(registry),
       sessions: sessionRegistrySummary(),
@@ -1621,6 +1834,7 @@ async function start() {
   try {
     await ensureStoreFile();
     await loadSessionRegistry();
+    await loadOAuthStateRegistry();
   } catch (error) {
     console.error(error.message || error);
   }

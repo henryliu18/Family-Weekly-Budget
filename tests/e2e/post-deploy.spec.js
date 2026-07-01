@@ -277,6 +277,26 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
       fallbackPasswordEnabled: true,
       sessionSecretConfigured: true,
     },
+    oauth: {
+      google: {
+        enabled: false,
+        configured: false,
+        clientIdConfigured: false,
+        clientSecretConfigured: false,
+        appBaseUrlConfigured: false,
+        redirectPath: "/auth/google/callback",
+        allowedDomainConfigured: false,
+        stateTtlSeconds: 600,
+      },
+      states: {
+        schemaVersion: 1,
+        activeStateCount: 0,
+        ttlSeconds: 600,
+        stateStorage: "hmac-sha256",
+        sessionSecretConfigured: true,
+        persistent: true,
+      },
+    },
     registry: {
       schemaVersion: 1,
       defaultOwnerExists: true,
@@ -326,9 +346,34 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
   expect(serialized).not.toContain(accountPassword);
   expect(serialized).not.toContain("e2e-session-secret");
   expect(serialized).not.toContain("DEFAULT_AUTH_SUBJECT");
+  expect(serialized).not.toContain("GOOGLE_OAUTH_CLIENT_SECRET");
   expect(serialized).not.toContain("tokenHash");
   expect(serialized).not.toContain("accounts");
   expect(serialized).not.toContain("memberships");
+});
+
+test("google oauth status is safe while disabled", async ({ request }) => {
+  const response = await request.get("/api/auth/google/status");
+  expect(response.ok()).toBe(true);
+  const status = await response.json();
+
+  expect(status).toMatchObject({
+    ok: true,
+    provider: "google",
+    enabled: false,
+    configured: false,
+    clientIdConfigured: false,
+    clientSecretConfigured: false,
+    appBaseUrlConfigured: false,
+    redirectPath: "/auth/google/callback",
+    allowedDomainConfigured: false,
+    stateTtlSeconds: 600,
+  });
+  expect(status.redirectUri).toBe(`${baseUrl}/auth/google/callback`);
+  const serialized = JSON.stringify(status);
+  expect(serialized).not.toContain("secret");
+  expect(serialized).not.toContain("password");
+  expect(serialized).not.toContain("authSubject");
 });
 
 test("authenticated sessions resolve isolated workspaces", async () => {
