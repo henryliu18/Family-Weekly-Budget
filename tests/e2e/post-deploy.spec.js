@@ -1620,7 +1620,7 @@ test("transaction import accepts copied online banking text", async ({ page }) =
   const originalState = await readState(page);
 
   try {
-    await addMonth(page, "2026-09");
+    await addMonth(page, "2026-06");
     await page.locator('.nav-tab[data-view="entry"]').click();
     await expect(page.locator("#entryView")).toHaveClass(/active/);
 
