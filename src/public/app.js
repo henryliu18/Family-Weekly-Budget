@@ -1701,12 +1701,6 @@ async function loadTrialRequests() {
   }
 }
 
-function escapeHtml(value) {
-  const div = document.createElement("div");
-  div.textContent = value;
-  return div.innerHTML;
-}
-
 function renderWorkspaceManagementPanel() {
   if (!els.workspaceManagementPanel || !els.workspaceManageSelect) return;
   const workspaces = Array.isArray(accountState?.workspaces) ? accountState.workspaces : [];
