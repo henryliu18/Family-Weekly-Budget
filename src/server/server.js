@@ -708,6 +708,41 @@ async function createAccountForSession(session, accountInput) {
   };
 }
 
+async function changePasswordForSession(session, input) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+
+  const registry = await ensureAccountRegistry();
+  const account = registry.accounts[session.accountId];
+  if (!account) {
+    throw new AccountRegistryError("Account is not registered.", 403);
+  }
+  if (account.authProvider && account.authProvider !== "password") {
+    throw new AccountRegistryError("Password changes are only available for password accounts.", 400);
+  }
+
+  const currentPassword = String(input?.currentPassword || "");
+  const newPassword = normalizePassword(input?.newPassword);
+  if (input?.confirmPassword !== undefined && newPassword !== String(input.confirmPassword || "")) {
+    throw new AccountRegistryError("New passwords do not match.", 400);
+  }
+
+  const hasAccountPassword = isSupportedPasswordHash(account.passwordHash);
+  const currentPasswordMatches = hasAccountPassword
+    ? verifyPassword(currentPassword, account.passwordHash)
+    : account.id === DEFAULT_ACCOUNT_ID && APP_PASSWORD && currentPassword === APP_PASSWORD;
+  if (!currentPasswordMatches) {
+    throw new AccountRegistryError("Current password is incorrect.", 401);
+  }
+
+  account.passwordHash = hashPassword(newPassword);
+  account.updatedAt = nowIso();
+  await writeAccountRegistry(registry);
+
+  return publicUserIdentity(account);
+}
+
 async function createWorkspaceForSession(session, name) {
   if (!session) {
     throw new AccountRegistryError("Authentication required", 401);
@@ -1114,6 +1149,21 @@ async function serveApi(req, res, pathname) {
       return true;
     }
     sendJson(res, 200, await accountReadModelForSession(session));
+    return true;
+  }
+
+  if (pathname === "/api/me/password" && req.method === "PATCH") {
+    const body = JSON.parse((await readBody(req)) || "{}");
+    try {
+      const account = await changePasswordForSession(sessionForRequest(req), body);
+      sendJson(res, 200, { ok: true, account });
+    } catch (error) {
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
     return true;
   }
 

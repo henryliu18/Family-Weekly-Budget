@@ -251,6 +251,16 @@ const i18n = {
     accountCreateFailed: "\u7121\u6cd5\u5efa\u7acb\u5e33\u865f\uff0c\u8acb\u6aa2\u67e5\u8f38\u5165\u5167\u5bb9\u5f8c\u518d\u8a66\u4e00\u6b21\u3002",
     accountCreateDuplicate: "\u9019\u500b\u5e33\u865f ID \u5df2\u5b58\u5728\uff0c\u8acb\u6539\u7528\u5176\u4ed6 ID\u3002",
     accountLoginHint: "\u8acb\u5c07\u81e8\u6642\u5bc6\u78bc\u4ee5\u5b89\u5168\u9014\u5f91\u4ea4\u7d66\u4f7f\u7528\u8005\uff1b\u7cfb\u7d71\u4e0d\u6703\u986f\u793a\u6216\u5132\u5b58\u660e\u78bc\u3002",
+    accountSecurityTitle: "\u5e33\u865f\u5b89\u5168",
+    accountSecuritySub: "\u8b8a\u66f4\u76ee\u524d\u767b\u5165\u5e33\u865f\u7684\u5bc6\u78bc\u3002",
+    currentPassword: "\u76ee\u524d\u5bc6\u78bc",
+    newPassword: "\u65b0\u5bc6\u78bc",
+    confirmNewPassword: "\u78ba\u8a8d\u65b0\u5bc6\u78bc",
+    changePassword: "\u8b8a\u66f4\u5bc6\u78bc",
+    passwordChangeSuccess: "\u5bc6\u78bc\u5df2\u66f4\u65b0\u3002\u4e0b\u6b21\u767b\u5165\u8acb\u4f7f\u7528\u65b0\u5bc6\u78bc\u3002",
+    passwordChangeFailed: "\u7121\u6cd5\u66f4\u65b0\u5bc6\u78bc\uff0c\u8acb\u78ba\u8a8d\u76ee\u524d\u5bc6\u78bc\u8207\u65b0\u5bc6\u78bc\u3002",
+    passwordMismatch: "\u65b0\u5bc6\u78bc\u8207\u78ba\u8a8d\u5bc6\u78bc\u4e0d\u76f8\u7b26\u3002",
+    signedInAccount: "\u76ee\u524d\u767b\u5165\u5e33\u865f",
   },
   en: {
     language: "Language",
@@ -496,6 +506,16 @@ const i18n = {
     accountCreateFailed: "Unable to create account. Check the details and try again.",
     accountCreateDuplicate: "This account ID already exists. Choose another ID.",
     accountLoginHint: "Share the temporary password securely. The app will not show or store plaintext passwords.",
+    accountSecurityTitle: "Account security",
+    accountSecuritySub: "Change the password for the account currently signed in.",
+    currentPassword: "Current password",
+    newPassword: "New password",
+    confirmNewPassword: "Confirm new password",
+    changePassword: "Change password",
+    passwordChangeSuccess: "Password updated. Use the new password next time you sign in.",
+    passwordChangeFailed: "Unable to update password. Check the current password and new password.",
+    passwordMismatch: "New password and confirmation do not match.",
+    signedInAccount: "Signed-in account",
   },
 };
 let currentLanguage = localStorage.getItem(LANGUAGE_KEY) || DEFAULT_LANGUAGE;
@@ -989,6 +1009,14 @@ function bindElements() {
     "renameWorkspaceBtn",
     "deleteWorkspaceBtn",
     "workspaceManagementStatus",
+    "accountSecurityPanel",
+    "accountSecurityForm",
+    "accountSecurityIdentity",
+    "currentPasswordInput",
+    "changePasswordInput",
+    "confirmPasswordInput",
+    "changePasswordBtn",
+    "accountSecurityStatus",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -1113,6 +1141,7 @@ function bindEvents() {
   els.resetLocalDataBtn.addEventListener("click", resetLocalData);
   els.loginForm?.addEventListener("submit", handleLogin);
   els.logoutBtn?.addEventListener("click", logout);
+  els.accountSecurityForm?.addEventListener("submit", changePasswordFromForm);
   els.accountAdminForm?.addEventListener("submit", createAccountFromForm);
   els.workspaceManagementForm?.addEventListener("submit", renameWorkspaceFromForm);
   els.workspaceManageSelect?.addEventListener("change", syncWorkspaceManagementForm);
@@ -1406,6 +1435,7 @@ function applyLanguage() {
   }
   renderWorkspaceSwitcher();
   renderWorkspaceManagementPanel();
+  renderAccountSecurityPanel();
   renderAccountAdminPanel();
   renderPersonalTitle();
   renderImportDraft();
@@ -1435,6 +1465,7 @@ function updateAuthUi() {
   els.logoutBtn?.classList.toggle("hidden", !authState.authEnabled || !authState.authenticated);
   renderWorkspaceSwitcher();
   renderWorkspaceManagementPanel();
+  renderAccountSecurityPanel();
   renderAccountAdminPanel();
   renderPersonalTitle();
   document.body.classList.toggle("landing-open", shouldShowOverlay);
@@ -1577,6 +1608,30 @@ function syncWorkspaceManagementForm() {
   }
 }
 
+function renderAccountSecurityPanel() {
+  if (!els.accountSecurityPanel) return;
+  const account = accountState?.account || accountState?.user || null;
+  const shouldShow = !isAuthLocked() && !!account;
+  els.accountSecurityPanel.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow) {
+    clearAccountSecurityStatus();
+    clearAccountSecurityFields();
+    if (els.accountSecurityIdentity) els.accountSecurityIdentity.innerHTML = "";
+    return;
+  }
+
+  if (els.accountSecurityIdentity) {
+    els.accountSecurityIdentity.innerHTML = `
+      <strong>${escapeHtml(t("signedInAccount"))}</strong>
+      <dl>
+        <div><dt>${escapeHtml(t("accountId"))}</dt><dd>${escapeHtml(account.id || "-")}</dd></div>
+        <div><dt>${escapeHtml(t("displayName"))}</dt><dd>${escapeHtml(account.displayName || "-")}</dd></div>
+        <div><dt>${escapeHtml(t("emailOptional"))}</dt><dd>${escapeHtml(account.email || "-")}</dd></div>
+      </dl>
+    `;
+  }
+}
+
 function renderAccountAdminPanel() {
   if (!els.accountAdminPanel) return;
   const shouldShow = !isAuthLocked() && accountState?.account?.isDefaultUser === true;
@@ -1584,6 +1639,38 @@ function renderAccountAdminPanel() {
   if (!shouldShow) {
     clearAccountAdminStatus();
     clearAccountAdminResult();
+  }
+}
+
+async function changePasswordFromForm(event) {
+  event.preventDefault();
+  clearAccountSecurityStatus();
+
+  const currentPassword = els.currentPasswordInput?.value || "";
+  const newPassword = els.changePasswordInput?.value || "";
+  const confirmPassword = els.confirmPasswordInput?.value || "";
+  if (newPassword !== confirmPassword) {
+    setAccountSecurityStatus("passwordMismatch", true);
+    return;
+  }
+
+  setButtonLoading(els.changePasswordBtn, true);
+  try {
+    const response = await fetch("/api/me/password", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+    });
+    if (!response.ok) {
+      setAccountSecurityStatus("passwordChangeFailed", true);
+      return;
+    }
+    clearAccountSecurityFields();
+    setAccountSecurityStatus("passwordChangeSuccess");
+  } catch {
+    setAccountSecurityStatus("passwordChangeFailed", true);
+  } finally {
+    setButtonLoading(els.changePasswordBtn, false);
   }
 }
 
@@ -1726,6 +1813,28 @@ function clearAccountAdminResult() {
   els.accountAdminResult.classList.add("hidden");
 }
 
+function setAccountSecurityStatus(key, isError = false) {
+  if (!els.accountSecurityStatus) return;
+  els.accountSecurityStatus.dataset.key = key;
+  els.accountSecurityStatus.dataset.status = isError ? "error" : "ok";
+  els.accountSecurityStatus.textContent = t(key);
+  els.accountSecurityStatus.classList.remove("hidden");
+}
+
+function clearAccountSecurityStatus() {
+  if (!els.accountSecurityStatus) return;
+  delete els.accountSecurityStatus.dataset.key;
+  delete els.accountSecurityStatus.dataset.status;
+  els.accountSecurityStatus.textContent = "";
+  els.accountSecurityStatus.classList.add("hidden");
+}
+
+function clearAccountSecurityFields() {
+  [els.currentPasswordInput, els.changePasswordInput, els.confirmPasswordInput].forEach((input) => {
+    if (input) input.value = "";
+  });
+}
+
 function setWorkspaceManagementStatus(key, isError = false) {
   if (!els.workspaceManagementStatus) return;
   els.workspaceManagementStatus.dataset.key = key;
@@ -1859,6 +1968,9 @@ function clearSensitiveUi() {
     els.monthNameInput,
     els.creditLimitInput,
     els.newMonthPicker,
+    els.currentPasswordInput,
+    els.changePasswordInput,
+    els.confirmPasswordInput,
   ].forEach((element) => {
     if (element) element.value = "";
   });

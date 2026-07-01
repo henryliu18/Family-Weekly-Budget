@@ -1204,6 +1204,95 @@ test("account admin UI creates secondary account with isolated workspace", async
   expect(secondaryMe.workspaces).toHaveLength(1);
 });
 
+test("account security UI changes the signed-in account password", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  const suffix = Date.now().toString(36);
+  const accountId = `e2e-password-account-${suffix}`;
+  const displayName = `E2E Password Account ${suffix}`;
+  const workspaceName = `E2E Password Workspace ${suffix}`;
+  const oldPassword = `e2e-old-password-${suffix}`;
+  const newPassword = `e2e-new-password-${suffix}`;
+
+  await login(page);
+  await page.locator("#languageSelect").selectOption("en");
+  const createResponse = await page.request.post("/api/admin/accounts", {
+    data: {
+      accountId,
+      displayName,
+      email: `${accountId}@example.test`,
+      password: oldPassword,
+      workspaceName,
+    },
+  });
+  expect(createResponse.ok()).toBe(true);
+
+  await page.locator("#logoutBtn").click();
+  await expect(page.locator("#authOverlay")).toBeVisible();
+  await page.locator("#loginAccountIdInput").fill(accountId);
+  await page.locator("#passwordInput").fill(oldPassword);
+  await page.locator("#loginBtn").click();
+  await expect(page.locator("#authOverlay")).toBeHidden();
+
+  await page.locator("#languageSelect").selectOption("en");
+  await page.locator('.nav-tab[data-view="settings"]').click();
+  await expect(page.locator("#accountSecurityPanel")).toBeVisible();
+  await expect(page.locator("#accountSecurityIdentity")).toContainText(accountId);
+  await expect(page.locator("#accountSecurityIdentity")).toContainText(displayName);
+
+  await page.locator("#currentPasswordInput").fill("wrong-current-password");
+  await page.locator("#changePasswordInput").fill(newPassword);
+  await page.locator("#confirmPasswordInput").fill(newPassword);
+  await page.locator("#changePasswordBtn").click();
+  await expect(page.locator("#accountSecurityStatus")).toHaveText(
+    "Unable to update password. Check the current password and new password.",
+  );
+
+  await page.locator("#logoutBtn").click();
+  await expect(page.locator("#authOverlay")).toBeVisible();
+  await page.locator("#loginAccountIdInput").fill(accountId);
+  await page.locator("#passwordInput").fill(newPassword);
+  await page.locator("#loginBtn").click();
+  await expect(page.locator("#authOverlay")).toBeVisible();
+  await expect(page.locator("#loginError")).toHaveText("Incorrect password. Please try again.");
+
+  await page.locator("#loginAccountIdInput").fill(accountId);
+  await page.locator("#passwordInput").fill(oldPassword);
+  await page.locator("#loginBtn").click();
+  await expect(page.locator("#authOverlay")).toBeHidden();
+
+  await page.locator('.nav-tab[data-view="settings"]').click();
+  await page.locator("#currentPasswordInput").fill(oldPassword);
+  await page.locator("#changePasswordInput").fill(newPassword);
+  await page.locator("#confirmPasswordInput").fill("not-the-same-password");
+  await page.locator("#changePasswordBtn").click();
+  await expect(page.locator("#accountSecurityStatus")).toHaveText(
+    "New password and confirmation do not match.",
+  );
+
+  await page.locator("#confirmPasswordInput").fill(newPassword);
+  await page.locator("#changePasswordBtn").click();
+  await expect(page.locator("#accountSecurityStatus")).toHaveText(
+    "Password updated. Use the new password next time you sign in.",
+  );
+  await expect(page.locator("#currentPasswordInput")).toHaveValue("");
+  await expect(page.locator("#changePasswordInput")).toHaveValue("");
+  await expect(page.locator("#confirmPasswordInput")).toHaveValue("");
+
+  await page.locator("#logoutBtn").click();
+  await expect(page.locator("#authOverlay")).toBeVisible();
+  await page.locator("#loginAccountIdInput").fill(accountId);
+  await page.locator("#passwordInput").fill(oldPassword);
+  await page.locator("#loginBtn").click();
+  await expect(page.locator("#authOverlay")).toBeVisible();
+
+  await page.locator("#loginAccountIdInput").fill(accountId);
+  await page.locator("#passwordInput").fill(newPassword);
+  await page.locator("#loginBtn").click();
+  await expect(page.locator("#authOverlay")).toBeHidden();
+  await expect(page.locator("#userIdentityLabel")).toHaveText(displayName);
+});
+
 test("post-deploy app smoke and workflow checks", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
