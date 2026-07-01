@@ -2,30 +2,15 @@ const landingEls = {
   authCopy: document.getElementById("landingAuthCopy"),
   authFootnote: document.getElementById("landingAuthFootnote"),
   enterWorkspaceLink: document.getElementById("enterWorkspaceLink"),
-  loginError: document.getElementById("landingLoginError"),
-  loginForm: document.getElementById("landingLoginForm"),
-  loginBtn: document.getElementById("landingLoginBtn"),
-  passwordInput: document.getElementById("landingPasswordInput"),
 };
 
 let landingAuthState = { authEnabled: false, authenticated: false };
 
-function setLandingError(message = "") {
-  if (!landingEls.loginError) return;
-  landingEls.loginError.textContent = message;
-  landingEls.loginError.classList.toggle("hidden", !message);
-}
-
 function renderLandingAuth() {
   const { authEnabled, authenticated } = landingAuthState;
-  const showLogin = authEnabled && !authenticated;
-  const showEnter = authenticated || !authEnabled;
-
-  landingEls.loginForm?.classList.toggle("hidden", !showLogin);
-  landingEls.enterWorkspaceLink?.classList.toggle("hidden", !showEnter);
 
   if (landingEls.enterWorkspaceLink) {
-    landingEls.enterWorkspaceLink.textContent = authenticated ? "Open workspace" : "Enter workspace";
+    landingEls.enterWorkspaceLink.textContent = authenticated ? "Open workspace" : "Log in";
   }
 
   if (landingEls.authCopy) {
@@ -34,7 +19,7 @@ function renderLandingAuth() {
     } else if (!authEnabled) {
       landingEls.authCopy.textContent = "This preview is currently open. Continue directly to the workspace.";
     } else {
-      landingEls.authCopy.textContent = "Use the temporary password to open the private trial workspace.";
+      landingEls.authCopy.textContent = "Continue to the private workspace. You will enter your password on the secure app login screen.";
     }
   }
 
@@ -62,33 +47,6 @@ async function refreshLandingAuth() {
   }
 
   renderLandingAuth();
-}
-
-async function handleLandingLogin(event) {
-  event.preventDefault();
-  setLandingError("");
-
-  const password = landingEls.passwordInput?.value || "";
-  landingEls.loginBtn?.setAttribute("disabled", "disabled");
-
-  try {
-    const response = await fetch("/api/session", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-
-    if (!response.ok) {
-      setLandingError("Incorrect password. Please try again.");
-      return;
-    }
-
-    window.location.assign("/app");
-  } catch {
-    setLandingError("Unable to sign in right now. Please try again.");
-  } finally {
-    landingEls.loginBtn?.removeAttribute("disabled");
-  }
 }
 
 /* ── Trial request form ── */
@@ -144,5 +102,4 @@ async function handleTrialRequest(event) {
 }
 
 trialFormEls.form?.addEventListener("submit", handleTrialRequest);
-landingEls.loginForm?.addEventListener("submit", handleLandingLogin);
 refreshLandingAuth();

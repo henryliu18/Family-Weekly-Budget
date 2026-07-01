@@ -215,7 +215,8 @@ test("landing page serves standalone entry", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".landing-headline")).toHaveText("Weekly budgeting, clearly presented.");
   await expect(page.locator('.landing-actions a[href="#trialAccessCard"]')).toBeVisible();
-  await expect(page.locator("#landingLoginForm")).toBeVisible();
+  await expect(page.locator('#enterWorkspaceLink[href="/app"]')).toHaveText("Log in");
+  await expect(page.locator("#landingPasswordInput")).toHaveCount(0);
   await expect(page.locator("#authOverlay")).toHaveCount(0);
 });
 
