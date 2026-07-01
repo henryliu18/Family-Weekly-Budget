@@ -1064,14 +1064,6 @@ function bindElements() {
     "confirmPasswordInput",
     "changePasswordBtn",
     "accountSecurityStatus",
-    "profilePanel",
-    "profileForm",
-    "profileIdentity",
-    "profileDisplayNameInput",
-    "saveProfileBtn",
-    "profileStatus",
-    "trialRequestsPanel",
-    "trialRequestsList",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -1199,7 +1191,6 @@ function bindEvents() {
   els.accountSecurityForm?.addEventListener("submit", changePasswordFromForm);
   els.accountAdminForm?.addEventListener("submit", createAccountFromForm);
   els.accountResetForm?.addEventListener("submit", resetAccountPasswordFromForm);
-  els.profileForm?.addEventListener("submit", saveProfileFromForm);
   els.workspaceManagementForm?.addEventListener("submit", renameWorkspaceFromForm);
   els.workspaceManageSelect?.addEventListener("change", syncWorkspaceManagementForm);
   els.deleteWorkspaceBtn?.addEventListener("click", deleteWorkspaceFromForm);
