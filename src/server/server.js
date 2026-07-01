@@ -304,6 +304,14 @@ function hasMembership(registry, accountId, workspaceId) {
   );
 }
 
+function membershipRole(registry, accountId, workspaceId) {
+  return registry.memberships.find(
+    (membership) =>
+      membership.accountId === accountId &&
+      membership.workspaceId === workspaceId,
+  )?.role || null;
+}
+
 function ensureMembershipRecord(registry, accountId, workspaceId, role = "owner") {
   if (!hasMembership(registry, accountId, workspaceId)) {
     registry.memberships.push({
@@ -724,6 +732,111 @@ async function createWorkspaceForSession(session, name) {
   };
 }
 
+async function updateWorkspaceForSession(session, workspaceId, input) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  const registry = await ensureAccountRegistry();
+  const account = registry.accounts[session.accountId];
+  if (!account) {
+    throw new AccountRegistryError("Account is not registered.", 403);
+  }
+
+  const id = normalizeWorkspaceId(workspaceId);
+  const workspace = registry.workspaces[id];
+  if (!workspace) {
+    throw new AccountRegistryError("Workspace is not registered.", 404);
+  }
+  if (membershipRole(registry, account.id, id) !== "owner") {
+    throw new AccountRegistryError("Only workspace owners can update this workspace.", 403);
+  }
+
+  workspace.name = normalizeWorkspaceName(input?.name);
+  workspace.updatedAt = nowIso();
+  await writeAccountRegistry(registry);
+
+  return {
+    id: workspace.id,
+    name: workspace.name,
+    role: "owner",
+  };
+}
+
+async function deleteWorkspaceStore(workspaceId) {
+  const id = normalizeWorkspaceId(workspaceId);
+  if (id === DEFAULT_WORKSPACE_ID) return false;
+
+  const storePath = storePathForWorkspace(id);
+  const targetDir = path.resolve(path.dirname(storePath));
+  const workspaceRoot = path.resolve(
+    WORKSPACE_STORE_ROOT || path.join(path.dirname(STORE_PATH), "workspace-stores"),
+  );
+  if (!targetDir.startsWith(`${workspaceRoot}${path.sep}`)) {
+    throw new StorePathError("Workspace store path is outside the workspace store root.");
+  }
+
+  try {
+    await fs.rm(targetDir, { recursive: true, force: true });
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function deleteWorkspaceForSession(session, workspaceId) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  const registry = await ensureAccountRegistry();
+  const account = registry.accounts[session.accountId];
+  if (!account) {
+    throw new AccountRegistryError("Account is not registered.", 403);
+  }
+
+  const id = normalizeWorkspaceId(workspaceId);
+  if (id === DEFAULT_WORKSPACE_ID) {
+    throw new AccountRegistryError("Default workspace cannot be deleted.", 400);
+  }
+  if (!registry.workspaces[id]) {
+    throw new AccountRegistryError("Workspace is not registered.", 404);
+  }
+  if (membershipRole(registry, account.id, id) !== "owner") {
+    throw new AccountRegistryError("Only workspace owners can delete this workspace.", 403);
+  }
+
+  const accountWorkspaceIds = registry.memberships
+    .filter((membership) => membership.accountId === account.id && registry.workspaces[membership.workspaceId])
+    .map((membership) => membership.workspaceId);
+  if (accountWorkspaceIds.length < 2) {
+    throw new AccountRegistryError("At least one workspace must remain.", 400);
+  }
+
+  const fallbackWorkspaceId = accountWorkspaceIds.find((candidate) => candidate !== id);
+  if (!fallbackWorkspaceId) {
+    throw new AccountRegistryError("At least one workspace must remain.", 400);
+  }
+
+  delete registry.workspaces[id];
+  registry.memberships = registry.memberships.filter((membership) => membership.workspaceId !== id);
+  await writeAccountRegistry(registry);
+  const storeDeleted = await deleteWorkspaceStore(id);
+
+  for (const activeSession of sessions.values()) {
+    if (activeSession.accountId === account.id && activeSession.workspaceId === id) {
+      activeSession.workspaceId = fallbackWorkspaceId;
+      activeSession.lastSeenAt = nowIso();
+    }
+  }
+  scheduleSessionRegistryWrite();
+
+  return {
+    deletedWorkspaceId: id,
+    currentWorkspaceId: session.workspaceId,
+    storeDeleted,
+  };
+}
+
 function sessionForRequest(req) {
   if (!APP_PASSWORD) return { accountId: DEFAULT_ACCOUNT_ID, workspaceId: DEFAULT_WORKSPACE_ID };
   const token = parseCookies(req)[AUTH_COOKIE];
@@ -1075,6 +1188,38 @@ async function serveApi(req, res, pathname) {
     try {
       const workspace = await createWorkspaceForSession(sessionForRequest(req), body.name);
       sendJson(res, 201, { ok: true, workspace });
+    } catch (error) {
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
+  const workspaceRouteMatch = pathname.match(/^\/api\/workspaces\/([^/]+)$/);
+  if (workspaceRouteMatch && req.method === "PATCH") {
+    const workspaceId = decodeURIComponent(workspaceRouteMatch[1]);
+    const body = JSON.parse((await readBody(req)) || "{}");
+    try {
+      const workspace = await updateWorkspaceForSession(sessionForRequest(req), workspaceId, body);
+      sendJson(res, 200, { ok: true, workspace });
+    } catch (error) {
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
+  if (workspaceRouteMatch && req.method === "DELETE") {
+    const workspaceId = decodeURIComponent(workspaceRouteMatch[1]);
+    try {
+      const result = await deleteWorkspaceForSession(sessionForRequest(req), workspaceId);
+      sendJson(res, 200, { ok: true, ...result });
     } catch (error) {
       if (error instanceof StorePathError || error instanceof AccountRegistryError) {
         sendJson(res, error.status || 400, { error: error.message });

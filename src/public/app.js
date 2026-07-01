@@ -223,6 +223,15 @@ const i18n = {
     createWorkspace: "\u65b0\u589e\u5de5\u4f5c\u5340",
     createWorkspacePrompt: "\u8acb\u8f38\u5165\u65b0\u5de5\u4f5c\u5340\u540d\u7a31",
     createWorkspaceFailed: "\u7121\u6cd5\u65b0\u589e\u5de5\u4f5c\u5340\uff0c\u8acb\u518d\u8a66\u4e00\u6b21\u3002",
+    workspaceManagementTitle: "\u5de5\u4f5c\u5340\u7ba1\u7406",
+    workspaceManagementSub: "\u91cd\u65b0\u547d\u540d\u6216\u522a\u9664\u9019\u500b\u5e33\u865f\u64c1\u6709\u7684\u5de5\u4f5c\u5340\u3002",
+    renameWorkspace: "\u91cd\u65b0\u547d\u540d\u5de5\u4f5c\u5340",
+    deleteWorkspace: "\u522a\u9664\u5de5\u4f5c\u5340",
+    workspaceRenameSuccess: "\u5de5\u4f5c\u5340\u5df2\u91cd\u65b0\u547d\u540d\u3002",
+    workspaceRenameFailed: "\u7121\u6cd5\u91cd\u65b0\u547d\u540d\u5de5\u4f5c\u5340\uff0c\u8acb\u6aa2\u67e5\u540d\u7a31\u5f8c\u518d\u8a66\u4e00\u6b21\u3002",
+    workspaceDeleteConfirm: (name) => `\u78ba\u5b9a\u8981\u522a\u9664\u300c${name}\u300d\u55ce\uff1f\u9019\u6703\u6c38\u4e45\u79fb\u9664\u6b64\u5de5\u4f5c\u5340\u7684\u8cc7\u6599\u3002`,
+    workspaceDeleteSuccess: "\u5de5\u4f5c\u5340\u5df2\u522a\u9664\u3002",
+    workspaceDeleteFailed: "\u7121\u6cd5\u522a\u9664\u5de5\u4f5c\u5340\uff0c\u8acb\u78ba\u8a8d\u4e0d\u662f\u9810\u8a2d\u6216\u6700\u5f8c\u4e00\u500b\u5de5\u4f5c\u5340\u3002",
     accountAdminTitle: "\u5e33\u865f\u7ba1\u7406",
     accountAdminSub: "\u5efa\u7acb\u64c1\u6709\u7368\u7acb\u7a7a\u767d\u5de5\u4f5c\u5340\u7684\u5bc6\u78bc\u5e33\u865f\u3002",
     accountId: "\u5e33\u865f ID",
@@ -453,6 +462,15 @@ const i18n = {
     createWorkspace: "New workspace",
     createWorkspacePrompt: "Enter a name for the new workspace",
     createWorkspaceFailed: "Unable to create workspace. Please try again.",
+    workspaceManagementTitle: "Workspace management",
+    workspaceManagementSub: "Rename or delete workspaces owned by this account.",
+    renameWorkspace: "Rename workspace",
+    deleteWorkspace: "Delete workspace",
+    workspaceRenameSuccess: "Workspace renamed.",
+    workspaceRenameFailed: "Unable to rename workspace. Check the name and try again.",
+    workspaceDeleteConfirm: (name) => `Delete "${name}"? This permanently removes this workspace's data.`,
+    workspaceDeleteSuccess: "Workspace deleted.",
+    workspaceDeleteFailed: "Unable to delete workspace. Confirm it is not the default or final workspace.",
     accountAdminTitle: "Account management",
     accountAdminSub: "Create a password account with its own clean workspace.",
     accountId: "Account ID",
@@ -943,13 +961,20 @@ function bindElements() {
     "createAccountBtn",
     "accountAdminStatus",
     "accountAdminResult",
+    "workspaceManagementPanel",
+    "workspaceManagementForm",
+    "workspaceManageSelect",
+    "workspaceRenameInput",
+    "renameWorkspaceBtn",
+    "deleteWorkspaceBtn",
+    "workspaceManagementStatus",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
 }
 
 function bindEvents() {
-  document.querySelectorAll(".nav-tab").forEach((button) => {
+  document.querySelectorAll(".nav-tab[data-view]").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
   });
 
@@ -1025,6 +1050,9 @@ function bindEvents() {
   els.loginForm?.addEventListener("submit", handleLogin);
   els.logoutBtn?.addEventListener("click", logout);
   els.accountAdminForm?.addEventListener("submit", createAccountFromForm);
+  els.workspaceManagementForm?.addEventListener("submit", renameWorkspaceFromForm);
+  els.workspaceManageSelect?.addEventListener("change", syncWorkspaceManagementForm);
+  els.deleteWorkspaceBtn?.addEventListener("click", deleteWorkspaceFromForm);
 
   els.weeklyChart.addEventListener("mousemove", showChartTooltip);
   els.weeklyChart.addEventListener("mouseleave", () => els.chartTooltip.classList.add("hidden"));
@@ -1207,6 +1235,7 @@ function renderAll() {
     return;
   }
   renderWorkspaceSwitcher();
+  renderWorkspaceManagementPanel();
   renderAccountAdminPanel();
   renderPersonalTitle();
   renderMonthOptions();
@@ -1262,6 +1291,8 @@ function applyLanguage() {
     "#logoutBtn": "logout",
     "#createWorkspaceBtn": "createWorkspace",
     "#createAccountBtn": "createAccount",
+    "#renameWorkspaceBtn": "renameWorkspace",
+    "#deleteWorkspaceBtn": "deleteWorkspace",
   };
 
   Object.entries(textBySelector).forEach(([selector, key]) => {
@@ -1289,6 +1320,7 @@ function applyLanguage() {
     newAccountEmailInput: "emailOptional",
     newAccountWorkspaceInput: "workspaceName",
     newAccountPasswordInput: "temporaryPassword",
+    workspaceRenameInput: "workspaceName",
   };
   Object.entries(spans).forEach(([id, key]) => {
     const label = document.getElementById(id)?.closest("label")?.querySelector("span");
@@ -1304,6 +1336,7 @@ function applyLanguage() {
     els.loginError.textContent = t(els.loginError.dataset.key);
   }
   renderWorkspaceSwitcher();
+  renderWorkspaceManagementPanel();
   renderAccountAdminPanel();
   renderPersonalTitle();
   renderImportDraft();
@@ -1332,6 +1365,7 @@ function updateAuthUi() {
   els.authOverlay?.classList.toggle("hidden", !shouldShowOverlay);
   els.logoutBtn?.classList.toggle("hidden", !authState.authEnabled || !authState.authenticated);
   renderWorkspaceSwitcher();
+  renderWorkspaceManagementPanel();
   renderAccountAdminPanel();
   renderPersonalTitle();
   document.body.classList.toggle("landing-open", shouldShowOverlay);
@@ -1414,6 +1448,50 @@ function renderWorkspaceSwitcher() {
   els.workspaceSelect.disabled = workspaces.length < 2;
 }
 
+function selectedManagedWorkspace() {
+  const workspaceId = els.workspaceManageSelect?.value;
+  const workspaces = Array.isArray(accountState?.workspaces) ? accountState.workspaces : [];
+  return workspaces.find((workspace) => workspace.id === workspaceId) || null;
+}
+
+function renderWorkspaceManagementPanel() {
+  if (!els.workspaceManagementPanel || !els.workspaceManageSelect) return;
+  const workspaces = Array.isArray(accountState?.workspaces) ? accountState.workspaces : [];
+  const shouldShow = !isAuthLocked() && workspaces.length > 0;
+  els.workspaceManagementPanel.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow) {
+    clearWorkspaceManagementStatus();
+    return;
+  }
+
+  const selectedValue = els.workspaceManageSelect.value || accountState?.currentWorkspace?.id || "";
+  els.workspaceManageSelect.innerHTML = "";
+  workspaces.forEach((workspace) => {
+    const option = document.createElement("option");
+    option.value = workspace.id;
+    option.textContent = workspace.name || workspace.id;
+    option.dataset.workspaceId = workspace.id;
+    els.workspaceManageSelect.append(option);
+  });
+  els.workspaceManageSelect.value = workspaces.some((workspace) => workspace.id === selectedValue)
+    ? selectedValue
+    : workspaces[0]?.id || "";
+  syncWorkspaceManagementForm();
+}
+
+function syncWorkspaceManagementForm() {
+  const workspace = selectedManagedWorkspace();
+  if (els.workspaceRenameInput) {
+    els.workspaceRenameInput.value = workspace?.name || workspace?.id || "";
+  }
+  if (els.deleteWorkspaceBtn) {
+    els.deleteWorkspaceBtn.disabled = !workspace || (accountState?.workspaces || []).length < 2;
+  }
+  if (els.renameWorkspaceBtn) {
+    els.renameWorkspaceBtn.disabled = !workspace;
+  }
+}
+
 function renderAccountAdminPanel() {
   if (!els.accountAdminPanel) return;
   const shouldShow = !isAuthLocked() && accountState?.account?.isDefaultUser === true;
@@ -1421,6 +1499,60 @@ function renderAccountAdminPanel() {
   if (!shouldShow) {
     clearAccountAdminStatus();
     clearAccountAdminResult();
+  }
+}
+
+async function renameWorkspaceFromForm(event) {
+  event.preventDefault();
+  const workspace = selectedManagedWorkspace();
+  const name = els.workspaceRenameInput?.value.trim();
+  if (!workspace || !name) return;
+  clearWorkspaceManagementStatus();
+  if (els.renameWorkspaceBtn) els.renameWorkspaceBtn.disabled = true;
+  try {
+    const response = await fetch(`/api/workspaces/${encodeURIComponent(workspace.id)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!response.ok) throw new Error("Workspace rename failed");
+    await loadAccountState();
+    renderWorkspaceSwitcher();
+    renderWorkspaceManagementPanel();
+    setWorkspaceManagementStatus("workspaceRenameSuccess");
+  } catch {
+    setWorkspaceManagementStatus("workspaceRenameFailed", true);
+  } finally {
+    if (els.renameWorkspaceBtn) els.renameWorkspaceBtn.disabled = false;
+    syncWorkspaceManagementForm();
+  }
+}
+
+async function deleteWorkspaceFromForm() {
+  const workspace = selectedManagedWorkspace();
+  if (!workspace) return;
+  const name = workspace.name || workspace.id;
+  if (!window.confirm(t("workspaceDeleteConfirm", name))) return;
+  clearWorkspaceManagementStatus();
+  const previousWorkspaceId = accountState?.currentWorkspace?.id || "";
+  if (els.deleteWorkspaceBtn) els.deleteWorkspaceBtn.disabled = true;
+  try {
+    const response = await fetch(`/api/workspaces/${encodeURIComponent(workspace.id)}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) throw new Error("Workspace delete failed");
+    await loadAccountState();
+    if (workspace.id === previousWorkspaceId) {
+      await loadState();
+      importDraft = createEmptyImportDraft();
+    }
+    renderAll();
+    setWorkspaceManagementStatus("workspaceDeleteSuccess");
+  } catch {
+    setWorkspaceManagementStatus("workspaceDeleteFailed", true);
+  } finally {
+    if (els.deleteWorkspaceBtn) els.deleteWorkspaceBtn.disabled = false;
+    syncWorkspaceManagementForm();
   }
 }
 
@@ -1506,6 +1638,22 @@ function clearAccountAdminResult() {
   if (!els.accountAdminResult) return;
   els.accountAdminResult.innerHTML = "";
   els.accountAdminResult.classList.add("hidden");
+}
+
+function setWorkspaceManagementStatus(key, isError = false) {
+  if (!els.workspaceManagementStatus) return;
+  els.workspaceManagementStatus.dataset.key = key;
+  els.workspaceManagementStatus.dataset.status = isError ? "error" : "ok";
+  els.workspaceManagementStatus.textContent = t(key);
+  els.workspaceManagementStatus.classList.remove("hidden");
+}
+
+function clearWorkspaceManagementStatus() {
+  if (!els.workspaceManagementStatus) return;
+  delete els.workspaceManagementStatus.dataset.key;
+  delete els.workspaceManagementStatus.dataset.status;
+  els.workspaceManagementStatus.textContent = "";
+  els.workspaceManagementStatus.classList.add("hidden");
 }
 
 async function createWorkspace() {
