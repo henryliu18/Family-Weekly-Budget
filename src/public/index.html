@@ -494,6 +494,35 @@
             </form>
           </section>
 
+          <section id="accountResetPanel" class="panel account-reset-panel hidden">
+            <div class="panel-head">
+              <div>
+                <h3 data-i18n="accountResetTitle">Admin password reset</h3>
+                <p data-i18n="accountResetSub">Reset a password account when the user needs recovery access.</p>
+              </div>
+            </div>
+            <form id="accountResetForm" class="account-reset-form">
+              <div class="form-grid">
+                <label class="field">
+                  <span data-i18n="accountToReset">Account to reset</span>
+                  <select id="resetAccountSelect"></select>
+                </label>
+                <label class="field">
+                  <span data-i18n="newTemporaryPassword">New temporary password</span>
+                  <input id="resetAccountPasswordInput" type="password" autocomplete="new-password" />
+                </label>
+                <label class="field">
+                  <span data-i18n="confirmTemporaryPassword">Confirm temporary password</span>
+                  <input id="resetAccountConfirmInput" type="password" autocomplete="new-password" />
+                </label>
+              </div>
+              <div class="account-reset-actions">
+                <button id="resetAccountPasswordBtn" class="primary-btn" type="submit" data-i18n="resetAccountPassword">Reset password</button>
+                <p id="accountResetStatus" class="save-status hidden" role="status" aria-live="polite"></p>
+              </div>
+            </form>
+          </section>
+
           <section class="panel">
             <div class="panel-head">
               <div>

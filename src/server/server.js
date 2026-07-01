@@ -708,6 +708,53 @@ async function createAccountForSession(session, accountInput) {
   };
 }
 
+async function listAccountsForSession(session) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  if (!isDefaultOwnerSession(session)) {
+    throw new AccountRegistryError("Only the default owner can list accounts.", 403);
+  }
+
+  const registry = await ensureAccountRegistry();
+  return Object.values(registry.accounts)
+    .map(publicUserIdentity)
+    .sort((left, right) => {
+      if (left.isDefaultUser !== right.isDefaultUser) return left.isDefaultUser ? -1 : 1;
+      return String(left.displayName || left.id).localeCompare(String(right.displayName || right.id));
+    });
+}
+
+async function resetAccountPasswordForSession(session, accountId, input) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  if (!isDefaultOwnerSession(session)) {
+    throw new AccountRegistryError("Only the default owner can reset account passwords.", 403);
+  }
+
+  const registry = await ensureAccountRegistry();
+  const targetAccountId = normalizeAccountId(accountId);
+  const account = registry.accounts[targetAccountId];
+  if (!account) {
+    throw new AccountRegistryError("Account was not found.", 404);
+  }
+  if (account.authProvider && account.authProvider !== "password") {
+    throw new AccountRegistryError("Password reset is only available for password accounts.", 400);
+  }
+
+  const newPassword = normalizePassword(input?.newPassword);
+  if (input?.confirmPassword !== undefined && newPassword !== String(input.confirmPassword || "")) {
+    throw new AccountRegistryError("New passwords do not match.", 400);
+  }
+
+  account.passwordHash = hashPassword(newPassword);
+  account.updatedAt = nowIso();
+  await writeAccountRegistry(registry);
+
+  return publicUserIdentity(account);
+}
+
 async function changePasswordForSession(session, input) {
   if (!session) {
     throw new AccountRegistryError("Authentication required", 401);
@@ -1114,11 +1161,45 @@ async function serveApi(req, res, pathname) {
     return true;
   }
 
+  if (pathname === "/api/admin/accounts" && req.method === "GET") {
+    try {
+      const accounts = await listAccountsForSession(sessionForRequest(req));
+      sendJson(res, 200, { ok: true, accounts });
+    } catch (error) {
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
   if (pathname === "/api/admin/accounts" && req.method === "POST") {
     const body = JSON.parse((await readBody(req)) || "{}");
     try {
       const created = await createAccountForSession(sessionForRequest(req), body);
       sendJson(res, 201, { ok: true, ...created });
+    } catch (error) {
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
+  const accountPasswordRouteMatch = pathname.match(/^\/api\/admin\/accounts\/([^/]+)\/password$/);
+  if (accountPasswordRouteMatch && req.method === "PATCH") {
+    const body = JSON.parse((await readBody(req)) || "{}");
+    try {
+      const account = await resetAccountPasswordForSession(
+        sessionForRequest(req),
+        decodeURIComponent(accountPasswordRouteMatch[1]),
+        body,
+      );
+      sendJson(res, 200, { ok: true, account });
     } catch (error) {
       if (error instanceof StorePathError || error instanceof AccountRegistryError) {
         sendJson(res, error.status || 400, { error: error.message });
