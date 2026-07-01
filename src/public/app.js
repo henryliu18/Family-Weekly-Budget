@@ -251,6 +251,10 @@ const i18n = {
     accountCreateFailed: "\u7121\u6cd5\u5efa\u7acb\u5e33\u865f\uff0c\u8acb\u6aa2\u67e5\u8f38\u5165\u5167\u5bb9\u5f8c\u518d\u8a66\u4e00\u6b21\u3002",
     accountCreateDuplicate: "\u9019\u500b\u5e33\u865f ID \u5df2\u5b58\u5728\uff0c\u8acb\u6539\u7528\u5176\u4ed6 ID\u3002",
     accountLoginHint: "\u8acb\u5c07\u81e8\u6642\u5bc6\u78bc\u4ee5\u5b89\u5168\u9014\u5f91\u4ea4\u7d66\u4f7f\u7528\u8005\uff1b\u7cfb\u7d71\u4e0d\u6703\u986f\u793a\u6216\u5132\u5b58\u660e\u78bc\u3002",
+    accountPreparedFromTrial: (name) => `\u5df2\u5c07 ${name} \u7684\u8a66\u7528\u7533\u8acb\u5e36\u5165\u5e33\u865f\u8868\u55ae\u3002\u8acb\u8a2d\u5b9a\u81e8\u6642\u5bc6\u78bc\u5f8c\u5efa\u7acb\u5e33\u865f\u3002`,
+    trialRequestsTitle: "\u8a66\u7528\u7533\u8acb",
+    trialRequestsSub: "\u4f86\u81ea\u767b\u9678\u9801\u7684\u5f85\u8655\u7406\u5b58\u53d6\u7533\u8acb\u3002",
+    trialRequestUseForAccount: "\u5e36\u5165\u5e33\u865f\u8868\u55ae",
     accountResetTitle: "\u7ba1\u7406\u54e1\u5bc6\u78bc\u91cd\u8a2d",
     accountResetSub: "\u7576\u4f7f\u7528\u8005\u9700\u8981\u6062\u5fa9\u5b58\u53d6\u6642\uff0c\u66ff\u5bc6\u78bc\u5e33\u865f\u8a2d\u5b9a\u65b0\u7684\u81e8\u6642\u5bc6\u78bc\u3002",
     accountToReset: "\u8981\u91cd\u8a2d\u7684\u5e33\u865f",
@@ -516,6 +520,10 @@ const i18n = {
     accountCreateFailed: "Unable to create account. Check the details and try again.",
     accountCreateDuplicate: "This account ID already exists. Choose another ID.",
     accountLoginHint: "Share the temporary password securely. The app will not show or store plaintext passwords.",
+    accountPreparedFromTrial: (name) => `Copied ${name}'s trial request into the account form. Add a temporary password, then create the account.`,
+    trialRequestsTitle: "Trial requests",
+    trialRequestsSub: "Pending access requests from the landing page.",
+    trialRequestUseForAccount: "Prepare account",
     accountResetTitle: "Admin password reset",
     accountResetSub: "Set a new temporary password when a password account needs recovery access.",
     accountToReset: "Account to reset",
@@ -1683,7 +1691,7 @@ async function loadTrialRequests() {
           <span>${escapeHtml(r.email)}</span>
           <small>${date}${note}</small>
         </div>
-        <button class="ghost-btn use-request-btn" type="button" data-name="${escapeHtml(r.name)}" data-email="${escapeHtml(r.email)}">Use for account</button>
+        <button class="ghost-btn use-request-btn" type="button" data-name="${escapeHtml(r.name)}" data-email="${escapeHtml(r.email)}">${escapeHtml(t("trialRequestUseForAccount"))}</button>
       </article>`;
     }).join("");
 
@@ -1691,14 +1699,32 @@ async function loadTrialRequests() {
       btn.addEventListener("click", () => {
         const name = btn.getAttribute("data-name");
         const email = btn.getAttribute("data-email");
-        if (els.newAccountDisplayNameInput) els.newAccountDisplayNameInput.value = name;
-        if (els.newAccountEmailInput) els.newAccountEmailInput.value = email;
-        document.querySelector('[data-view="settings"]')?.click();
+        prepareAccountFromTrialRequest({ name, email });
       });
     });
   } catch {
     els.trialRequestsList.innerHTML = '<p class="empty-state">Could not load requests.</p>';
   }
+}
+
+function prepareAccountFromTrialRequest({ name = "", email = "" }) {
+  const displayName = String(name || "").trim();
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const seed = normalizedEmail || displayName;
+  const accountId = trialRequestAccountId(seed);
+  const workspaceName = displayName ? `${displayName} Workspace` : "Trial Workspace";
+
+  if (els.newAccountIdInput) els.newAccountIdInput.value = accountId;
+  if (els.newAccountDisplayNameInput) els.newAccountDisplayNameInput.value = displayName;
+  if (els.newAccountEmailInput) els.newAccountEmailInput.value = normalizedEmail;
+  if (els.newAccountWorkspaceInput) els.newAccountWorkspaceInput.value = workspaceName;
+  clearAccountAdminResult();
+  setAccountAdminStatus("accountPreparedFromTrial", false, displayName || accountId);
+
+  els.accountAdminPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+  els.accountAdminPanel?.classList.add("panel-highlight");
+  setTimeout(() => els.accountAdminPanel?.classList.remove("panel-highlight"), 1600);
+  setTimeout(() => els.newAccountPasswordInput?.focus(), 250);
 }
 
 function renderWorkspaceManagementPanel() {
@@ -4583,6 +4609,29 @@ function slugify(value) {
     .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
     .replace(/^-|-$/g, "");
   return `${base || "month"}-${Date.now().toString(36)}`;
+}
+
+function trialRequestAccountId(value) {
+  const base = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/@.*/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+  const fallback = base || `trial-${Date.now().toString(36)}`;
+  const existingIds = new Set([
+    accountState?.account?.id,
+    ...(Array.isArray(adminAccounts) ? adminAccounts.map((account) => account.id) : []),
+  ].filter(Boolean));
+  if (!existingIds.has(fallback)) return fallback;
+  for (let index = 2; index < 100; index += 1) {
+    const suffix = `-${index}`;
+    const candidate = `${fallback.slice(0, 40 - suffix.length)}${suffix}`;
+    if (!existingIds.has(candidate)) return candidate;
+  }
+  return `${fallback.slice(0, 32)}-${Date.now().toString(36)}`;
 }
 
 function escapeHtml(value) {

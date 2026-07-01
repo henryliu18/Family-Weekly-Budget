@@ -215,7 +215,8 @@ test("landing page serves standalone entry", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".landing-headline")).toHaveText("Weekly budgeting, clearly presented.");
   await expect(page.locator('.landing-actions a[href="#trialAccessCard"]')).toBeVisible();
-  await expect(page.locator("#landingLoginForm")).toBeVisible();
+  await expect(page.locator('#enterWorkspaceLink[href="/app"]')).toHaveText("Log in");
+  await expect(page.locator("#landingPasswordInput")).toHaveCount(0);
   await expect(page.locator("#authOverlay")).toHaveCount(0);
 });
 
@@ -2065,9 +2066,10 @@ test("invalid trial request is rejected", async ({ page }) => {
 test("default owner can see pending trial requests in Settings", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
+  const requestName = `Owner See Test ${Date.now()}`;
   // Submit a request on landing page
   await page.goto("/");
-  await page.locator("#trialRequestNameInput").fill("Owner See Test");
+  await page.locator("#trialRequestNameInput").fill(requestName);
   await page.locator("#trialRequestEmailInput").fill("owner-see@example.test");
   await page.locator("#trialRequestNoteInput").fill("Testing owner view");
   await page.locator("#trialRequestBtn").click();
@@ -2077,7 +2079,15 @@ test("default owner can see pending trial requests in Settings", async ({ page }
   await login(page);
   await page.locator('.nav-tab[data-view="settings"]').click();
   await expect(page.locator("#trialRequestsPanel")).not.toBeHidden();
-  await expect(page.locator(".trial-request-item").filter({ hasText: "Owner See Test" })).toBeVisible();
+  const ownerRequest = page.locator(".trial-request-item").filter({ hasText: requestName });
+  await expect(ownerRequest).toBeVisible();
+
+  await ownerRequest.locator(".use-request-btn").click();
+  await expect(page.locator("#newAccountDisplayNameInput")).toHaveValue(requestName);
+  await expect(page.locator("#newAccountEmailInput")).toHaveValue("owner-see@example.test");
+  await expect(page.locator("#newAccountIdInput")).toHaveValue("owner-see");
+  await expect(page.locator("#newAccountWorkspaceInput")).toHaveValue(`${requestName} Workspace`);
+  await expect(page.locator("#accountAdminStatus")).toContainText("Copied");
 });
 
 test("secondary account cannot see trial requests", async ({ page }) => {
