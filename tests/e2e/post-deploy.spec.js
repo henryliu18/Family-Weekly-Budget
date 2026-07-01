@@ -644,6 +644,30 @@ test("workspace management API creates account-owned isolated workspaces", async
     );
     expect(list.workspaces.map((workspace) => workspace.id)).not.toContain("e2e-unowned-workspace");
 
+    const renameResponse = await context.patch(`/api/workspaces/${created.workspace.id}`, {
+      data: { name: "E2E Renamed Workspace" },
+    });
+    expect(renameResponse.ok()).toBe(true);
+    await expect(renameResponse.json()).resolves.toMatchObject({
+      ok: true,
+      workspace: { id: created.workspace.id, name: "E2E Renamed Workspace", role: "owner" },
+    });
+
+    const renamedListResponse = await context.get("/api/workspaces");
+    expect(renamedListResponse.ok()).toBe(true);
+    const renamedList = await renamedListResponse.json();
+    expect(renamedList.workspaces).toEqual(
+      expect.arrayContaining([
+        { id: created.workspace.id, name: "E2E Renamed Workspace", role: "owner" },
+      ]),
+    );
+
+    const unownedDelete = await context.delete("/api/workspaces/e2e-unowned-workspace");
+    expect(unownedDelete.status()).toBe(403);
+
+    const defaultDelete = await context.delete("/api/workspaces/e2e-default");
+    expect(defaultDelete.status()).toBe(400);
+
     const switchResponse = await context.post("/api/session/workspace", {
       data: { workspaceId: created.workspace.id },
     });
@@ -679,6 +703,31 @@ test("workspace management API creates account-owned isolated workspaces", async
     expect(defaultStateResponse.ok()).toBe(true);
     const defaultState = await defaultStateResponse.json();
     expect(defaultState.months[managedMonthId]).toBeUndefined();
+
+    expect((await context.post("/api/session/workspace", { data: { workspaceId: created.workspace.id } })).ok()).toBe(true);
+    const deleteResponse = await context.delete(`/api/workspaces/${created.workspace.id}`);
+    expect(deleteResponse.ok()).toBe(true);
+    await expect(deleteResponse.json()).resolves.toMatchObject({
+      ok: true,
+      deletedWorkspaceId: created.workspace.id,
+      currentWorkspaceId: "e2e-default",
+    });
+
+    const afterDeleteSessionResponse = await context.get("/api/session");
+    expect(afterDeleteSessionResponse.ok()).toBe(true);
+    await expect(afterDeleteSessionResponse.json()).resolves.toMatchObject({
+      workspaceId: "e2e-default",
+    });
+
+    const afterDeleteListResponse = await context.get("/api/workspaces");
+    expect(afterDeleteListResponse.ok()).toBe(true);
+    const afterDeleteList = await afterDeleteListResponse.json();
+    expect(afterDeleteList.workspaces.map((workspace) => workspace.id)).not.toContain(created.workspace.id);
+
+    const switchDeletedResponse = await context.post("/api/session/workspace", {
+      data: { workspaceId: created.workspace.id },
+    });
+    expect(switchDeletedResponse.status()).toBe(403);
   } finally {
     await unauthenticated.dispose();
     await context.dispose();
@@ -784,6 +833,9 @@ test("admin account creation creates isolated account-owned workspaces", async (
     expect(JSON.stringify(secondaryModel)).not.toContain(secondaryPassword);
     expect(JSON.stringify(secondaryModel)).not.toContain("passwordHash");
     expect(JSON.stringify(secondaryModel)).not.toContain("authSubject");
+
+    const secondaryCannotDeleteLastWorkspace = await secondary.delete(`/api/workspaces/${created.workspace.id}`);
+    expect(secondaryCannotDeleteLastWorkspace.status()).toBe(400);
 
     const secondaryCannotCreateAccounts = await secondary.post("/api/admin/accounts", {
       data: {
@@ -1058,6 +1110,27 @@ test("workspace create button adds and switches to a new workspace", async ({ pa
     role: "owner",
   });
   expect(me.workspaces.map((workspace) => workspace.id)).toContain(selectedWorkspaceId);
+
+  await page.locator('.nav-tab[data-view="settings"]').click();
+  await expect(page.locator("#workspaceManagementPanel")).toBeVisible();
+  await page.locator("#workspaceManageSelect").selectOption(selectedWorkspaceId);
+  await page.locator("#workspaceRenameInput").fill("E2E UI Workspace Renamed");
+  await page.locator("#renameWorkspaceBtn").click();
+  await expect(page.locator("#workspaceManagementStatus")).toHaveText("Workspace renamed.");
+  await expect(page.locator("#workspaceSelect option:checked")).toHaveText("E2E UI Workspace Renamed");
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.type()).toBe("confirm");
+    expect(dialog.message()).toBe('Delete "E2E UI Workspace Renamed"? This permanently removes this workspace\'s data.');
+    await dialog.accept();
+  });
+  await page.locator("#deleteWorkspaceBtn").click();
+  await expect(page.locator("#workspaceManagementStatus")).toHaveText("Workspace deleted.");
+  await expect(page.locator("#workspaceSelect")).toHaveValue("e2e-default");
+  const workspaceValuesAfterDelete = await page.locator("#workspaceSelect option").evaluateAll((options) =>
+    options.map((option) => option.value),
+  );
+  expect(workspaceValuesAfterDelete).not.toContain(selectedWorkspaceId);
 });
 
 test("account admin UI creates secondary account with isolated workspace", async ({ page }) => {
