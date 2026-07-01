@@ -1363,10 +1363,147 @@ tr:hover td {
 .account-admin-panel,
 .account-reset-panel,
 .account-security-panel,
-.workspace-management-panel {
+.workspace-management-panel,
+.profile-panel,
+.trial-requests-panel {
   border-color: rgba(36, 113, 93, 0.22);
   background:
     linear-gradient(135deg, rgba(241, 248, 244, 0.92), rgba(255, 255, 255, 0.98));
+}
+
+.profile-identity {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.trial-requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trial-request-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: 6px;
+}
+
+.trial-request-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trial-request-info strong {
+  font-size: 14px;
+}
+
+.trial-request-info span {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.trial-request-info small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.use-request-btn {
+  flex-shrink: 0;
+}
+
+.trial-card-request {
+  padding: 28px;
+  background: linear-gradient(135deg, rgba(241, 248, 244, 0.96), rgba(255, 255, 255, 0.98));
+  border-left: 5px solid var(--accent);
+  border-radius: 10px;
+}
+
+.trial-card-copy {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 6px 0 18px;
+  line-height: 1.5;
+}
+
+.trial-request-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.trial-request-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trial-field {
+  margin: 0;
+}
+
+.trial-field input,
+.trial-field textarea {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color .15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.trial-field input:focus,
+.trial-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(36, 113, 93, 0.12);
+}
+
+.trial-field textarea {
+  resize: vertical;
+  min-height: 56px;
+}
+
+.trial-field span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.trial-field span small {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.trial-request-status {
+  font-size: 13px;
+  margin: 0;
+  min-height: 20px;
+}
+
+.trial-request-cta {
+  align-self: flex-start;
+  padding: 10px 22px;
+  font-size: 14px;
 }
 
 .account-admin-form,

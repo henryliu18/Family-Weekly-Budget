@@ -380,6 +380,29 @@
               <h2 data-i18n="dataSettingsTitle">資料與分類設定</h2>
             </div>
           </div>
+
+          <section id="profilePanel" class="panel profile-panel hidden">
+            <div class="panel-head">
+              <div>
+                <h3 data-i18n="profileTitle">Profile</h3>
+                <p data-i18n="profileSub">Edit your account display name.</p>
+              </div>
+            </div>
+            <div id="profileIdentity" class="profile-identity"></div>
+            <form id="profileForm" class="profile-form">
+              <div class="form-grid">
+                <label class="field">
+                  <span data-i18n="displayName">Display name</span>
+                  <input id="profileDisplayNameInput" type="text" autocomplete="name" />
+                </label>
+              </div>
+              <div class="profile-actions">
+                <button id="saveProfileBtn" class="primary-btn" type="submit" data-i18n="save">Save</button>
+                <p id="profileStatus" class="save-status hidden" role="status" aria-live="polite"></p>
+              </div>
+            </form>
+          </section>
+
           <section class="panel">
             <div class="panel-head">
               <div>
@@ -521,6 +544,16 @@
                 <p id="accountResetStatus" class="save-status hidden" role="status" aria-live="polite"></p>
               </div>
             </form>
+          <section id="trialRequestsPanel" class="panel trial-requests-panel hidden">
+            <div class="panel-head">
+              <div>
+                <h3 data-i18n="trialRequestsTitle">Trial requests</h3>
+                <p data-i18n="trialRequestsSub">Pending access requests from the landing page.</p>
+              </div>
+            </div>
+            <div id="trialRequestsList" class="trial-requests-list">
+              <p class="empty-state hidden" data-i18n="trialRequestsEmpty">No pending requests.</p>
+            </div>
           </section>
 
           <section class="panel">
