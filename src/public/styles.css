@@ -53,9 +53,9 @@ button {
   top: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: minmax(260px, 0.55fr) minmax(700px, 1fr) minmax(300px, 0.45fr);
-  gap: 10px 16px;
-  align-items: center;
+  grid-template-columns: minmax(250px, 0.36fr) minmax(720px, 1fr);
+  gap: 8px 18px;
+  align-items: start;
   padding: 10px 16px;
   border-bottom: 1px solid rgba(216, 224, 216, 0.9);
   background:
@@ -127,7 +127,8 @@ button {
 }
 
 .topbar-controls {
-  justify-self: end;
+  grid-column: 2;
+  justify-self: stretch;
 }
 
 .month-action-btn {
@@ -138,15 +139,16 @@ button {
 }
 
 .topbar-controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto minmax(130px, 0.75fr) minmax(180px, 1fr) minmax(130px, 0.65fr);
   align-items: end;
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
+  padding: 0 5px;
 }
 
 .topbar-control-field {
-  flex: 1 1 150px;
   min-width: 120px;
 }
 
@@ -155,12 +157,11 @@ button {
 }
 
 .topbar-controls .workspace-switcher {
-  flex: 1.25 1 210px;
   max-width: 280px;
 }
 
 .topbar-controls .language-control {
-  flex: 0 1 145px;
+  max-width: 180px;
 }
 
 .month-action-btn {
@@ -1968,7 +1969,7 @@ body.landing-open {
   }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .topbar {
     grid-template-columns: 1fr;
   }
@@ -1979,6 +1980,7 @@ body.landing-open {
   }
 
   .topbar-controls {
+    grid-column: auto;
     justify-self: stretch;
   }
 
@@ -1990,13 +1992,13 @@ body.landing-open {
 
 }
 
-@media (min-width: 1101px) and (max-width: 1400px) {
+@media (min-width: 1181px) and (max-width: 1400px) {
   .topbar {
-    grid-template-columns: minmax(240px, 0.42fr) minmax(700px, 1fr);
+    grid-template-columns: minmax(240px, 0.34fr) minmax(700px, 1fr);
   }
 
   .topbar-controls {
-    grid-column: 1 / -1;
+    grid-column: 2;
   }
 }
 
@@ -2020,7 +2022,8 @@ body.landing-open {
 
   .topbar-controls {
     align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
   }
 
   .compact-field,
