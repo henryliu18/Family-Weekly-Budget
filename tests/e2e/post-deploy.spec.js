@@ -2077,7 +2077,7 @@ test("default owner can see pending trial requests in Settings", async ({ page }
   await login(page);
   await page.locator('.nav-tab[data-view="settings"]').click();
   await expect(page.locator("#trialRequestsPanel")).not.toBeHidden();
-  await expect(page.locator(".trial-request-item")).toContainText("Owner See Test");
+  await expect(page.locator(".trial-request-item").filter({ hasText: "Owner See Test" })).toBeVisible();
 });
 
 test("secondary account cannot see trial requests", async ({ page }) => {
