@@ -19,6 +19,8 @@ const expectedOwnerPublicIdentity = {
   displayName: expectedOwner.displayName,
   email: expectedOwner.email,
   authProvider: expectedOwner.authProvider,
+  accountStatus: "active",
+  trialStartedAt: null,
   isDefaultUser: true,
 };
 
@@ -934,6 +936,8 @@ test("admin account creation creates isolated account-owned workspaces", async (
       displayName: "E2E Secondary Owner",
       email: "secondary@example.test",
       authProvider: "password",
+      accountStatus: "active",
+      trialStartedAt: null,
       isDefaultUser: false,
     });
     expect(created.workspace).toMatchObject({
@@ -1753,6 +1757,7 @@ test("transaction import accepts copied online banking text", async ({ page }) =
 
   try {
     await addMonth(page, "2099-06");
+    await expect(page.locator("#monthSelect")).toHaveValue("2099-06");
     await page.locator('.nav-tab[data-view="entry"]').click();
     await expect(page.locator("#entryView")).toHaveClass(/active/);
 
@@ -1760,6 +1765,7 @@ test("transaction import accepts copied online banking text", async ({ page }) =
     await page.locator("#periodEndInput").fill("2099-06-23");
     await page.locator("#availableInput").fill("14800");
     await page.locator("#unpaidInput").fill("0");
+    await expect(page.locator("#importPeriodLabel")).toContainText("22-23 Jun 2099");
 
     const copiedRows = [
       "Available",
