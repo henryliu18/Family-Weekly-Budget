@@ -208,13 +208,13 @@ async function seedTrendMonths(page) {
   return seededMonthIds;
 }
 
-test("HTTP redirects to HTTPS", async ({ request }) => {
+test("HTTP redirects to HTTPS @e2e-core", async ({ request }) => {
   const response = await request.get(httpUrl, { maxRedirects: 0 });
   expect(response.status()).toBe(308);
   expect(response.headers().location).toMatch(/^https:\/\//);
 });
 
-test("landing page serves standalone entry", async ({ page }) => {
+test("landing page serves standalone entry @e2e-core", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".landing-headline")).toHaveText("Weekly budgeting, clearly presented.");
   if (googleOauthExpectedEnabled) {
@@ -229,7 +229,7 @@ test("landing page serves standalone entry", async ({ page }) => {
   await expect(page.locator("#authOverlay")).toHaveCount(0);
 });
 
-test("app hides protected content while authentication is being checked", async ({ page }) => {
+test("app hides protected content while authentication is being checked @e2e-auth", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   let releaseSession;
@@ -267,7 +267,7 @@ test("app hides protected content while authentication is being checked", async 
   await expect(page.locator(".app-shell")).toBeHidden();
 });
 
-test("logout returns to login without protected content flicker", async ({ page }) => {
+test("logout returns to login without protected content flicker @e2e-auth", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -301,7 +301,7 @@ test("logout returns to login without protected content flicker", async ({ page 
   await expect(page.locator("#authOverlay")).toBeVisible();
 });
 
-test("authenticated state API persists current workspace data", async ({ page }) => {
+test("authenticated state API persists current workspace data @e2e-workspace-account", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await apiLogin(page);
@@ -346,7 +346,7 @@ test("authenticated state API persists current workspace data", async ({ page })
   }
 });
 
-test("health exposes safe registry and storage diagnostics", async ({ request }) => {
+test("health exposes safe registry and storage diagnostics @e2e-core", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.ok()).toBe(true);
   const health = await response.json();
@@ -434,7 +434,7 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
   expect(serialized).not.toContain("memberships");
 });
 
-test("google oauth status is safe and exposes login entrypoint", async ({ request }) => {
+test("google oauth status is safe and exposes login entrypoint @e2e-auth", async ({ request }) => {
   const response = await request.get("/api/auth/google/status");
   expect(response.ok()).toBe(true);
   const status = await response.json();
@@ -473,7 +473,7 @@ async function beginGoogleOAuth(context) {
   return state;
 }
 
-test("google oauth creates an open trial account and app session", async () => {
+test("google oauth creates an open trial account and app session @e2e-auth", async () => {
   test.skip(!googleOauthExpectedEnabled, "Google OAuth e2e mock is not enabled.");
 
   const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
@@ -513,7 +513,7 @@ test("google oauth creates an open trial account and app session", async () => {
   expect(replay.headers().location).toContain("googleAuth=state");
 });
 
-test("default owner can promote a Google trial user to standard access", async ({ page }) => {
+test("default owner can promote a Google trial user to standard access @e2e-auth", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
   test.skip(!googleOauthExpectedEnabled, "Google OAuth e2e mock is not enabled.");
 
@@ -562,7 +562,7 @@ test("default owner can promote a Google trial user to standard access", async (
   }
 });
 
-test("google oauth rejects unverified email profiles", async () => {
+test("google oauth rejects unverified email profiles @e2e-auth", async () => {
   test.skip(!googleOauthExpectedEnabled, "Google OAuth e2e mock is not enabled.");
 
   const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
@@ -579,7 +579,7 @@ test("google oauth rejects unverified email profiles", async () => {
   expect(session.authenticated).toBe(false);
 });
 
-test("authenticated sessions resolve isolated workspaces", async () => {
+test("authenticated sessions resolve isolated workspaces @e2e-workspace-account", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const first = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
@@ -646,7 +646,7 @@ test("authenticated sessions resolve isolated workspaces", async () => {
   }
 });
 
-test("session login rejects unregistered workspaces", async () => {
+test("session login rejects unregistered workspaces @e2e-workspace-account", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
@@ -661,7 +661,7 @@ test("session login rejects unregistered workspaces", async () => {
   }
 });
 
-test("session login rejects workspaces without account membership", async () => {
+test("session login rejects workspaces without account membership @e2e-workspace-account", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
@@ -678,7 +678,7 @@ test("session login rejects workspaces without account membership", async () => 
   }
 });
 
-test("account read model returns only current account workspaces", async () => {
+test("account read model returns only current account workspaces @e2e-workspace-account", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
@@ -724,7 +724,7 @@ test("account read model returns only current account workspaces", async () => {
   }
 });
 
-test("fallback app password remains accepted beside account password", async () => {
+test("fallback app password remains accepted beside account password @e2e-auth", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
   test.skip(accountPassword === password, "Distinct E2E_ACCOUNT_PASSWORD is required for fallback coverage.");
 
@@ -744,7 +744,7 @@ test("fallback app password remains accepted beside account password", async () 
   }
 });
 
-test("registry diagnostics are authenticated and safe", async () => {
+test("registry diagnostics are authenticated and safe @e2e-workspace-account", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
@@ -818,7 +818,7 @@ test("registry diagnostics are authenticated and safe", async () => {
   }
 });
 
-test("durable session registry keeps tokens server-side and logout invalidates the session", async () => {
+test("durable session registry keeps tokens server-side and logout invalidates the session @e2e-auth", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
@@ -862,7 +862,7 @@ test("durable session registry keeps tokens server-side and logout invalidates t
   }
 });
 
-test("workspace management API creates account-owned isolated workspaces", async () => {
+test("workspace management API creates account-owned isolated workspaces @e2e-workspace-account", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const unauthenticated = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
@@ -1007,7 +1007,7 @@ test("workspace management API creates account-owned isolated workspaces", async
   }
 });
 
-test("admin account creation creates isolated account-owned workspaces", async () => {
+test("admin account creation creates isolated account-owned workspaces @e2e-workspace-account", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const unauthenticated = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
@@ -1163,7 +1163,7 @@ test("admin account creation creates isolated account-owned workspaces", async (
   }
 });
 
-test("session workspace switch changes current state workspace", async () => {
+test("session workspace switch changes current state workspace @e2e-workspace-account", async () => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const unauthenticated = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
@@ -1277,7 +1277,7 @@ test("session workspace switch changes current state workspace", async () => {
   }
 });
 
-test("workspace selector lists allowed workspaces and switches visible state", async ({ page }) => {
+test("workspace selector lists allowed workspaces and switches visible state @e2e-workspace-account", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -1358,7 +1358,7 @@ test("workspace selector lists allowed workspaces and switches visible state", a
   await expect(page.locator("#overviewTitle")).toHaveText("UI Bravo Workspace");
 });
 
-test("workspace create button adds and switches to a new workspace", async ({ page }) => {
+test("workspace create button adds and switches to a new workspace @e2e-workspace-account", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -1406,7 +1406,7 @@ test("workspace create button adds and switches to a new workspace", async ({ pa
   expect(workspaceValuesAfterDelete).not.toContain(selectedWorkspaceId);
 });
 
-test("account admin UI creates secondary account with isolated workspace", async ({ page }) => {
+test("account admin UI creates secondary account with isolated workspace @e2e-workspace-account", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const suffix = Date.now().toString(36);
@@ -1462,7 +1462,7 @@ test("account admin UI creates secondary account with isolated workspace", async
   expect(secondaryMe.workspaces).toHaveLength(1);
 });
 
-test("account security UI changes the signed-in account password", async ({ page }) => {
+test("account security UI changes the signed-in account password @e2e-auth", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const suffix = Date.now().toString(36);
@@ -1551,7 +1551,7 @@ test("account security UI changes the signed-in account password", async ({ page
   await expect(page.locator("#userIdentityLabel")).toHaveText(displayName);
 });
 
-test("default owner can reset a secondary account password", async ({ page }) => {
+test("default owner can reset a secondary account password @e2e-auth", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const suffix = Date.now().toString(36);
@@ -1632,7 +1632,7 @@ test("default owner can reset a secondary account password", async ({ page }) =>
   expect(secondaryCannotReset.status()).toBe(403);
 });
 
-test("post-deploy app smoke and workflow checks", async ({ page }) => {
+test("post-deploy app smoke and workflow checks @e2e-core", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -1767,7 +1767,7 @@ test("post-deploy app smoke and workflow checks", async ({ page }) => {
   await expect(page.locator("#authOverlay")).toBeVisible();
 });
 
-test("transaction import draft filters, reviews, and applies rows", async ({ page }) => {
+test("transaction import draft filters, reviews, and applies rows @e2e-import", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -1870,7 +1870,7 @@ test("transaction import draft filters, reviews, and applies rows", async ({ pag
   }
 });
 
-test("transaction import accepts copied online banking text", async ({ page }) => {
+test("transaction import accepts copied online banking text @e2e-import", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -1942,7 +1942,7 @@ test("transaction import accepts copied online banking text", async ({ page }) =
   }
 });
 
-test("brand home link navigates to overview", async ({ page }) => {
+test("brand home link navigates to overview @e2e-core", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -1956,7 +1956,7 @@ test("brand home link navigates to overview", async ({ page }) => {
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
 });
 
-test("click trend chart switches to selected month", async ({ page }) => {
+test("click trend chart switches to selected month @e2e-charts-ui", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -1980,7 +1980,7 @@ test("click trend chart switches to selected month", async ({ page }) => {
   expect(newMonth).toBe(targetInfo.id);
 });
 
-test("import textarea clears when leaving entry view", async ({ page }) => {
+test("import textarea clears when leaving entry view @e2e-core", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -1997,7 +1997,7 @@ test("import textarea clears when leaving entry view", async ({ page }) => {
   await expect(page.locator("#transactionImportInput")).toHaveValue("");
 });
 
-test("mobile overview stays within the viewport", async ({ page }) => {
+test("mobile overview stays within the viewport @e2e-charts-ui", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -2046,7 +2046,7 @@ test("mobile overview stays within the viewport", async ({ page }) => {
     });
 });
 
-test("trend chart renders status bars with correct colors", async ({ page }) => {
+test("trend chart renders status bars with correct colors @e2e-charts-ui", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -2074,7 +2074,7 @@ test("trend chart renders status bars with correct colors", async ({ page }) => 
   });
 });
 
-test("monthly trend bar status colors match overview", async ({ page }) => {
+test("monthly trend bar status colors match overview @e2e-charts-ui", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -2110,7 +2110,7 @@ test("monthly trend bar status colors match overview", async ({ page }) => {
   }
 });
 
-test("weekly chart category colors stay distinct from status palette", async ({ page }) => {
+test("weekly chart category colors stay distinct from status palette @e2e-charts-ui", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -2135,7 +2135,7 @@ test("weekly chart category colors stay distinct from status palette", async ({ 
   expect(hasContent).toBe(true);
 });
 
-test("bar colors scale with spending via /api/state", async ({ page }) => {
+test("bar colors scale with spending via /api/state @e2e-charts-ui", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -2241,7 +2241,7 @@ test("bar colors scale with spending via /api/state", async ({ page }) => {
   }
 });
 
-test("signed-in user can edit display name in Settings", async ({ page }) => {
+test("signed-in user can edit display name in Settings @e2e-workspace-account", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await login(page);
@@ -2265,7 +2265,7 @@ test("signed-in user can edit display name in Settings", async ({ page }) => {
   expect(meData.account.id).not.toBe(newName);
 });
 
-test("display name persists after reload", async ({ page }) => {
+test("display name persists after reload @e2e-workspace-account", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   const originalName = `E2E Persist ${Date.now()}`;
@@ -2287,7 +2287,7 @@ test("display name persists after reload", async ({ page }) => {
   expect(meData.user.displayName).toBe(originalName);
 });
 
-test("legacy trial request APIs are closed", async ({ request }) => {
+test("legacy trial request APIs are closed @e2e-auth", async ({ request }) => {
   const createResponse = await request.post("/api/trial-requests", {
     data: {
       name: "E2E Tester",
@@ -2303,7 +2303,7 @@ test("legacy trial request APIs are closed", async ({ request }) => {
   expect(adminResponse.status()).toBe(410);
 });
 
-test("secondary account cannot manage account status", async ({ page }) => {
+test("secondary account cannot manage account status @e2e-workspace-account", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
   await apiLogin(page);
