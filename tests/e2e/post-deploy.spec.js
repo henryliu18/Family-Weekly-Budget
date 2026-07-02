@@ -1175,6 +1175,34 @@ test("admin account creation creates isolated account-owned workspaces @e2e-work
     expect(ownerDefaultState.ok()).toBe(true);
     const ownerState = await ownerDefaultState.json();
     expect(ownerState.months[secondaryMonthId]).toBeUndefined();
+
+    const defaultDelete = await owner.delete(`/api/admin/accounts/${expectedOwner.id}`);
+    expect(defaultDelete.status()).toBe(400);
+
+    const deleteResponse = await owner.delete(`/api/admin/accounts/${created.account.id}`);
+    expect(deleteResponse.ok()).toBe(true);
+    const deleteResult = await deleteResponse.json();
+    expect(deleteResult).toMatchObject({
+      ok: true,
+      deletedAccountId: created.account.id,
+      deletedWorkspaceIds: [created.workspace.id],
+      deletedStoreIds: [created.workspace.id],
+      preservedWorkspaceIds: [],
+      storeCleanupWarnings: [],
+    });
+
+    const deletedAccountListResponse = await owner.get("/api/admin/accounts");
+    expect(deletedAccountListResponse.ok()).toBe(true);
+    const deletedAccountList = await deletedAccountListResponse.json();
+    expect(deletedAccountList.accounts.map((account) => account.id)).not.toContain(created.account.id);
+
+    const deletedWorkspaceSwitch = await owner.post("/api/session/workspace", {
+      data: { workspaceId: created.workspace.id },
+    });
+    expect(deletedWorkspaceSwitch.status()).toBe(403);
+
+    const secondaryAfterDelete = await secondary.get("/api/me");
+    expect(secondaryAfterDelete.status()).toBe(401);
   } finally {
     await unauthenticated.dispose();
     await owner.dispose();

@@ -259,6 +259,10 @@ const i18n = {
     promoteToStandard: "\u5347\u7d1a\u70ba\u6b63\u5f0f",
     accountPromoteSuccess: (account) => `\u5df2\u5c07 ${account} \u5347\u7d1a\u70ba\u6b63\u5f0f\u5b58\u53d6\u3002`,
     accountPromoteFailed: "\u7121\u6cd5\u66f4\u65b0\u4f7f\u7528\u8005\u72c0\u614b\uff0c\u8acb\u518d\u8a66\u4e00\u6b21\u3002",
+    deleteAccount: "\u522a\u9664\u5e33\u865f",
+    accountDeleteConfirm: (account) => `\u78ba\u5b9a\u8981\u522a\u9664\u300c${account}\u300d\u55ce\uff1f\u9019\u6703\u6c38\u4e45\u79fb\u9664\u8a72\u4f7f\u7528\u8005\u7684\u5de5\u4f5c\u5340\u8207\u4f3a\u670d\u5668\u8cc7\u6599\u3002`,
+    accountDeleteSuccess: (account) => `\u5df2\u522a\u9664 ${account} \u548c\u5c08\u5c6c\u5de5\u4f5c\u5340\u3002`,
+    accountDeleteFailed: "\u7121\u6cd5\u522a\u9664\u5e33\u865f\uff0c\u8acb\u518d\u8a66\u4e00\u6b21\u3002",
     noActionNeeded: "\u7121\u9700\u64cd\u4f5c",
     accountResetTitle: "\u7ba1\u7406\u54e1\u5bc6\u78bc\u91cd\u8a2d",
     accountResetSub: "\u7576\u4f7f\u7528\u8005\u9700\u8981\u6062\u5fa9\u5b58\u53d6\u6642\uff0c\u66ff\u5bc6\u78bc\u5e33\u865f\u8a2d\u5b9a\u65b0\u7684\u81e8\u6642\u5bc6\u78bc\u3002",
@@ -540,6 +544,10 @@ const i18n = {
     promoteToStandard: "Promote to standard",
     accountPromoteSuccess: (account) => `Promoted ${account} to standard access.`,
     accountPromoteFailed: "Unable to update user status. Please try again.",
+    deleteAccount: "Delete account",
+    accountDeleteConfirm: (account) => `Delete "${account}"? This permanently removes this user's workspaces and server data.`,
+    accountDeleteSuccess: (account) => `Deleted ${account} and owned workspaces.`,
+    accountDeleteFailed: "Unable to delete account. Please try again.",
     noActionNeeded: "No action needed",
     accountResetTitle: "Admin password reset",
     accountResetSub: "Set a new temporary password when a password account needs recovery access.",
@@ -1244,7 +1252,7 @@ function bindEvents() {
   els.profileForm?.addEventListener("submit", saveProfileFromForm);
   els.accountSecurityForm?.addEventListener("submit", changePasswordFromForm);
   els.accountAdminForm?.addEventListener("submit", createAccountFromForm);
-  els.managedAccountsList?.addEventListener("click", promoteManagedAccountFromClick);
+  els.managedAccountsList?.addEventListener("click", handleManagedAccountClick);
   els.accountResetForm?.addEventListener("submit", resetAccountPasswordFromForm);
   els.workspaceManagementForm?.addEventListener("submit", renameWorkspaceFromForm);
   els.workspaceManageSelect?.addEventListener("change", syncWorkspaceManagementForm);
@@ -1807,6 +1815,7 @@ function renderManagedAccountsList() {
     const action = isTrial
       ? `<button class="ghost-btn promote-account-btn" type="button" data-promote-account="${escapeHtml(account.id)}">${escapeHtml(t("promoteToStandard"))}</button>`
       : `<span class="managed-account-note">${escapeHtml(t("noActionNeeded"))}</span>`;
+    const label = account.displayName || account.email || account.id;
     return `<article class="managed-account-item" data-managed-account-id="${escapeHtml(account.id)}">
       <div class="managed-account-main">
         <strong>${escapeHtml(account.displayName || account.id)}</strong>
@@ -1816,9 +1825,18 @@ function renderManagedAccountsList() {
       <div class="managed-account-status">
         <span class="${statusClass}">${escapeHtml(accountStatusLabel(account))}</span>
         ${action}
+        <button class="danger-btn delete-account-btn" type="button" data-delete-account="${escapeHtml(account.id)}" data-delete-account-label="${escapeHtml(label)}">${escapeHtml(t("deleteAccount"))}</button>
       </div>
     </article>`;
   }).join("");
+}
+
+async function handleManagedAccountClick(event) {
+  if (event.target.closest("[data-delete-account]")) {
+    await deleteManagedAccountFromClick(event);
+    return;
+  }
+  await promoteManagedAccountFromClick(event);
 }
 
 async function promoteManagedAccountFromClick(event) {
@@ -1844,6 +1862,40 @@ async function promoteManagedAccountFromClick(event) {
     setAccountAdminStatus("accountPromoteSuccess", false, result.account?.displayName || result.account?.id || accountId);
   } catch {
     setAccountAdminStatus("accountPromoteFailed", true);
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+async function deleteManagedAccountFromClick(event) {
+  const button = event.target.closest("[data-delete-account]");
+  if (!button) return;
+  const accountId = button.getAttribute("data-delete-account");
+  if (!accountId) return;
+  const accountLabel = button.getAttribute("data-delete-account-label") || accountId;
+
+  const ok = await confirmDialog(t("accountDeleteConfirm", accountLabel), {
+    title: t("deleteAccount"),
+    confirmLabel: t("deleteAccount"),
+  });
+  if (!ok) return;
+
+  setButtonLoading(button, true);
+  try {
+    const response = await fetch(`/api/admin/accounts/${encodeURIComponent(accountId)}`, {
+      method: "DELETE",
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setAccountAdminStatus("accountDeleteFailed", true);
+      return;
+    }
+    await Promise.all([loadAccountState(), loadAdminAccounts()]);
+    renderManagedAccountsList();
+    renderAccountResetPanel();
+    setAccountAdminStatus("accountDeleteSuccess", false, result.account?.displayName || accountLabel);
+  } catch {
+    setAccountAdminStatus("accountDeleteFailed", true);
   } finally {
     setButtonLoading(button, false);
   }

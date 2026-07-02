@@ -1418,6 +1418,73 @@ async function deleteWorkspaceForSession(session, workspaceId) {
   };
 }
 
+async function deleteAccountForSession(session, accountId) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  if (!isDefaultOwnerSession(session)) {
+    throw new AccountRegistryError("Only the default owner can delete accounts.", 403);
+  }
+
+  const registry = await ensureAccountRegistry();
+  const id = normalizeAccountId(accountId);
+  if (id === DEFAULT_ACCOUNT_ID || id === session.accountId) {
+    throw new AccountRegistryError("Default owner account cannot be deleted.", 400);
+  }
+  const account = registry.accounts[id];
+  if (!account) {
+    throw new AccountRegistryError("Account is not registered.", 404);
+  }
+
+  const targetWorkspaceIds = registry.memberships
+    .filter((membership) => membership.accountId === id)
+    .map((membership) => membership.workspaceId);
+  const deletedWorkspaceIds = [];
+  const preservedWorkspaceIds = [];
+
+  for (const workspaceId of targetWorkspaceIds) {
+    const otherMemberships = registry.memberships.filter(
+      (membership) => membership.workspaceId === workspaceId && membership.accountId !== id,
+    );
+    if (workspaceId !== DEFAULT_WORKSPACE_ID && otherMemberships.length === 0) {
+      delete registry.workspaces[workspaceId];
+      deletedWorkspaceIds.push(workspaceId);
+    } else {
+      preservedWorkspaceIds.push(workspaceId);
+    }
+  }
+
+  delete registry.accounts[id];
+  registry.memberships = registry.memberships.filter((membership) => membership.accountId !== id);
+  await writeAccountRegistry(registry);
+
+  const deletedStoreIds = [];
+  const storeCleanupWarnings = [];
+  for (const workspaceId of deletedWorkspaceIds) {
+    try {
+      if (await deleteWorkspaceStore(workspaceId)) deletedStoreIds.push(workspaceId);
+    } catch {
+      storeCleanupWarnings.push(workspaceId);
+    }
+  }
+
+  for (const [tokenHash, activeSession] of sessions.entries()) {
+    if (activeSession.accountId === id) {
+      sessions.delete(tokenHash);
+    }
+  }
+  scheduleSessionRegistryWrite();
+
+  return {
+    account: publicUserIdentity(account),
+    deletedAccountId: id,
+    deletedWorkspaceIds,
+    deletedStoreIds,
+    preservedWorkspaceIds,
+    storeCleanupWarnings,
+  };
+}
+
 function sessionForRequest(req) {
   if (!APP_PASSWORD) return { accountId: DEFAULT_ACCOUNT_ID, workspaceId: DEFAULT_WORKSPACE_ID };
   const token = parseCookies(req)[AUTH_COOKIE];
@@ -1748,6 +1815,24 @@ async function serveApi(req, res, pathname) {
     try {
       const created = await createAccountForSession(sessionForRequest(req), body);
       sendJson(res, 201, { ok: true, ...created });
+    } catch (error) {
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
+  const accountRouteMatch = pathname.match(/^\/api\/admin\/accounts\/([^/]+)$/);
+  if (accountRouteMatch && req.method === "DELETE") {
+    try {
+      const result = await deleteAccountForSession(
+        sessionForRequest(req),
+        decodeURIComponent(accountRouteMatch[1]),
+      );
+      sendJson(res, 200, { ok: true, ...result });
     } catch (error) {
       if (error instanceof StorePathError || error instanceof AccountRegistryError) {
         sendJson(res, error.status || 400, { error: error.message });
