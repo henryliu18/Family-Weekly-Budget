@@ -267,6 +267,7 @@ const i18n = {
     accountResetFailed: "\u7121\u6cd5\u91cd\u8a2d\u5bc6\u78bc\uff0c\u8acb\u78ba\u8a8d\u5e33\u865f\u8207\u65b0\u5bc6\u78bc\u3002",
     accountSecurityTitle: "\u5e33\u865f\u5b89\u5168",
     accountSecuritySub: "\u8b8a\u66f4\u76ee\u524d\u767b\u5165\u5e33\u865f\u7684\u5bc6\u78bc\u3002",
+    accountSecurityGoogleSub: "\u9019\u500b\u5e33\u865f\u4f7f\u7528 Google \u767b\u5165\uff0c\u4e0d\u9700\u8981\u8a2d\u5b9a\u672c\u7cfb\u7d71\u5bc6\u78bc\u3002",
     currentPassword: "\u76ee\u524d\u5bc6\u78bc",
     newPassword: "\u65b0\u5bc6\u78bc",
     confirmNewPassword: "\u78ba\u8a8d\u65b0\u5bc6\u78bc",
@@ -275,6 +276,12 @@ const i18n = {
     passwordChangeFailed: "\u7121\u6cd5\u66f4\u65b0\u5bc6\u78bc\uff0c\u8acb\u78ba\u8a8d\u76ee\u524d\u5bc6\u78bc\u8207\u65b0\u5bc6\u78bc\u3002",
     passwordMismatch: "\u65b0\u5bc6\u78bc\u8207\u78ba\u8a8d\u5bc6\u78bc\u4e0d\u76f8\u7b26\u3002",
     signedInAccount: "\u76ee\u524d\u767b\u5165\u5e33\u865f",
+    signInMethod: "\u767b\u5165\u65b9\u5f0f",
+    accountStatus: "\u5e33\u865f\u72c0\u614b",
+    trialAccount: "\u8a66\u7528",
+    activeAccount: "\u6b63\u5f0f",
+    continueWithGoogle: "\u4f7f\u7528 Google \u7e7c\u7e8c",
+    orPasswordLogin: "\u6216\u4f7f\u7528\u5bc6\u78bc\u767b\u5165",
   },
   en: {
     language: "Language",
@@ -536,6 +543,7 @@ const i18n = {
     accountResetFailed: "Unable to reset password. Check the account and new password.",
     accountSecurityTitle: "Account security",
     accountSecuritySub: "Change the password for the account currently signed in.",
+    accountSecurityGoogleSub: "This account signs in with Google, so it does not need a local app password.",
     currentPassword: "Current password",
     newPassword: "New password",
     confirmNewPassword: "Confirm new password",
@@ -544,11 +552,18 @@ const i18n = {
     passwordChangeFailed: "Unable to update password. Check the current password and new password.",
     passwordMismatch: "New password and confirmation do not match.",
     signedInAccount: "Signed-in account",
+    signInMethod: "Sign-in method",
+    accountStatus: "Account status",
+    trialAccount: "Trial",
+    activeAccount: "Active",
+    continueWithGoogle: "Continue with Google",
+    orPasswordLogin: "or use password login",
   },
 };
 let currentLanguage = localStorage.getItem(LANGUAGE_KEY) || DEFAULT_LANGUAGE;
 let appMeta = META_FALLBACK;
 let authState = { authEnabled: false, authenticated: true };
+let googleAuthState = { enabled: false, configured: false, loginUrl: "/auth/google/start?returnTo=%2Fapp" };
 let accountState = null;
 let adminAccounts = [];
 
@@ -799,6 +814,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function bootstrapApp() {
   await loadMeta();
   await loadSession();
+  await loadGoogleAuthStatus();
   applyLanguage();
   updateBuildVersion();
   updateAuthUi();
@@ -806,6 +822,16 @@ async function bootstrapApp() {
   await loadAccountState();
   await loadState();
   renderAll();
+}
+
+async function loadGoogleAuthStatus() {
+  try {
+    const response = await fetch("/api/auth/google/status", { cache: "no-store" });
+    if (!response.ok) throw new Error("Google auth status request failed");
+    googleAuthState = await response.json();
+  } catch {
+    googleAuthState = { enabled: false, configured: false, loginUrl: "/auth/google/start?returnTo=%2Fapp" };
+  }
 }
 
 async function loadMeta() {
@@ -1034,6 +1060,8 @@ function bindElements() {
     "passwordInput",
     "loginError",
     "loginBtn",
+    "googleLoginBtn",
+    "authDivider",
     "enterWorkspaceBtn",
     "logoutBtn",
     "workspaceSwitcher",
@@ -1454,6 +1482,8 @@ function applyLanguage() {
     "#confirmMonthBtn": "addMonth",
     "#cancelMonthBtn": "cancel",
     "#loginBtn": "login",
+    "#googleLoginBtn span:last-child": "continueWithGoogle",
+    "#authDivider span": "orPasswordLogin",
     "#logoutBtn": "logout",
     "#createWorkspaceBtn": "createWorkspace",
     "#createAccountBtn": "createAccount",
@@ -1532,8 +1562,14 @@ function updateBuildVersion() {
 
 function updateAuthUi() {
   const shouldShowOverlay = isAuthLocked();
+  const googleReady = !!(googleAuthState.enabled && googleAuthState.configured);
   els.authOverlay?.classList.toggle("hidden", !shouldShowOverlay);
   els.logoutBtn?.classList.toggle("hidden", !authState.authEnabled || !authState.authenticated);
+  els.googleLoginBtn?.classList.toggle("hidden", !shouldShowOverlay || !googleReady);
+  els.authDivider?.classList.toggle("hidden", !shouldShowOverlay || !googleReady);
+  if (els.googleLoginBtn) {
+    els.googleLoginBtn.href = googleAuthState.loginUrl || "/auth/google/start?returnTo=%2Fapp";
+  }
   renderWorkspaceSwitcher();
   renderWorkspaceManagementPanel();
   renderAccountSecurityPanel();
@@ -1777,6 +1813,8 @@ function renderAccountSecurityPanel() {
     return;
   }
 
+  const isPasswordAccount = (account.authProvider || "password") === "password";
+  const statusLabel = account.accountStatus === "trial" ? t("trialAccount") : t("activeAccount");
   if (els.accountSecurityIdentity) {
     els.accountSecurityIdentity.innerHTML = `
       <strong>${escapeHtml(t("signedInAccount"))}</strong>
@@ -1784,9 +1822,14 @@ function renderAccountSecurityPanel() {
         <div><dt>${escapeHtml(t("accountId"))}</dt><dd>${escapeHtml(account.id || "-")}</dd></div>
         <div><dt>${escapeHtml(t("displayName"))}</dt><dd>${escapeHtml(account.displayName || "-")}</dd></div>
         <div><dt>${escapeHtml(t("emailOptional"))}</dt><dd>${escapeHtml(account.email || "-")}</dd></div>
+        <div><dt>${escapeHtml(t("signInMethod"))}</dt><dd>${escapeHtml(account.authProvider || "password")}</dd></div>
+        <div><dt>${escapeHtml(t("accountStatus"))}</dt><dd>${escapeHtml(statusLabel)}</dd></div>
       </dl>
     `;
   }
+  els.accountSecurityForm?.classList.toggle("hidden", !isPasswordAccount);
+  const sub = els.accountSecurityPanel.querySelector("[data-i18n='accountSecuritySub']");
+  if (sub) sub.textContent = isPasswordAccount ? t("accountSecuritySub") : t("accountSecurityGoogleSub");
 }
 
 function renderAccountAdminPanel() {

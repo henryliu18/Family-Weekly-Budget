@@ -28,7 +28,8 @@
               </p>
 
               <div class="landing-actions">
-                <a class="primary-btn" href="#trialAccessCard">Start trial access</a>
+                <a id="landingGoogleHeroLink" class="primary-btn hidden" href="/auth/google/start?returnTo=%2Fapp">Continue with Google</a>
+                <a id="landingTrialAccessLink" class="primary-btn" href="#trialAccessCard">Start trial access</a>
                 <a class="ghost-btn" href="#contactUs">Contact us</a>
               </div>
 
@@ -62,15 +63,15 @@
                 <li>
                   <span class="trial-step-number">1</span>
                   <div>
-                    <strong>Request a password</strong>
-                    <p>Ask the service owner or demo host for temporary access.</p>
+                    <strong>Continue with Google</strong>
+                    <p>Use a verified Google account to create your trial workspace.</p>
                   </div>
                 </li>
                 <li>
                   <span class="trial-step-number">2</span>
                   <div>
-                    <strong>Sign in</strong>
-                    <p>Use the shared password to open the workspace.</p>
+                    <strong>Open your trial</strong>
+                    <p>Your account and clean workspace are prepared automatically.</p>
                   </div>
                 </li>
                 <li>
@@ -127,6 +128,10 @@
                   Continue to the private workspace. You will enter your password on the secure app login screen.
                 </p>
               </div>
+              <a id="landingGoogleLoginLink" class="google-auth-btn auth-submit hidden" href="/auth/google/start?returnTo=%2Fapp">
+                <span class="google-auth-mark" aria-hidden="true">G</span>
+                <span>Continue with Google</span>
+              </a>
               <a id="enterWorkspaceLink" class="primary-btn auth-submit" href="/app">Log in</a>
               <p id="landingAuthFootnote" class="auth-footnote">
                 Need a trial password? Ask the budget owner to share one with you.

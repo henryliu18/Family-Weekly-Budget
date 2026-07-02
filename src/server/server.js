@@ -51,10 +51,20 @@ const SESSION_SECRET = process.env.SESSION_SECRET || "";
 const GOOGLE_OAUTH_ENABLED = process.env.GOOGLE_OAUTH_ENABLED === "true";
 const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || "";
 const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || "";
+const GOOGLE_OAUTH_AUTHORIZATION_ENDPOINT =
+  process.env.GOOGLE_OAUTH_AUTHORIZATION_ENDPOINT || "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_OAUTH_TOKEN_ENDPOINT = process.env.GOOGLE_OAUTH_TOKEN_ENDPOINT || "https://oauth2.googleapis.com/token";
+const GOOGLE_OAUTH_USERINFO_ENDPOINT =
+  process.env.GOOGLE_OAUTH_USERINFO_ENDPOINT || "https://openidconnect.googleapis.com/v1/userinfo";
 const GOOGLE_OAUTH_REDIRECT_PATH = process.env.GOOGLE_OAUTH_REDIRECT_PATH || "/auth/google/callback";
 const GOOGLE_OAUTH_APP_BASE_URL = process.env.GOOGLE_OAUTH_APP_BASE_URL || process.env.APP_BASE_URL || "";
 const GOOGLE_OAUTH_ALLOWED_DOMAIN = process.env.GOOGLE_OAUTH_ALLOWED_DOMAIN || "";
 const GOOGLE_OAUTH_STATE_TTL_SECONDS = Math.max(60, Number(process.env.GOOGLE_OAUTH_STATE_TTL_SECONDS || 10 * 60) || 10 * 60);
+const GOOGLE_OAUTH_REQUEST_TIMEOUT_MS = Math.max(
+  1000,
+  Number(process.env.GOOGLE_OAUTH_REQUEST_TIMEOUT_MS || 10000) || 10000,
+);
+const GOOGLE_OAUTH_MOCK_ENABLED = process.env.GOOGLE_OAUTH_MOCK_ENABLED === "true";
 const BUILD_VERSION = process.env.APP_BUILD_VERSION || "";
 const BUILD_TIME = process.env.APP_BUILD_TIME || new Date().toISOString();
 const SSL_CERT_PATH = process.env.SSL_CERT_PATH || "";
@@ -237,6 +247,9 @@ function registeredAccount(accountId, displayName = accountId) {
     email: id === DEFAULT_ACCOUNT_ID ? DEFAULT_ACCOUNT_EMAIL || null : null,
     authProvider: DEFAULT_AUTH_PROVIDER,
     authSubject: id === DEFAULT_ACCOUNT_ID ? DEFAULT_AUTH_SUBJECT : id,
+    accountStatus: "active",
+    trialStartedAt: null,
+    trialSource: null,
     isDefaultUser: id === DEFAULT_ACCOUNT_ID,
     createdAt: now,
     updatedAt: now,
@@ -251,6 +264,7 @@ function configuredFirstOwnerIdentity() {
     authProvider: DEFAULT_AUTH_PROVIDER,
     authSubject: DEFAULT_AUTH_SUBJECT,
     passwordHash: DEFAULT_ACCOUNT_PASSWORD_HASH || (DEFAULT_ACCOUNT_PASSWORD ? hashPassword(DEFAULT_ACCOUNT_PASSWORD) : null),
+    accountStatus: "active",
   };
 }
 
@@ -267,6 +281,9 @@ function normalizeAccountRecord(account, accountId) {
     authProvider: provider,
     authSubject: account?.authSubject || (id === DEFAULT_ACCOUNT_ID ? DEFAULT_AUTH_SUBJECT : id),
     passwordHash: account?.passwordHash || null,
+    accountStatus: account?.accountStatus || "active",
+    trialStartedAt: account?.trialStartedAt || null,
+    trialSource: account?.trialSource || null,
     isDefaultUser: account?.isDefaultUser ?? id === DEFAULT_ACCOUNT_ID,
     createdAt: account?.createdAt || now,
     updatedAt: account?.updatedAt || now,
@@ -293,6 +310,7 @@ function ensureFirstOwnerBootstrapRecord(registry) {
   if (!account.authProvider) updates.authProvider = identity.authProvider;
   if (!account.authSubject) updates.authSubject = identity.authSubject;
   if (identity.passwordHash && !isSupportedPasswordHash(account.passwordHash)) updates.passwordHash = identity.passwordHash;
+  if (!account.accountStatus) updates.accountStatus = identity.accountStatus;
   if (account.isDefaultUser === undefined) updates.isDefaultUser = identity.id === FALLBACK_ACCOUNT_ID;
   if (!account.updatedAt) updates.updatedAt = nowIso();
   if (Object.keys(updates).length > 0) {
@@ -463,6 +481,7 @@ function googleOAuthConfigSummary() {
     redirectPath,
     allowedDomainConfigured: !!GOOGLE_OAUTH_ALLOWED_DOMAIN,
     stateTtlSeconds: GOOGLE_OAUTH_STATE_TTL_SECONDS,
+    signupMode: "open-trial",
   };
 }
 
@@ -488,6 +507,120 @@ function googleOAuthRedirectUri(req = null) {
   }
 }
 
+function googleOAuthReady() {
+  return !!(GOOGLE_OAUTH_ENABLED && GOOGLE_OAUTH_CLIENT_ID && GOOGLE_OAUTH_CLIENT_SECRET);
+}
+
+function normalizeLocalReturnTo(value) {
+  const fallback = "/app";
+  const candidate = String(value || fallback).trim();
+  if (!candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\") || candidate.includes("\n")) {
+    return fallback;
+  }
+  if (candidate.startsWith("/auth/")) return fallback;
+  return candidate || fallback;
+}
+
+function sendRedirect(res, location, cookie = null) {
+  const headers = {
+    location,
+    "cache-control": "no-store",
+  };
+  if (cookie) headers["set-cookie"] = cookie;
+  res.writeHead(302, headers);
+  res.end();
+}
+
+function validateGoogleProfile(profile) {
+  const subject = String(profile?.sub || "").trim();
+  const email = normalizeEmail(profile?.email);
+  const emailVerified = profile?.email_verified === true || profile?.email_verified === "true";
+  const displayName = normalizeWorkspaceName(profile?.name || email || "Google User");
+  if (!subject) {
+    throw new AccountRegistryError("Google identity did not include a stable subject.", 401);
+  }
+  if (!email || !emailVerified) {
+    throw new AccountRegistryError("Google account email must be verified.", 403);
+  }
+  if (GOOGLE_OAUTH_ALLOWED_DOMAIN) {
+    const domain = email.split("@")[1] || "";
+    const hostedDomain = String(profile?.hd || "").trim().toLowerCase();
+    const allowedDomain = GOOGLE_OAUTH_ALLOWED_DOMAIN.trim().toLowerCase();
+    if (domain !== allowedDomain && hostedDomain !== allowedDomain) {
+      throw new AccountRegistryError("Google account domain is not allowed.", 403);
+    }
+  }
+  return {
+    subject,
+    email,
+    displayName,
+  };
+}
+
+function mockGoogleProfileForCode(code) {
+  const value = String(code || "");
+  if (value === "e2e-google-unverified") {
+    return {
+      sub: "e2e-google-unverified-sub",
+      email: "unverified-google-user@example.test",
+      email_verified: false,
+      name: "Unverified Google User",
+    };
+  }
+  const suffix = value.replace(/^e2e-google-/, "") || "trial";
+  return {
+    sub: `e2e-google-${suffix}-sub`,
+    email: `${suffix.replace(/[^a-z0-9-]+/gi, "-").toLowerCase()}@example.test`,
+    email_verified: true,
+    name: `Google ${suffix.replace(/[-_]+/g, " ")}`,
+  };
+}
+
+async function exchangeGoogleOAuthCode(code, redirectUri) {
+  if (GOOGLE_OAUTH_MOCK_ENABLED) {
+    return validateGoogleProfile(mockGoogleProfileForCode(code));
+  }
+
+  const body = new URLSearchParams({
+    code,
+    client_id: GOOGLE_OAUTH_CLIENT_ID,
+    client_secret: GOOGLE_OAUTH_CLIENT_SECRET,
+    redirect_uri: redirectUri,
+    grant_type: "authorization_code",
+  });
+  let tokenResponse;
+  try {
+    tokenResponse = await fetch(GOOGLE_OAUTH_TOKEN_ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+      signal: AbortSignal.timeout(GOOGLE_OAUTH_REQUEST_TIMEOUT_MS),
+    });
+  } catch {
+    throw new AccountRegistryError("Google authorization code exchange failed.", 401);
+  }
+  if (!tokenResponse.ok) {
+    throw new AccountRegistryError("Google authorization code exchange failed.", 401);
+  }
+  const token = await tokenResponse.json();
+  if (!token.access_token) {
+    throw new AccountRegistryError("Google authorization did not return an access token.", 401);
+  }
+  let profileResponse;
+  try {
+    profileResponse = await fetch(GOOGLE_OAUTH_USERINFO_ENDPOINT, {
+      headers: { authorization: `Bearer ${token.access_token}` },
+      signal: AbortSignal.timeout(GOOGLE_OAUTH_REQUEST_TIMEOUT_MS),
+    });
+  } catch {
+    throw new AccountRegistryError("Google profile lookup failed.", 401);
+  }
+  if (!profileResponse.ok) {
+    throw new AccountRegistryError("Google profile lookup failed.", 401);
+  }
+  return validateGoogleProfile(await profileResponse.json());
+}
+
 function publicUserIdentity(account) {
   return {
     id: account.id,
@@ -495,6 +628,8 @@ function publicUserIdentity(account) {
     displayName: account.displayName,
     email: account.email || null,
     authProvider: account.authProvider,
+    accountStatus: account.accountStatus || "active",
+    trialStartedAt: account.trialStartedAt || null,
     isDefaultUser: !!account.isDefaultUser,
   };
 }
@@ -973,6 +1108,66 @@ async function createAccountForSession(session, accountInput) {
   };
 }
 
+async function findOrCreateGoogleTrialAccount(profile) {
+  const registry = await ensureAccountRegistry();
+  const existing = Object.values(registry.accounts).find(
+    (account) => account.authProvider === "google" && account.authSubject === profile.subject,
+  );
+  if (existing) {
+    let changed = false;
+    if (existing.email !== profile.email) {
+      existing.email = profile.email;
+      changed = true;
+    }
+    if (!existing.displayName && profile.displayName) {
+      existing.displayName = profile.displayName;
+      changed = true;
+    }
+    if (!existing.accountStatus) {
+      existing.accountStatus = "trial";
+      changed = true;
+    }
+    if (changed) {
+      existing.updatedAt = nowIso();
+      await writeAccountRegistry(registry);
+    }
+    return {
+      account: existing,
+      created: false,
+    };
+  }
+
+  const now = nowIso();
+  const accountId = uniqueAccountId(registry, `google-${profile.email || profile.displayName}`);
+  const workspaceName = normalizeWorkspaceName(`${profile.displayName} Workspace`);
+  const workspaceId = uniqueWorkspaceId(registry, workspaceName);
+  const account = {
+    id: accountId,
+    userId: accountId,
+    displayName: profile.displayName,
+    email: profile.email,
+    authProvider: "google",
+    authSubject: profile.subject,
+    passwordHash: null,
+    accountStatus: "trial",
+    trialStartedAt: now,
+    trialSource: "google-oauth",
+    isDefaultUser: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  registry.accounts[account.id] = account;
+  const workspace = ensureWorkspaceRecord(registry, workspaceId, workspaceName);
+  ensureMembershipRecord(registry, account.id, workspace.id, "owner");
+  await ensureFreshWorkspaceStore(workspace.id);
+  await writeAccountRegistry(registry);
+
+  return {
+    account,
+    created: true,
+  };
+}
+
 async function listAccountsForSession(session) {
   if (!session) {
     throw new AccountRegistryError("Authentication required", 401);
@@ -1413,12 +1608,75 @@ async function serveApi(req, res, pathname) {
     return true;
   }
 
+  if (pathname === "/auth/google/start" && req.method === "GET") {
+    if (!googleOAuthReady()) {
+      sendJson(res, 503, { error: "Google sign-in is not configured." });
+      return true;
+    }
+    const requestUrl = new URL(req.url, "http://127.0.0.1");
+    const redirectUri = googleOAuthRedirectUri(req);
+    if (!redirectUri) {
+      sendJson(res, 500, { error: "Google sign-in redirect URI is not configured." });
+      return true;
+    }
+    const { state, nonce } = await createOAuthState(normalizeLocalReturnTo(requestUrl.searchParams.get("returnTo")));
+    const authorizationUrl = new URL(GOOGLE_OAUTH_AUTHORIZATION_ENDPOINT);
+    authorizationUrl.searchParams.set("client_id", GOOGLE_OAUTH_CLIENT_ID);
+    authorizationUrl.searchParams.set("redirect_uri", redirectUri);
+    authorizationUrl.searchParams.set("response_type", "code");
+    authorizationUrl.searchParams.set("scope", "openid email profile");
+    authorizationUrl.searchParams.set("state", state);
+    authorizationUrl.searchParams.set("nonce", nonce);
+    authorizationUrl.searchParams.set("include_granted_scopes", "true");
+    sendRedirect(res, authorizationUrl.toString());
+    return true;
+  }
+
+  if (pathname === normalizeGoogleOAuthRedirectPath() && req.method === "GET") {
+    const requestUrl = new URL(req.url, "http://127.0.0.1");
+    const oauthError = requestUrl.searchParams.get("error");
+    const code = requestUrl.searchParams.get("code");
+    const state = requestUrl.searchParams.get("state");
+    if (oauthError) {
+      sendRedirect(res, `/?googleAuth=${encodeURIComponent(oauthError)}`);
+      return true;
+    }
+    if (!googleOAuthReady() || !code || !state) {
+      sendRedirect(res, "/?googleAuth=invalid");
+      return true;
+    }
+    try {
+      const stateRecord = await consumeOAuthState(state);
+      if (!stateRecord) {
+        sendRedirect(res, "/?googleAuth=state");
+        return true;
+      }
+      const redirectUri = googleOAuthRedirectUri(req);
+      if (!redirectUri) {
+        sendRedirect(res, "/?googleAuth=redirect");
+        return true;
+      }
+      const profile = await exchangeGoogleOAuthCode(code, redirectUri);
+      const { account } = await findOrCreateGoogleTrialAccount(profile);
+      const created = await createSession(account.id, null);
+      sendRedirect(res, normalizeLocalReturnTo(stateRecord.returnTo), sessionCookie(created.token));
+    } catch (error) {
+      if (error instanceof AccountRegistryError || error instanceof StorePathError) {
+        sendRedirect(res, `/?googleAuth=${encodeURIComponent(error.message)}`);
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
   if (pathname === "/api/auth/google/status" && req.method === "GET") {
     sendJson(res, 200, {
       ok: true,
       provider: "google",
       ...googleOAuthConfigSummary(),
       redirectUri: googleOAuthRedirectUri(req),
+      loginUrl: "/auth/google/start?returnTo=%2Fapp",
     });
     return true;
   }
