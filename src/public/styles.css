@@ -1865,6 +1865,7 @@ body.dialog-open::before {
   display: none !important;
 }
 
+body.auth-checking,
 body.auth-locked {
   overflow: hidden;
   background:
@@ -1872,20 +1873,27 @@ body.auth-locked {
     linear-gradient(135deg, #08110d 0%, #13231c 48%, #eef3ed 100%);
 }
 
+body.auth-checking .app-shell,
 body.auth-locked .app-shell {
   display: none;
 }
 
+body.auth-checking #authOverlay,
 body.auth-locked #authOverlay {
   display: grid;
   place-items: center;
 }
 
+body.auth-checking #authOverlay .auth-scene,
 body.auth-locked #authOverlay .auth-scene {
   display: grid;
   min-height: auto;
   width: min(420px, 100%);
   place-items: center;
+}
+
+body.auth-checking #authOverlay .auth-marketing {
+  display: none;
 }
 
 body.auth-locked #authOverlay .auth-marketing {
@@ -1913,6 +1921,10 @@ body.auth-locked #trialAccessCard {
   max-width: none;
   border-radius: 8px;
   background: #ffffff;
+}
+
+body.auth-locked #authCheckingCard {
+  display: none;
 }
 
 body.landing-open {
@@ -1947,6 +1959,40 @@ body.landing-open {
   width: min(1260px, 100%);
   min-height: 100%;
   margin: 0 auto;
+}
+
+.auth-checking-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(420px, 100%);
+  border: 1px solid rgba(236, 243, 237, 0.2);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 34px 28px;
+  color: var(--ink);
+  text-align: center;
+  box-shadow: 0 28px 70px rgba(3, 8, 6, 0.26);
+}
+
+.auth-checking-card h2,
+.auth-checking-card p {
+  margin: 0;
+}
+
+.auth-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(36, 113, 93, 0.16);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: auth-spin 0.85s linear infinite;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .auth-marketing {

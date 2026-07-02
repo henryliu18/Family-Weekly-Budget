@@ -8,7 +8,7 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
+  <body class="auth-checking">
     <div class="app-shell">
       <header class="topbar">
         <div class="brand topbar-brand" id="brandHome">
@@ -621,8 +621,13 @@
       </form>
     </dialog>
 
-    <section id="authOverlay" class="auth-overlay hidden" aria-live="polite">
+    <section id="authOverlay" class="auth-overlay" aria-live="polite">
       <div class="auth-scene">
+        <div id="authCheckingCard" class="auth-checking-card" role="status" aria-live="polite">
+          <div class="auth-spinner" aria-hidden="true"></div>
+          <p class="eyebrow" data-i18n="checkingAccess">Checking access</p>
+          <h2 data-i18n="checkingAccessTitle">Preparing your workspace...</h2>
+        </div>
         <div class="auth-marketing">
           <div class="landing-brand">
             <div class="brand-mark landing-brand-mark">家</div>

@@ -229,6 +229,78 @@ test("landing page serves standalone entry", async ({ page }) => {
   await expect(page.locator("#authOverlay")).toHaveCount(0);
 });
 
+test("app hides protected content while authentication is being checked", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  let releaseSession;
+  let resolveSessionRequested;
+  const sessionRequested = new Promise((resolve) => {
+    resolveSessionRequested = resolve;
+  });
+  await page.route("**/api/session", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    resolveSessionRequested();
+    await new Promise((resolve) => {
+      releaseSession = resolve;
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ authEnabled: true, authenticated: false }),
+    });
+  });
+
+  await page.goto(appUrl, { waitUntil: "domcontentloaded" });
+  await sessionRequested;
+  await expect(page.locator("body")).toHaveClass(/auth-checking/);
+  await expect(page.locator("#authCheckingCard")).toBeVisible();
+  await expect(page.locator(".app-shell")).toBeHidden();
+  await expect(page.locator("#overviewView")).toBeHidden();
+
+  releaseSession();
+  await expect(page.locator("body")).not.toHaveClass(/auth-checking/);
+  await expect(page.locator("#authOverlay")).toBeVisible();
+  await expect(page.locator("#loginForm")).toBeVisible();
+  await expect(page.locator(".app-shell")).toBeHidden();
+});
+
+test("logout returns to login without protected content flicker", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+
+  await login(page);
+  await expect(page.locator(".app-shell")).toBeVisible();
+
+  let releaseLogout;
+  let resolveLogoutRequested;
+  const logoutRequested = new Promise((resolve) => {
+    resolveLogoutRequested = resolve;
+  });
+  await page.route("**/api/session", async (route) => {
+    if (route.request().method() !== "DELETE") {
+      await route.continue();
+      return;
+    }
+    resolveLogoutRequested();
+    await new Promise((resolve) => {
+      releaseLogout = resolve;
+    });
+    await route.fulfill({ status: 204, body: "" });
+  });
+
+  await page.locator("#logoutBtn").click();
+  await logoutRequested;
+  await expect(page.locator("body")).toHaveClass(/auth-locked/);
+  await expect(page.locator("#authOverlay")).toBeVisible();
+  await expect(page.locator("#loginForm")).toBeVisible();
+  await expect(page.locator(".app-shell")).toBeHidden();
+
+  releaseLogout();
+  await expect(page.locator("#authOverlay")).toBeVisible();
+});
+
 test("authenticated state API persists current workspace data", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 

@@ -216,6 +216,8 @@ const i18n = {
     loginRequired: "需要登入",
     loginTitle: "輸入密碼",
     loginSub: "這份家庭預算受密碼保護；請向家庭預算管理者取得密碼。",
+    checkingAccess: "\u6aa2\u67e5\u5b58\u53d6",
+    checkingAccessTitle: "\u6b63\u5728\u6e96\u5099\u4f60\u7684\u5de5\u4f5c\u5340...",
     loginAccountId: "\u5e33\u865f ID\uff08\u9078\u586b\uff09",
     password: "密碼",
     login: "登入",
@@ -495,6 +497,8 @@ const i18n = {
     loginRequired: "Login required",
     loginTitle: "Enter password",
     loginSub: "This family budget is password-protected. Ask the household budget owner for access.",
+    checkingAccess: "Checking access",
+    checkingAccessTitle: "Preparing your workspace...",
     loginAccountId: "Account ID (optional)",
     password: "Password",
     login: "Log in",
@@ -568,7 +572,7 @@ const i18n = {
 };
 let currentLanguage = localStorage.getItem(LANGUAGE_KEY) || DEFAULT_LANGUAGE;
 let appMeta = META_FALLBACK;
-let authState = { authEnabled: false, authenticated: true };
+let authState = { authEnabled: true, authenticated: false, resolved: false };
 let googleAuthState = { enabled: false, configured: false, loginUrl: "/auth/google/start?returnTo=%2Fapp" };
 let accountState = null;
 let adminAccounts = [];
@@ -854,9 +858,9 @@ async function loadSession() {
   try {
     const response = await fetch("/api/session", { cache: "no-store" });
     if (!response.ok) throw new Error("Session request failed");
-    authState = await response.json();
+    authState = { ...(await response.json()), resolved: true };
   } catch {
-    authState = { authEnabled: false, authenticated: true };
+    authState = { authEnabled: true, authenticated: false, resolved: true };
   }
 }
 
@@ -871,7 +875,7 @@ async function loadAccountState() {
     if (response.status === 401) {
       accountState = null;
       adminAccounts = [];
-      authState = { ...authState, authenticated: false };
+      authState = { ...authState, authenticated: false, resolved: true };
       updateAuthUi();
       return;
     }
@@ -903,7 +907,7 @@ async function loadState() {
   try {
     const response = await fetch("/api/state", { cache: "no-store" });
     if (response.status === 401) {
-      authState = { ...authState, authenticated: false };
+      authState = { ...authState, authenticated: false, resolved: true };
       updateAuthUi();
       return;
     }
@@ -1457,7 +1461,7 @@ function categoryLabel(category) {
 }
 
 function isAuthLocked() {
-  return authState.authEnabled && !authState.authenticated;
+  return !authState.resolved || (authState.authEnabled && !authState.authenticated);
 }
 
 function applyLanguage() {
@@ -1565,12 +1569,14 @@ function updateBuildVersion() {
 }
 
 function updateAuthUi() {
-  const shouldShowOverlay = isAuthLocked();
+  const isCheckingAuth = !authState.resolved;
+  const shouldShowOverlay = isCheckingAuth || isAuthLocked();
+  const shouldShowLogin = shouldShowOverlay && !isCheckingAuth;
   const googleReady = !!(googleAuthState.enabled && googleAuthState.configured);
   els.authOverlay?.classList.toggle("hidden", !shouldShowOverlay);
   els.logoutBtn?.classList.toggle("hidden", !authState.authEnabled || !authState.authenticated);
-  els.googleLoginBtn?.classList.toggle("hidden", !shouldShowOverlay || !googleReady);
-  els.authDivider?.classList.toggle("hidden", !shouldShowOverlay || !googleReady);
+  els.googleLoginBtn?.classList.toggle("hidden", !shouldShowLogin || !googleReady);
+  els.authDivider?.classList.toggle("hidden", !shouldShowLogin || !googleReady);
   if (els.googleLoginBtn) {
     els.googleLoginBtn.href = googleAuthState.loginUrl || "/auth/google/start?returnTo=%2Fapp";
   }
@@ -1581,13 +1587,14 @@ function updateAuthUi() {
   renderAccountResetPanel();
   renderProfilePanel();
   renderPersonalTitle();
-  document.body.classList.toggle("landing-open", shouldShowOverlay);
-  document.body.classList.toggle("auth-locked", isAuthLocked());
+  document.body.classList.toggle("auth-checking", isCheckingAuth);
+  document.body.classList.toggle("landing-open", shouldShowLogin);
+  document.body.classList.toggle("auth-locked", shouldShowOverlay);
   const authCopy = els.authOverlay?.querySelector(".auth-copy");
   if (authCopy) authCopy.textContent = t("loginSub");
   if (shouldShowOverlay) {
     clearSensitiveUi();
-    if (isAuthLocked()) {
+    if (shouldShowLogin) {
       setTimeout(() => els.passwordInput?.focus(), 0);
     }
   } else {
@@ -1625,7 +1632,7 @@ async function handleLogin(event) {
       showLoginError("loginFailed");
       return;
     }
-    authState = { authEnabled: true, authenticated: true };
+    authState = { authEnabled: true, authenticated: true, resolved: true };
     els.passwordInput.value = "";
     if (els.loginAccountIdInput) els.loginAccountIdInput.value = "";
     updateAuthUi();
@@ -1640,11 +1647,14 @@ async function handleLogin(event) {
 }
 
 async function logout() {
+  authState = { ...authState, authenticated: false, resolved: true };
+  accountState = null;
+  adminAccounts = [];
+  clearSensitiveUi();
+  updateAuthUi();
   try {
     await fetch("/api/session", { method: "DELETE" });
   } catch {}
-  authState = { ...authState, authenticated: false };
-  accountState = null;
   updateAuthUi();
 }
 
