@@ -24,6 +24,11 @@ const expectedOwnerPublicIdentity = {
   isDefaultUser: true,
 };
 
+function currentMonthSortKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
 async function login(page) {
   await page.goto(appUrl);
   await expect(page.locator("#authOverlay")).toBeVisible();
@@ -505,6 +510,20 @@ test("google oauth creates an open trial account and app session @e2e-auth", asy
   });
   expect(me.workspaces).toHaveLength(1);
   expect(me.currentWorkspace.id).toBe(me.workspaces[0].id);
+  expect(me.currentWorkspace.name).toBe("My Budget");
+
+  const stateResponse = await context.get("/api/state");
+  expect(stateResponse.ok()).toBe(true);
+  const budgetState = await stateResponse.json();
+  expect(budgetState.currentMonthId).toBe(currentMonthSortKey());
+  expect(Object.keys(budgetState.months)).toEqual([budgetState.currentMonthId]);
+  expect(budgetState.months[budgetState.currentMonthId].weeks).toHaveLength(4);
+  expect(budgetState.months[budgetState.currentMonthId].weeks.every((week) => week.cumulativeSpend === null)).toBe(true);
+  expect(
+    budgetState.months[budgetState.currentMonthId].weeks.every(
+      (week) => Object.keys(week.categoryValues || {}).length === 0,
+    ),
+  ).toBe(true);
 
   const replay = await context.get(`/auth/google/callback?code=e2e-google-family-trial&state=${state}`, {
     maxRedirects: 0,
@@ -710,7 +729,7 @@ test("account read model returns only current account workspaces @e2e-workspace-
     });
     expect(me.workspaces).toEqual(
       expect.arrayContaining([
-        { id: "e2e-default", name: "Default Workspace", role: "owner" },
+        { id: "e2e-default", name: "My Budget", role: "owner" },
         { id: "e2e-session-alpha", name: "e2e-session-alpha", role: "owner" },
         { id: "e2e-session-bravo", name: "e2e-session-bravo", role: "owner" },
       ]),
@@ -1888,6 +1907,9 @@ test("transaction import accepts copied online banking text @e2e-import", async 
     await page.locator("#availableInput").fill("14800");
     await page.locator("#unpaidInput").fill("0");
     await expect(page.locator("#importPeriodLabel")).toContainText("22-23 Jun 2099");
+    await expect
+      .poll(async () => page.evaluate(() => currentImportPeriodRange()))
+      .toEqual({ start: "2099-06-22", end: "2099-06-23" });
 
     const copiedRows = [
       "Available",
@@ -1915,6 +1937,7 @@ test("transaction import accepts copied online banking text @e2e-import", async 
     ].join("\n");
 
     await page.locator("#transactionImportInput").fill(copiedRows);
+    await expect(page.locator("#transactionImportInput")).toHaveValue(/Department of Transpor/);
     await page.locator("#parseImportBtn").click();
     await expect(page.locator("#importSummary")).toContainText("Included");
     await expect(page.locator("#importSummary")).toContainText("5 transactions");
