@@ -101,7 +101,7 @@ The automated E2E deployment uses:
 
 ```text
 deploy/docker-compose.e2e.yml
-${VM_APP_PATH}/e2e-<github.run_id>
+${VM_APP_PATH}/e2e-<github.run_id>-<suite>
 project name: family-budget-e2e
 VM localhost only: 127.0.0.1:18080 and 127.0.0.1:18443
 GitHub Actions access: SSH tunnel to https://127.0.0.1:18443/
@@ -115,15 +115,17 @@ The workflow:
 - generates a short-lived localhost TLS certificate on the VM
 - generates a random app password
 - pulls the just-built immutable image tag
-- runs Playwright through an SSH tunnel with:
+- runs each feature suite as a separate GitHub Actions matrix job so a flaky suite can be rerun on its own
+- keeps E2E suites serialized with `max-parallel: 1` because the current VM compose file uses fixed localhost ports
+- runs Playwright through an SSH tunnel with a suite tag, for example:
 
 ```powershell
 npm install
 npx playwright install --with-deps chromium
-npm run test:e2e -- --project=chromium
+npm run test:e2e -- --project=chromium --grep "@e2e-import"
 ```
 
-If E2E fails, the workflow prints the container logs and then cleans up the isolated deployment.
+Current suites are `@e2e-core`, `@e2e-auth`, `@e2e-workspace-account`, `@e2e-import`, and `@e2e-charts-ui`. If an E2E suite fails, the workflow prints the container logs and then cleans up that suite's isolated deployment.
 
 ## Production VM deployment
 
@@ -309,7 +311,7 @@ TF_VAR_instance_shape=VM.Standard.E2.1.Micro
 
 - product work: local Docker on `http://127.0.0.1:5173/`
 - image publishing: `docker-image.yml`
-- isolated VM validation: built-in `e2e` job in `docker-image.yml`
+- isolated VM validation: feature-based `e2e` matrix jobs in `docker-image.yml`
 - production deployment: `deploy-vm.yml`
 - state bucket bootstrap: `infra-bootstrap/`
 - main OCI infrastructure: `infra/`
