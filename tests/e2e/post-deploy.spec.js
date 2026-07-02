@@ -12,6 +12,7 @@ const expectedOwner = {
   email: process.env.E2E_EXPECT_ACCOUNT_EMAIL || null,
   authProvider: process.env.E2E_EXPECT_AUTH_PROVIDER || "password",
 };
+const googleOauthExpectedEnabled = process.env.E2E_GOOGLE_OAUTH_ENABLED !== "false";
 const expectedOwnerPublicIdentity = {
   id: expectedOwner.id,
   userId: expectedOwner.id,
@@ -214,7 +215,12 @@ test("HTTP redirects to HTTPS", async ({ request }) => {
 test("landing page serves standalone entry", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".landing-headline")).toHaveText("Weekly budgeting, clearly presented.");
-  await expect(page.locator('.landing-actions a[href="#trialAccessCard"]')).toBeVisible();
+  if (googleOauthExpectedEnabled) {
+    await expect(page.locator("#landingGoogleHeroLink")).toBeVisible();
+    await expect(page.locator("#landingGoogleLoginLink")).toBeVisible();
+  } else {
+    await expect(page.locator('.landing-actions a[href="#trialAccessCard"]')).toBeVisible();
+  }
   await expect(page.locator('#enterWorkspaceLink[href="/app"]')).toHaveText("Log in");
   await expect(page.locator("#landingPasswordInput")).toHaveCount(0);
   await expect(page.locator("#authOverlay")).toHaveCount(0);
@@ -279,14 +285,15 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
     },
     oauth: {
       google: {
-        enabled: false,
-        configured: false,
-        clientIdConfigured: false,
-        clientSecretConfigured: false,
-        appBaseUrlConfigured: false,
+        enabled: googleOauthExpectedEnabled,
+        configured: googleOauthExpectedEnabled,
+        clientIdConfigured: googleOauthExpectedEnabled,
+        clientSecretConfigured: googleOauthExpectedEnabled,
+        appBaseUrlConfigured: googleOauthExpectedEnabled,
         redirectPath: "/auth/google/callback",
         allowedDomainConfigured: false,
         stateTtlSeconds: 600,
+        signupMode: "open-trial",
       },
       states: {
         schemaVersion: 1,
@@ -352,7 +359,7 @@ test("health exposes safe registry and storage diagnostics", async ({ request })
   expect(serialized).not.toContain("memberships");
 });
 
-test("google oauth status is safe while disabled", async ({ request }) => {
+test("google oauth status is safe and exposes login entrypoint", async ({ request }) => {
   const response = await request.get("/api/auth/google/status");
   expect(response.ok()).toBe(true);
   const status = await response.json();
@@ -360,20 +367,92 @@ test("google oauth status is safe while disabled", async ({ request }) => {
   expect(status).toMatchObject({
     ok: true,
     provider: "google",
-    enabled: false,
-    configured: false,
-    clientIdConfigured: false,
-    clientSecretConfigured: false,
-    appBaseUrlConfigured: false,
+    enabled: googleOauthExpectedEnabled,
+    configured: googleOauthExpectedEnabled,
+    clientIdConfigured: googleOauthExpectedEnabled,
+    clientSecretConfigured: googleOauthExpectedEnabled,
+    appBaseUrlConfigured: googleOauthExpectedEnabled,
     redirectPath: "/auth/google/callback",
     allowedDomainConfigured: false,
     stateTtlSeconds: 600,
+    signupMode: "open-trial",
+    loginUrl: "/auth/google/start?returnTo=%2Fapp",
   });
   expect(status.redirectUri).toBe(`${baseUrl}/auth/google/callback`);
   const serialized = JSON.stringify(status);
   expect(serialized).not.toContain("secret");
   expect(serialized).not.toContain("password");
   expect(serialized).not.toContain("authSubject");
+});
+
+async function beginGoogleOAuth(context) {
+  const startResponse = await context.get("/auth/google/start?returnTo=%2Fapp", { maxRedirects: 0 });
+  expect(startResponse.status()).toBe(302);
+  const location = startResponse.headers().location;
+  expect(location).toBeTruthy();
+  const redirect = new URL(location);
+  expect(redirect.searchParams.get("client_id")).toBe("e2e-google-client");
+  expect(redirect.searchParams.get("scope")).toContain("openid");
+  const state = redirect.searchParams.get("state");
+  expect(state).toBeTruthy();
+  return state;
+}
+
+test("google oauth creates an open trial account and app session", async () => {
+  test.skip(!googleOauthExpectedEnabled, "Google OAuth e2e mock is not enabled.");
+
+  const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  const state = await beginGoogleOAuth(context);
+  const callbackResponse = await context.get(`/auth/google/callback?code=e2e-google-family-trial&state=${state}`, {
+    maxRedirects: 0,
+  });
+  expect(callbackResponse.status()).toBe(302);
+  expect(callbackResponse.headers().location).toBe("/app");
+
+  const sessionResponse = await context.get("/api/session");
+  expect(sessionResponse.ok()).toBe(true);
+  const session = await sessionResponse.json();
+  expect(session.authenticated).toBe(true);
+  expect(session.user).toMatchObject({
+    email: "family-trial@example.test",
+    authProvider: "google",
+    accountStatus: "trial",
+    isDefaultUser: false,
+  });
+
+  const meResponse = await context.get("/api/me");
+  expect(meResponse.ok()).toBe(true);
+  const me = await meResponse.json();
+  expect(me.account).toMatchObject({
+    email: "family-trial@example.test",
+    authProvider: "google",
+    accountStatus: "trial",
+  });
+  expect(me.workspaces).toHaveLength(1);
+  expect(me.currentWorkspace.id).toBe(me.workspaces[0].id);
+
+  const replay = await context.get(`/auth/google/callback?code=e2e-google-family-trial&state=${state}`, {
+    maxRedirects: 0,
+  });
+  expect(replay.status()).toBe(302);
+  expect(replay.headers().location).toContain("googleAuth=state");
+});
+
+test("google oauth rejects unverified email profiles", async () => {
+  test.skip(!googleOauthExpectedEnabled, "Google OAuth e2e mock is not enabled.");
+
+  const context = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  const state = await beginGoogleOAuth(context);
+  const callbackResponse = await context.get(`/auth/google/callback?code=e2e-google-unverified&state=${state}`, {
+    maxRedirects: 0,
+  });
+  expect(callbackResponse.status()).toBe(302);
+  expect(callbackResponse.headers().location).toContain("googleAuth=");
+
+  const sessionResponse = await context.get("/api/session");
+  expect(sessionResponse.ok()).toBe(true);
+  const session = await sessionResponse.json();
+  expect(session.authenticated).toBe(false);
 });
 
 test("authenticated sessions resolve isolated workspaces", async () => {

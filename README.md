@@ -255,7 +255,7 @@ Generate `SESSION_SECRET` as a long random value, for example `openssl rand -hex
 
 `DEFAULT_ACCOUNT_PASSWORD_HASH` is a secret, not a variable. It should contain the `scrypt$<salt>$<key>` output from `npm.cmd run hash-password`. Keep `APP_PASSWORD` during the transition; it remains the fallback password if the account hash is missing or invalid.
 
-`GOOGLE_OAUTH_CLIENT_SECRET` is a secret, not a variable. It is reserved for the Google OAuth server-side authorization-code flow. The app does not expose this value through health checks, diagnostics, or frontend JavaScript. Google OAuth remains disabled unless `GOOGLE_OAUTH_ENABLED=true` and the required client configuration is also present.
+`GOOGLE_OAUTH_CLIENT_SECRET` is a secret, not a variable. It is used by the Google OAuth server-side authorization-code flow. The app does not expose this value through health checks, diagnostics, or frontend JavaScript. Google OAuth remains disabled unless `GOOGLE_OAUTH_ENABLED=true` and the required client configuration is also present.
 
 ### Variables used by image / E2E / deploy workflows
 
@@ -272,7 +272,7 @@ GOOGLE_OAUTH_REDIRECT_PATH
 GOOGLE_OAUTH_ALLOWED_DOMAIN
 ```
 
-Google OAuth is currently foundation-only. Set `GOOGLE_OAUTH_ENABLED=false` or leave it empty until the Google sign-in and account-linking PRs are merged. When enabled in a future PR, use:
+Google OAuth supports open trial signup. When enabled, a visitor can use a verified Google account to create or reopen a trial account and a clean account-owned workspace. Password login remains available for existing password accounts.
 
 - `GOOGLE_OAUTH_CLIENT_ID`: Google OAuth web client ID.
 - `GOOGLE_OAUTH_APP_BASE_URL`: public app origin, for example `https://money.example.com`.
@@ -280,6 +280,8 @@ Google OAuth is currently foundation-only. Set `GOOGLE_OAUTH_ENABLED=false` or l
 - `GOOGLE_OAUTH_ALLOWED_DOMAIN`: optional Google Workspace hosted-domain restriction.
 
 The full redirect URI registered in Google Cloud Console should be `${GOOGLE_OAUTH_APP_BASE_URL}${GOOGLE_OAUTH_REDIRECT_PATH}`.
+
+Google OAuth uses only the `openid email profile` scopes and stores the Google `sub`, verified email, and display name in the account registry. Google access tokens are not stored. Automatically created Google accounts are marked with `accountStatus: "trial"` so trial limits can be introduced later without changing the sign-in model.
 
 ### Secrets used by Terraform workflow
 
