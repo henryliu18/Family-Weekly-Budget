@@ -19,9 +19,6 @@ const SESSION_REGISTRY_PATH =
 const OAUTH_STATE_REGISTRY_PATH =
   process.env.OAUTH_STATE_REGISTRY_PATH ||
   path.join(WORKSPACE_STORE_ROOT || path.dirname(STORE_PATH), "oauth-state-registry.json");
-const TRIAL_REQUESTS_PATH =
-  process.env.TRIAL_REQUESTS_PATH ||
-  path.join(WORKSPACE_STORE_ROOT || path.dirname(STORE_PATH), "trial-requests.json");
 const WORKSPACE_REGISTRY_SEED_IDS = (process.env.WORKSPACE_REGISTRY_SEED_IDS || "")
   .split(",")
   .map((workspaceId) => workspaceId.trim())
@@ -247,7 +244,7 @@ function registeredAccount(accountId, displayName = accountId) {
     email: id === DEFAULT_ACCOUNT_ID ? DEFAULT_ACCOUNT_EMAIL || null : null,
     authProvider: DEFAULT_AUTH_PROVIDER,
     authSubject: id === DEFAULT_ACCOUNT_ID ? DEFAULT_AUTH_SUBJECT : id,
-    accountStatus: "active",
+    accountStatus: "standard",
     trialStartedAt: null,
     trialSource: null,
     isDefaultUser: id === DEFAULT_ACCOUNT_ID,
@@ -264,7 +261,7 @@ function configuredFirstOwnerIdentity() {
     authProvider: DEFAULT_AUTH_PROVIDER,
     authSubject: DEFAULT_AUTH_SUBJECT,
     passwordHash: DEFAULT_ACCOUNT_PASSWORD_HASH || (DEFAULT_ACCOUNT_PASSWORD ? hashPassword(DEFAULT_ACCOUNT_PASSWORD) : null),
-    accountStatus: "active",
+    accountStatus: "standard",
   };
 }
 
@@ -272,6 +269,7 @@ function normalizeAccountRecord(account, accountId) {
   const id = normalizeWorkspaceId(account?.id || accountId);
   const provider = account?.authProvider || DEFAULT_AUTH_PROVIDER;
   const now = nowIso();
+  const accountStatus = account?.accountStatus === "active" ? "standard" : account?.accountStatus || "standard";
   return {
     ...account,
     id,
@@ -281,7 +279,7 @@ function normalizeAccountRecord(account, accountId) {
     authProvider: provider,
     authSubject: account?.authSubject || (id === DEFAULT_ACCOUNT_ID ? DEFAULT_AUTH_SUBJECT : id),
     passwordHash: account?.passwordHash || null,
-    accountStatus: account?.accountStatus || "active",
+    accountStatus,
     trialStartedAt: account?.trialStartedAt || null,
     trialSource: account?.trialSource || null,
     isDefaultUser: account?.isDefaultUser ?? id === DEFAULT_ACCOUNT_ID,
@@ -622,13 +620,14 @@ async function exchangeGoogleOAuthCode(code, redirectUri) {
 }
 
 function publicUserIdentity(account) {
+  const accountStatus = account.accountStatus === "active" ? "standard" : account.accountStatus || "standard";
   return {
     id: account.id,
     userId: account.userId || account.id,
     displayName: account.displayName,
     email: account.email || null,
     authProvider: account.authProvider,
-    accountStatus: account.accountStatus || "active",
+    accountStatus,
     trialStartedAt: account.trialStartedAt || null,
     isDefaultUser: !!account.isDefaultUser,
   };
@@ -650,55 +649,6 @@ async function updateProfileForSession(session, input) {
   await writeAccountRegistry(registry);
 
   return publicUserIdentity(account);
-}
-
-async function readTrialRequests() {
-  try {
-    const text = await fs.readFile(TRIAL_REQUESTS_PATH, "utf8");
-    return JSON.parse(text);
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      return { version: 1, requests: [] };
-    }
-    throw error;
-  }
-}
-
-async function writeTrialRequests(store) {
-  await fs.mkdir(path.dirname(TRIAL_REQUESTS_PATH), { recursive: true });
-  await fs.writeFile(TRIAL_REQUESTS_PATH, `${JSON.stringify(store, null, 2)}\n`, "utf8");
-}
-
-function submitTrialRequest(input) {
-  const name = String(input?.name || "").trim().replace(/\s+/g, " ");
-  const email = normalizeEmail(input?.email);
-  const note = String(input?.note || "").trim();
-  if (!name || name.length < 2 || name.length > 80) {
-    throw new AccountRegistryError("Name must be between 2 and 80 characters.", 400);
-  }
-  if (note.length > 500) {
-    throw new AccountRegistryError("Note must be 500 characters or fewer.", 400);
-  }
-
-  return {
-    id: crypto.randomUUID(),
-    name,
-    email,
-    note,
-    status: "pending",
-    createdAt: nowIso(),
-  };
-}
-
-async function listTrialRequestsForSession(session) {
-  if (!session) {
-    throw new AccountRegistryError("Authentication required", 401);
-  }
-  if (!isDefaultOwnerSession(session)) {
-    throw new AccountRegistryError("Only the default owner can list trial requests.", 403);
-  }
-  const store = await readTrialRequests();
-  return store.requests;
 }
 
 function emptySessionRegistry() {
@@ -1059,6 +1009,14 @@ function isDefaultOwnerSession(session) {
   return session?.accountId === DEFAULT_ACCOUNT_ID;
 }
 
+function normalizeAccountStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (!["trial", "standard"].includes(normalized)) {
+    throw new AccountRegistryError("Account status must be trial or standard.", 400);
+  }
+  return normalized;
+}
+
 async function createAccountForSession(session, accountInput) {
   if (!session) {
     throw new AccountRegistryError("Authentication required", 401);
@@ -1088,6 +1046,7 @@ async function createAccountForSession(session, accountInput) {
     authProvider: "password",
     authSubject: accountId,
     passwordHash: hashPassword(password),
+    accountStatus: "standard",
     isDefaultUser: false,
     createdAt: now,
     updatedAt: now,
@@ -1183,6 +1142,32 @@ async function listAccountsForSession(session) {
       if (left.isDefaultUser !== right.isDefaultUser) return left.isDefaultUser ? -1 : 1;
       return String(left.displayName || left.id).localeCompare(String(right.displayName || right.id));
     });
+}
+
+async function updateAccountStatusForSession(session, accountId, input) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  if (!isDefaultOwnerSession(session)) {
+    throw new AccountRegistryError("Only the default owner can manage account status.", 403);
+  }
+
+  const targetAccountId = normalizeAccountId(accountId);
+  if (targetAccountId === DEFAULT_ACCOUNT_ID) {
+    throw new AccountRegistryError("The default owner account status cannot be changed.", 400);
+  }
+
+  const nextStatus = normalizeAccountStatus(input?.accountStatus || input?.status);
+  const registry = await ensureAccountRegistry();
+  const account = registry.accounts[targetAccountId];
+  if (!account) {
+    throw new AccountRegistryError("Account was not found.", 404);
+  }
+
+  account.accountStatus = nextStatus;
+  account.updatedAt = nowIso();
+  await writeAccountRegistry(registry);
+  return publicUserIdentity(account);
 }
 
 async function resetAccountPasswordForSession(session, accountId, input) {
@@ -1751,16 +1736,18 @@ async function serveApi(req, res, pathname) {
     return true;
   }
 
-  if (pathname === "/api/trial-requests" && req.method === "POST") {
+  const accountStatusRouteMatch = pathname.match(/^\/api\/admin\/accounts\/([^/]+)\/status$/);
+  if (accountStatusRouteMatch && req.method === "PATCH") {
     const body = JSON.parse((await readBody(req)) || "{}");
     try {
-      const request = submitTrialRequest(body);
-      const store = await readTrialRequests();
-      store.requests.push(request);
-      await writeTrialRequests(store);
-      sendJson(res, 201, { ok: true, id: request.id });
+      const account = await updateAccountStatusForSession(
+        sessionForRequest(req),
+        decodeURIComponent(accountStatusRouteMatch[1]),
+        body,
+      );
+      sendJson(res, 200, { ok: true, account });
     } catch (error) {
-      if (error instanceof AccountRegistryError) {
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
         sendJson(res, error.status || 400, { error: error.message });
         return true;
       }
@@ -1769,22 +1756,17 @@ async function serveApi(req, res, pathname) {
     return true;
   }
 
+  if (pathname === "/api/trial-requests" && req.method === "POST") {
+    sendJson(res, 410, {
+      error: "Trial requests are closed. Continue with Google to start a trial workspace.",
+    });
+    return true;
+  }
+
   if (pathname === "/api/admin/trial-requests" && req.method === "GET") {
-    const session = sessionForRequest(req);
-    if (!session) {
-      authRequired(res);
-      return true;
-    }
-    try {
-      const requests = await listTrialRequestsForSession(session);
-      sendJson(res, 200, { ok: true, requests });
-    } catch (error) {
-      if (error instanceof AccountRegistryError) {
-        sendJson(res, error.status || 400, { error: error.message });
-        return true;
-      }
-      throw error;
-    }
+    sendJson(res, 410, {
+      error: "Trial request management has moved to Google trial account status management.",
+    });
     return true;
   }
 

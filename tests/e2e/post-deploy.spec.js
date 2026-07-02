@@ -19,7 +19,7 @@ const expectedOwnerPublicIdentity = {
   displayName: expectedOwner.displayName,
   email: expectedOwner.email,
   authProvider: expectedOwner.authProvider,
-  accountStatus: "active",
+  accountStatus: "standard",
   trialStartedAt: null,
   isDefaultUser: true,
 };
@@ -223,6 +223,7 @@ test("landing page serves standalone entry", async ({ page }) => {
   } else {
     await expect(page.locator('.landing-actions a[href="#trialAccessCard"]')).toBeVisible();
   }
+  await expect(page.locator("#trialRequestForm")).toHaveCount(0);
   await expect(page.locator('#enterWorkspaceLink[href="/app"]')).toHaveText("Log in");
   await expect(page.locator("#landingPasswordInput")).toHaveCount(0);
   await expect(page.locator("#authOverlay")).toHaveCount(0);
@@ -438,6 +439,55 @@ test("google oauth creates an open trial account and app session", async () => {
   });
   expect(replay.status()).toBe(302);
   expect(replay.headers().location).toContain("googleAuth=state");
+});
+
+test("default owner can promote a Google trial user to standard access", async ({ page }) => {
+  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
+  test.skip(!googleOauthExpectedEnabled, "Google OAuth e2e mock is not enabled.");
+
+  const suffix = Date.now().toString(36);
+  const googleCode = `e2e-google-promote-${suffix}`;
+  const googleContext = await apiRequest.newContext({ baseURL: baseUrl, ignoreHTTPSErrors: true });
+  try {
+    const state = await beginGoogleOAuth(googleContext);
+    const callbackResponse = await googleContext.get(`/auth/google/callback?code=${googleCode}&state=${state}`, {
+      maxRedirects: 0,
+    });
+    expect(callbackResponse.status()).toBe(302);
+
+    const trialMeResponse = await googleContext.get("/api/me");
+    expect(trialMeResponse.ok()).toBe(true);
+    const trialMe = await trialMeResponse.json();
+    expect(trialMe.account).toMatchObject({
+      authProvider: "google",
+      accountStatus: "trial",
+      isDefaultUser: false,
+    });
+
+    await login(page);
+    await page.locator("#languageSelect").selectOption("en");
+    await page.locator('.nav-tab[data-view="settings"]').click();
+    await expect(page.locator("#accountAdminPanel")).toBeVisible();
+
+    const managedAccount = page.locator(`[data-managed-account-id="${trialMe.account.id}"]`);
+    await expect(managedAccount).toContainText("Trial");
+    await managedAccount.locator("[data-promote-account]").click();
+    await expect(page.locator("#accountAdminStatus")).toHaveText(
+      `Promoted ${trialMe.account.displayName} to standard access.`,
+    );
+    await expect(managedAccount).toContainText("Standard");
+    await expect(managedAccount.locator("[data-promote-account]")).toHaveCount(0);
+
+    const promotedMeResponse = await googleContext.get("/api/me");
+    expect(promotedMeResponse.ok()).toBe(true);
+    const promotedMe = await promotedMeResponse.json();
+    expect(promotedMe.account).toMatchObject({
+      id: trialMe.account.id,
+      accountStatus: "standard",
+    });
+  } finally {
+    await googleContext.dispose();
+  }
 });
 
 test("google oauth rejects unverified email profiles", async () => {
@@ -936,7 +986,7 @@ test("admin account creation creates isolated account-owned workspaces", async (
       displayName: "E2E Secondary Owner",
       email: "secondary@example.test",
       authProvider: "password",
-      accountStatus: "active",
+      accountStatus: "standard",
       trialStartedAt: null,
       isDefaultUser: false,
     });
@@ -2165,67 +2215,29 @@ test("display name persists after reload", async ({ page }) => {
   expect(meData.user.displayName).toBe(originalName);
 });
 
-test("visitor can submit trial access request from landing page", async ({ page }) => {
-  await page.goto("/");
+test("legacy trial request APIs are closed", async ({ request }) => {
+  const createResponse = await request.post("/api/trial-requests", {
+    data: {
+      name: "E2E Tester",
+      email: "e2e@example.test",
+      note: "Legacy trial request should be closed",
+    },
+  });
+  expect(createResponse.status()).toBe(410);
+  const createBody = await createResponse.json();
+  expect(createBody.error).toContain("Continue with Google");
 
-  await page.locator("#trialRequestNameInput").fill("E2E Tester");
-  await page.locator("#trialRequestEmailInput").fill("e2e@example.test");
-  await page.locator("#trialRequestNoteInput").fill("E2E test note");
-  await page.locator("#trialRequestBtn").click();
-
-  await expect(page.locator("#trialRequestStatus")).toContainText("Your request has been submitted");
-  await expect(page.locator("#trialRequestNameInput")).toHaveValue("");
-  await expect(page.locator("#trialRequestEmailInput")).toHaveValue("");
+  const adminResponse = await request.get("/api/admin/trial-requests");
+  expect(adminResponse.status()).toBe(410);
 });
 
-test("invalid trial request is rejected", async ({ page }) => {
-  await page.goto("/");
-
-  // Empty name
-  await page.locator("#trialRequestEmailInput").fill("e2e@example.test");
-  await page.locator("#trialRequestBtn").click();
-  await expect(page.locator("#trialRequestStatus")).not.toContainText("Your request has been submitted");
-
-  // Invalid email
-  await page.locator("#trialRequestNameInput").fill("E2E Tester");
-  await page.locator("#trialRequestEmailInput").fill("not-an-email");
-  await page.locator("#trialRequestBtn").click();
-  await expect(page.locator("#trialRequestStatus")).not.toContainText("Your request has been submitted");
-});
-
-test("default owner can see pending trial requests in Settings", async ({ page }) => {
+test("secondary account cannot manage account status", async ({ page }) => {
   test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
 
-  const requestName = `Owner See Test ${Date.now()}`;
-  // Submit a request on landing page
-  await page.goto("/");
-  await page.locator("#trialRequestNameInput").fill(requestName);
-  await page.locator("#trialRequestEmailInput").fill("owner-see@example.test");
-  await page.locator("#trialRequestNoteInput").fill("Testing owner view");
-  await page.locator("#trialRequestBtn").click();
-  await expect(page.locator("#trialRequestStatus")).toContainText("Your request has been submitted");
-
-  // Login as owner and check Settings
-  await login(page);
-  await page.locator('.nav-tab[data-view="settings"]').click();
-  await expect(page.locator("#trialRequestsPanel")).not.toBeHidden();
-  const ownerRequest = page.locator(".trial-request-item").filter({ hasText: requestName });
-  await expect(ownerRequest).toBeVisible();
-
-  await ownerRequest.locator(".use-request-btn").click();
-  await expect(page.locator("#newAccountDisplayNameInput")).toHaveValue(requestName);
-  await expect(page.locator("#newAccountEmailInput")).toHaveValue("owner-see@example.test");
-  await expect(page.locator("#newAccountIdInput")).toHaveValue("owner-see");
-  await expect(page.locator("#newAccountWorkspaceInput")).toHaveValue(`${requestName} Workspace`);
-  await expect(page.locator("#accountAdminStatus")).toContainText("Copied");
-});
-
-test("secondary account cannot see trial requests", async ({ page }) => {
-  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
-
-  // Login as owner via page.request (shares cookies with page context)
   await apiLogin(page);
-  const secondaryId = `e2e-secondary-${Date.now()}`;
+  const suffix = Date.now().toString(36);
+  const secondaryId = `e2e-secondary-${suffix}`;
+  const targetId = `e2e-target-${suffix}`;
   const createResp = await page.request.post("/api/admin/accounts", {
     data: {
       accountId: secondaryId,
@@ -2237,32 +2249,29 @@ test("secondary account cannot see trial requests", async ({ page }) => {
   });
   expect(createResp.ok()).toBe(true);
 
-  // Login as secondary via page.request (shares cookies with page context)
+  const targetResp = await page.request.post("/api/admin/accounts", {
+    data: {
+      accountId: targetId,
+      displayName: "Target Tester",
+      email: "target@example.test",
+      password: "testpassword456",
+      workspaceName: "Target WS",
+    },
+  });
+  expect(targetResp.ok()).toBe(true);
+
   const loginResp = await page.request.post("/api/session", {
     data: { password: "testpassword123", accountId: secondaryId },
   });
   expect(loginResp.ok()).toBe(true);
 
-  // Navigate to app - cookies are shared via page.request
   await page.goto("/app");
   await expect(page.locator("#overviewView")).toHaveClass(/active/);
   await page.locator('.nav-tab[data-view="settings"]').click();
-  await expect(page.locator("#trialRequestsPanel")).toHaveClass(/hidden/);
-});
+  await expect(page.locator("#accountAdminPanel")).toBeHidden();
 
-test("trial request API does not expose sensitive auth data", async ({ page }) => {
-  test.skip(!password, "E2E_APP_PASSWORD is required for authenticated deploy checks.");
-
-  await login(page);
-  const response = await page.request.get("/api/admin/trial-requests");
-  expect(response.ok()).toBe(true);
-  const data = await response.json();
-  expect(data.ok).toBe(true);
-  expect(Array.isArray(data.requests)).toBe(true);
-
-  const body = JSON.stringify(data);
-  expect(body).not.toContain("passwordHash");
-  expect(body).not.toContain("authSubject");
-  expect(body).not.toContain("token");
-  expect(body).not.toContain("secret");
+  const denied = await page.request.patch(`/api/admin/accounts/${targetId}/status`, {
+    data: { accountStatus: "standard" },
+  });
+  expect(denied.status()).toBe(403);
 });

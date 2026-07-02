@@ -29,7 +29,7 @@
 
               <div class="landing-actions">
                 <a id="landingGoogleHeroLink" class="primary-btn hidden" href="/auth/google/start?returnTo=%2Fapp">Continue with Google</a>
-                <a id="landingTrialAccessLink" class="primary-btn" href="#trialAccessCard">Start trial access</a>
+                <a id="landingTrialAccessLink" class="primary-btn" href="#trialAccessCard">Start with Google</a>
                 <a class="ghost-btn" href="#contactUs">Contact us</a>
               </div>
 
@@ -58,13 +58,13 @@
           <div class="landing-panel-grid">
             <section id="trialSteps" class="trial-card">
               <p class="eyebrow">Trial access</p>
-              <h3>Start in three steps</h3>
+              <h3>Start with Google</h3>
               <ol class="trial-list">
                 <li>
                   <span class="trial-step-number">1</span>
                   <div>
                     <strong>Continue with Google</strong>
-                    <p>Use a verified Google account to create your trial workspace.</p>
+                    <p>Use a verified Google account. No trial password is required.</p>
                   </div>
                 </li>
                 <li>
@@ -77,8 +77,8 @@
                 <li>
                   <span class="trial-step-number">3</span>
                   <div>
-                    <strong>Review the workflow</strong>
-                    <p>See overview, entry, and transaction import in a single flow.</p>
+                    <strong>Grow into standard access</strong>
+                    <p>The owner can upgrade trial users after review.</p>
                   </div>
                 </li>
               </ol>
@@ -86,38 +86,14 @@
 
             <section id="contactUs" class="contact-card">
               <p class="eyebrow">Contact us</p>
-              <h3>Trial access and onboarding</h3>
+              <h3>Support and onboarding</h3>
               <p>
-                Trial access is currently provided by invitation. If you are reviewing the product with a team,
-                contact your service owner or demo host to arrange access and onboarding.
+                New users can start a trial with Google. If you need standard access, onboarding support,
+                or help with an existing account, contact your service owner or demo host.
               </p>
               <div class="contact-actions">
-                <a class="ghost-btn" href="#trialAccessCard">Request trial access</a>
+                <a class="ghost-btn" href="#trialAccessCard">Go to login options</a>
               </div>
-            </section>
-
-            <section id="trialRequestCard" class="trial-card trial-card-request">
-              <p class="eyebrow">Request trial access</p>
-              <h3>Get started</h3>
-              <p class="trial-card-copy">Leave your details and the service owner will follow up with temporary access.</p>
-              <form id="trialRequestForm" class="trial-request-form">
-                <div class="trial-request-fields">
-                  <label class="field trial-field">
-                    <span>Name</span>
-                    <input id="trialRequestNameInput" type="text" placeholder="Your name" required />
-                  </label>
-                  <label class="field trial-field">
-                    <span>Email</span>
-                    <input id="trialRequestEmailInput" type="email" placeholder="you@example.com" required />
-                  </label>
-                  <label class="field trial-field">
-                    <span>Note <small>(optional)</small></span>
-                    <textarea id="trialRequestNoteInput" rows="2" maxlength="500" placeholder="Any context for the owner…"></textarea>
-                  </label>
-                </div>
-                <p id="trialRequestStatus" class="trial-request-status" role="status" aria-live="polite"></p>
-                <button id="trialRequestBtn" class="primary-btn trial-request-cta" type="submit">Request trial access →</button>
-              </form>
             </section>
 
             <section id="trialAccessCard" class="auth-card auth-card--landing">
@@ -134,7 +110,7 @@
               </a>
               <a id="enterWorkspaceLink" class="primary-btn auth-submit" href="/app">Log in</a>
               <p id="landingAuthFootnote" class="auth-footnote">
-                Need a trial password? Ask the budget owner to share one with you.
+                Password login is reserved for existing owner or internal accounts.
               </p>
             </section>
           </div>
