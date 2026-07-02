@@ -27,6 +27,8 @@ const WORKSPACE_REGISTRY_UNOWNED_SEED_IDS = (process.env.WORKSPACE_REGISTRY_UNOW
   .split(",")
   .map((workspaceId) => workspaceId.trim())
   .filter(Boolean);
+const DEFAULT_WORKSPACE_NAME = "My Budget";
+const LEGACY_GENERIC_DEFAULT_WORKSPACE_NAMES = new Set(["Default Workspace", "Default workspace"]);
 const ACCOUNT_REGISTRY_SCHEMA_VERSION = 1;
 const SESSION_REGISTRY_SCHEMA_VERSION = 1;
 const OAUTH_STATE_REGISTRY_SCHEMA_VERSION = 1;
@@ -328,6 +330,13 @@ function ensureWorkspaceRecord(registry, workspaceId, name = workspaceId) {
   return registry.workspaces[id];
 }
 
+function migrateGenericDefaultWorkspaceName(registry) {
+  const workspace = registry.workspaces[DEFAULT_WORKSPACE_ID];
+  if (workspace && LEGACY_GENERIC_DEFAULT_WORKSPACE_NAMES.has(workspace.name)) {
+    workspace.name = DEFAULT_WORKSPACE_NAME;
+  }
+}
+
 function hasMembership(registry, accountId, workspaceId) {
   return registry.memberships.some(
     (membership) =>
@@ -361,10 +370,11 @@ function ensureDefaultIdentity(registry) {
     const workspace = ensureWorkspaceRecord(
       registry,
       workspaceId,
-      workspaceId === DEFAULT_WORKSPACE_ID ? "Default Workspace" : workspaceId,
+      workspaceId === DEFAULT_WORKSPACE_ID ? DEFAULT_WORKSPACE_NAME : workspaceId,
     );
     ensureMembershipRecord(registry, account.id, workspace.id, "owner");
   });
+  migrateGenericDefaultWorkspaceName(registry);
 }
 
 function buildDefaultAccountRegistry() {
@@ -992,6 +1002,43 @@ function uniqueAccountId(registry, seed) {
   return normalizeAccountId(candidate);
 }
 
+function formatMonthSortKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonthDisplayName(sortKey) {
+  const [year, month] = String(sortKey || "").split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  if (!year || !month || Number.isNaN(date.getTime())) return String(sortKey || "");
+  return date.toLocaleString("en-AU", { year: "numeric", month: "long" });
+}
+
+function cleanStarterState(date = new Date()) {
+  const sortKey = formatMonthSortKey(date);
+  const displayName = formatMonthDisplayName(sortKey);
+  return {
+    currentMonthId: sortKey,
+    months: {
+      [sortKey]: {
+        id: sortKey,
+        sortKey,
+        displayName,
+        name: displayName,
+        creditLimit: 15000,
+        weeks: ["Period 1", "Period 2", "Period 3", "Period 4"].map((period, index) => ({
+          id: `${sortKey}-p${index + 1}`,
+          period,
+          availableBalance: null,
+          unpaidPrevious: null,
+          cumulativeSpend: null,
+          categoryValues: {},
+          notes: "",
+        })),
+      },
+    },
+  };
+}
+
 async function ensureFreshWorkspaceStore(workspaceId) {
   const storePath = storePathForWorkspace(workspaceId);
   try {
@@ -1000,7 +1047,7 @@ async function ensureFreshWorkspaceStore(workspaceId) {
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  const state = await loadDefaultState();
+  const state = cleanStarterState();
   await fs.mkdir(path.dirname(storePath), { recursive: true });
   await fs.writeFile(storePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
@@ -1035,7 +1082,7 @@ async function createAccountForSession(session, accountInput) {
     throw new AccountRegistryError("Account already exists.", 409);
   }
 
-  const workspaceName = normalizeWorkspaceName(accountInput?.workspaceName || `${displayName} Workspace`);
+  const workspaceName = normalizeWorkspaceName(accountInput?.workspaceName || DEFAULT_WORKSPACE_NAME);
   const workspaceId = uniqueWorkspaceId(registry, workspaceName);
   const now = nowIso();
   const account = {
@@ -1098,7 +1145,7 @@ async function findOrCreateGoogleTrialAccount(profile) {
 
   const now = nowIso();
   const accountId = uniqueAccountId(registry, `google-${profile.email || profile.displayName}`);
-  const workspaceName = normalizeWorkspaceName(`${profile.displayName} Workspace`);
+  const workspaceName = normalizeWorkspaceName(DEFAULT_WORKSPACE_NAME);
   const workspaceId = uniqueWorkspaceId(registry, workspaceName);
   const account = {
     id: accountId,
@@ -1371,6 +1418,73 @@ async function deleteWorkspaceForSession(session, workspaceId) {
   };
 }
 
+async function deleteAccountForSession(session, accountId) {
+  if (!session) {
+    throw new AccountRegistryError("Authentication required", 401);
+  }
+  if (!isDefaultOwnerSession(session)) {
+    throw new AccountRegistryError("Only the default owner can delete accounts.", 403);
+  }
+
+  const registry = await ensureAccountRegistry();
+  const id = normalizeAccountId(accountId);
+  if (id === DEFAULT_ACCOUNT_ID || id === session.accountId) {
+    throw new AccountRegistryError("Default owner account cannot be deleted.", 400);
+  }
+  const account = registry.accounts[id];
+  if (!account) {
+    throw new AccountRegistryError("Account is not registered.", 404);
+  }
+
+  const targetWorkspaceIds = registry.memberships
+    .filter((membership) => membership.accountId === id)
+    .map((membership) => membership.workspaceId);
+  const deletedWorkspaceIds = [];
+  const preservedWorkspaceIds = [];
+
+  for (const workspaceId of targetWorkspaceIds) {
+    const otherMemberships = registry.memberships.filter(
+      (membership) => membership.workspaceId === workspaceId && membership.accountId !== id,
+    );
+    if (workspaceId !== DEFAULT_WORKSPACE_ID && otherMemberships.length === 0) {
+      delete registry.workspaces[workspaceId];
+      deletedWorkspaceIds.push(workspaceId);
+    } else {
+      preservedWorkspaceIds.push(workspaceId);
+    }
+  }
+
+  delete registry.accounts[id];
+  registry.memberships = registry.memberships.filter((membership) => membership.accountId !== id);
+  await writeAccountRegistry(registry);
+
+  const deletedStoreIds = [];
+  const storeCleanupWarnings = [];
+  for (const workspaceId of deletedWorkspaceIds) {
+    try {
+      if (await deleteWorkspaceStore(workspaceId)) deletedStoreIds.push(workspaceId);
+    } catch {
+      storeCleanupWarnings.push(workspaceId);
+    }
+  }
+
+  for (const [tokenHash, activeSession] of sessions.entries()) {
+    if (activeSession.accountId === id) {
+      sessions.delete(tokenHash);
+    }
+  }
+  scheduleSessionRegistryWrite();
+
+  return {
+    account: publicUserIdentity(account),
+    deletedAccountId: id,
+    deletedWorkspaceIds,
+    deletedStoreIds,
+    preservedWorkspaceIds,
+    storeCleanupWarnings,
+  };
+}
+
 function sessionForRequest(req) {
   if (!APP_PASSWORD) return { accountId: DEFAULT_ACCOUNT_ID, workspaceId: DEFAULT_WORKSPACE_ID };
   const token = parseCookies(req)[AUTH_COOKIE];
@@ -1439,23 +1553,18 @@ async function writeBudgetState(workspaceId, state) {
 }
 
 async function loadDefaultState() {
+  return cleanStarterState();
+}
+
+async function loadExampleState() {
+  // Reset is a test/support fixture; new workspace initialization uses cleanStarterState().
   const script = await fs.readFile(path.join(PUBLIC_ROOT, "budget-data.js"), "utf8");
   const sandbox = { window: {} };
   Function("window", script)(sandbox.window);
   return sandbox.window.BUDGET_DATA.initialState;
 }
 
-async function loadSeedState(storePath) {
-  if (path.resolve(storePath) !== path.resolve(STORE_PATH)) {
-    try {
-      const stats = await fs.stat(STORE_PATH);
-      if (!stats.isDirectory()) {
-        return JSON.parse(await fs.readFile(STORE_PATH, "utf8"));
-      }
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-    }
-  }
+async function loadSeedState() {
   return loadDefaultState();
 }
 
@@ -1706,6 +1815,24 @@ async function serveApi(req, res, pathname) {
     try {
       const created = await createAccountForSession(sessionForRequest(req), body);
       sendJson(res, 201, { ok: true, ...created });
+    } catch (error) {
+      if (error instanceof StorePathError || error instanceof AccountRegistryError) {
+        sendJson(res, error.status || 400, { error: error.message });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+
+  const accountRouteMatch = pathname.match(/^\/api\/admin\/accounts\/([^/]+)$/);
+  if (accountRouteMatch && req.method === "DELETE") {
+    try {
+      const result = await deleteAccountForSession(
+        sessionForRequest(req),
+        decodeURIComponent(accountRouteMatch[1]),
+      );
+      sendJson(res, 200, { ok: true, ...result });
     } catch (error) {
       if (error instanceof StorePathError || error instanceof AccountRegistryError) {
         sendJson(res, error.status || 400, { error: error.message });
@@ -1983,7 +2110,7 @@ async function serveApi(req, res, pathname) {
   }
 
   if (pathname === "/api/reset" && req.method === "POST") {
-    const state = await loadDefaultState();
+    const state = await loadExampleState();
     await writeBudgetState(workspaceIdForRequest(req), state);
     sendJson(res, 200, state);
     return true;
