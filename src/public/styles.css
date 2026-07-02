@@ -701,6 +701,16 @@ button.is-loading::after {
   color: #24496f;
 }
 
+.status-pill--ok {
+  background: #dcecdf;
+  color: #14513f;
+}
+
+.status-pill--warning {
+  background: #fff1d7;
+  color: #8a4a0f;
+}
+
 .status-dot.status-watch {
   background: #c36b2d;
   box-shadow: 0 0 0 5px rgba(195, 107, 45, 0.13);
@@ -1586,6 +1596,76 @@ tr:hover td {
 .workspace-management-form {
   display: grid;
   gap: 14px;
+}
+
+.managed-account-section {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(36, 113, 93, 0.14);
+}
+
+.managed-account-section h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.managed-account-section p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.managed-account-list {
+  display: grid;
+  gap: 10px;
+}
+
+.managed-account-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid rgba(36, 113, 93, 0.16);
+  border-radius: 12px;
+  padding: 13px 14px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.managed-account-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.managed-account-main strong,
+.managed-account-main span,
+.managed-account-main small {
+  overflow-wrap: anywhere;
+}
+
+.managed-account-main span,
+.managed-account-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.managed-account-main small {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.managed-account-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .account-admin-actions,

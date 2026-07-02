@@ -44,7 +44,7 @@ function renderLandingAuth() {
     landingEls.authFootnote.textContent = googleReady
       ? "Google trial users get a clean workspace automatically. Password login remains available for existing accounts."
       : authEnabled
-      ? "Need a trial password? Ask the budget owner to share one with you."
+      ? "Password login is reserved for existing owner or internal accounts."
       : "Trial access is open in this environment. You can enter the workspace directly.";
   }
 }
@@ -72,57 +72,4 @@ async function refreshLandingAuth() {
   renderLandingAuth();
 }
 
-/* ── Trial request form ── */
-
-const trialFormEls = {
-  form: document.getElementById("trialRequestForm"),
-  nameInput: document.getElementById("trialRequestNameInput"),
-  emailInput: document.getElementById("trialRequestEmailInput"),
-  noteInput: document.getElementById("trialRequestNoteInput"),
-  submitBtn: document.getElementById("trialRequestBtn"),
-  status: document.getElementById("trialRequestStatus"),
-};
-
-function setTrialStatus(message, isError) {
-  if (!trialFormEls.status) return;
-  trialFormEls.status.textContent = message || "";
-  trialFormEls.status.style.color = isError ? "var(--danger, #b9413d)" : "var(--accent, #24715d)";
-}
-
-async function handleTrialRequest(event) {
-  event.preventDefault();
-  if (!trialFormEls.form) return;
-
-  const name = trialFormEls.nameInput?.value || "";
-  const email = trialFormEls.emailInput?.value || "";
-  const note = trialFormEls.noteInput?.value || "";
-
-  setTrialStatus("");
-  trialFormEls.submitBtn?.setAttribute("disabled", "disabled");
-
-  try {
-    const response = await fetch("/api/trial-requests", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, email, note }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      setTrialStatus(data.error || "Could not submit request. Please check your input.", true);
-      return;
-    }
-
-    setTrialStatus("Your request has been submitted. The owner will review it and follow up.");
-    trialFormEls.nameInput.value = "";
-    trialFormEls.emailInput.value = "";
-    trialFormEls.noteInput.value = "";
-  } catch {
-    setTrialStatus("Unable to submit request right now. Please try again.", true);
-  } finally {
-    trialFormEls.submitBtn?.removeAttribute("disabled");
-  }
-}
-
-trialFormEls.form?.addEventListener("submit", handleTrialRequest);
 refreshLandingAuth();

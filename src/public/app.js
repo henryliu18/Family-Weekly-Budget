@@ -239,7 +239,7 @@ const i18n = {
     workspaceDeleteSuccess: "\u5de5\u4f5c\u5340\u5df2\u522a\u9664\u3002",
     workspaceDeleteFailed: "\u7121\u6cd5\u522a\u9664\u5de5\u4f5c\u5340\uff0c\u8acb\u78ba\u8a8d\u4e0d\u662f\u9810\u8a2d\u6216\u6700\u5f8c\u4e00\u500b\u5de5\u4f5c\u5340\u3002",
     accountAdminTitle: "\u5e33\u865f\u7ba1\u7406",
-    accountAdminSub: "\u5efa\u7acb\u64c1\u6709\u7368\u7acb\u7a7a\u767d\u5de5\u4f5c\u5340\u7684\u5bc6\u78bc\u5e33\u865f\u3002",
+    accountAdminSub: "\u5efa\u7acb\u5167\u90e8\u5bc6\u78bc\u5e33\u865f\uff0c\u4e26\u7ba1\u7406 Google \u8a66\u7528\u4f7f\u7528\u8005\u7684\u5b58\u53d6\u72c0\u614b\u3002",
     accountId: "\u5e33\u865f ID",
     displayName: "\u986f\u793a\u540d\u7a31",
     emailOptional: "Email\uff08\u9078\u586b\uff09",
@@ -251,10 +251,13 @@ const i18n = {
     accountCreateFailed: "\u7121\u6cd5\u5efa\u7acb\u5e33\u865f\uff0c\u8acb\u6aa2\u67e5\u8f38\u5165\u5167\u5bb9\u5f8c\u518d\u8a66\u4e00\u6b21\u3002",
     accountCreateDuplicate: "\u9019\u500b\u5e33\u865f ID \u5df2\u5b58\u5728\uff0c\u8acb\u6539\u7528\u5176\u4ed6 ID\u3002",
     accountLoginHint: "\u8acb\u5c07\u81e8\u6642\u5bc6\u78bc\u4ee5\u5b89\u5168\u9014\u5f91\u4ea4\u7d66\u4f7f\u7528\u8005\uff1b\u7cfb\u7d71\u4e0d\u6703\u986f\u793a\u6216\u5132\u5b58\u660e\u78bc\u3002",
-    accountPreparedFromTrial: (name) => `\u5df2\u5c07 ${name} \u7684\u8a66\u7528\u7533\u8acb\u5e36\u5165\u5e33\u865f\u8868\u55ae\u3002\u8acb\u8a2d\u5b9a\u81e8\u6642\u5bc6\u78bc\u5f8c\u5efa\u7acb\u5e33\u865f\u3002`,
-    trialRequestsTitle: "\u8a66\u7528\u7533\u8acb",
-    trialRequestsSub: "\u4f86\u81ea\u767b\u9678\u9801\u7684\u5f85\u8655\u7406\u5b58\u53d6\u7533\u8acb\u3002",
-    trialRequestUseForAccount: "\u5e36\u5165\u5e33\u865f\u8868\u55ae",
+    managedUsersTitle: "\u4f7f\u7528\u8005",
+    managedUsersSub: "\u6aa2\u8996 Google \u8a66\u7528\u4f7f\u7528\u8005\uff0c\u4e26\u5c07\u5df2\u6838\u53ef\u4f7f\u7528\u8005\u5347\u7d1a\u70ba\u6b63\u5f0f\u5b58\u53d6\u3002",
+    managedUsersEmpty: "\u76ee\u524d\u6c92\u6709\u5176\u4ed6\u4f7f\u7528\u8005\u3002",
+    promoteToStandard: "\u5347\u7d1a\u70ba\u6b63\u5f0f",
+    accountPromoteSuccess: (account) => `\u5df2\u5c07 ${account} \u5347\u7d1a\u70ba\u6b63\u5f0f\u5b58\u53d6\u3002`,
+    accountPromoteFailed: "\u7121\u6cd5\u66f4\u65b0\u4f7f\u7528\u8005\u72c0\u614b\uff0c\u8acb\u518d\u8a66\u4e00\u6b21\u3002",
+    noActionNeeded: "\u7121\u9700\u64cd\u4f5c",
     accountResetTitle: "\u7ba1\u7406\u54e1\u5bc6\u78bc\u91cd\u8a2d",
     accountResetSub: "\u7576\u4f7f\u7528\u8005\u9700\u8981\u6062\u5fa9\u5b58\u53d6\u6642\uff0c\u66ff\u5bc6\u78bc\u5e33\u865f\u8a2d\u5b9a\u65b0\u7684\u81e8\u6642\u5bc6\u78bc\u3002",
     accountToReset: "\u8981\u91cd\u8a2d\u7684\u5e33\u865f",
@@ -515,7 +518,7 @@ const i18n = {
     workspaceDeleteSuccess: "Workspace deleted.",
     workspaceDeleteFailed: "Unable to delete workspace. Confirm it is not the default or final workspace.",
     accountAdminTitle: "Account management",
-    accountAdminSub: "Create a password account with its own clean workspace.",
+    accountAdminSub: "Create internal password accounts and manage Google trial user access.",
     accountId: "Account ID",
     displayName: "Display name",
     emailOptional: "Email (optional)",
@@ -527,10 +530,13 @@ const i18n = {
     accountCreateFailed: "Unable to create account. Check the details and try again.",
     accountCreateDuplicate: "This account ID already exists. Choose another ID.",
     accountLoginHint: "Share the temporary password securely. The app will not show or store plaintext passwords.",
-    accountPreparedFromTrial: (name) => `Copied ${name}'s trial request into the account form. Add a temporary password, then create the account.`,
-    trialRequestsTitle: "Trial requests",
-    trialRequestsSub: "Pending access requests from the landing page.",
-    trialRequestUseForAccount: "Prepare account",
+    managedUsersTitle: "Users",
+    managedUsersSub: "Review Google trial users and promote approved users to standard access.",
+    managedUsersEmpty: "No other users yet.",
+    promoteToStandard: "Promote to standard",
+    accountPromoteSuccess: (account) => `Promoted ${account} to standard access.`,
+    accountPromoteFailed: "Unable to update user status. Please try again.",
+    noActionNeeded: "No action needed",
     accountResetTitle: "Admin password reset",
     accountResetSub: "Set a new temporary password when a password account needs recovery access.",
     accountToReset: "Account to reset",
@@ -555,7 +561,7 @@ const i18n = {
     signInMethod: "Sign-in method",
     accountStatus: "Account status",
     trialAccount: "Trial",
-    activeAccount: "Active",
+    activeAccount: "Standard",
     continueWithGoogle: "Continue with Google",
     orPasswordLogin: "or use password login",
   },
@@ -1078,6 +1084,7 @@ function bindElements() {
     "createAccountBtn",
     "accountAdminStatus",
     "accountAdminResult",
+    "managedAccountsList",
     "accountResetPanel",
     "accountResetForm",
     "resetAccountSelect",
@@ -1106,8 +1113,6 @@ function bindElements() {
     "profileDisplayNameInput",
     "saveProfileBtn",
     "profileStatus",
-    "trialRequestsPanel",
-    "trialRequestsList",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -1235,6 +1240,7 @@ function bindEvents() {
   els.profileForm?.addEventListener("submit", saveProfileFromForm);
   els.accountSecurityForm?.addEventListener("submit", changePasswordFromForm);
   els.accountAdminForm?.addEventListener("submit", createAccountFromForm);
+  els.managedAccountsList?.addEventListener("click", promoteManagedAccountFromClick);
   els.accountResetForm?.addEventListener("submit", resetAccountPasswordFromForm);
   els.workspaceManagementForm?.addEventListener("submit", renameWorkspaceFromForm);
   els.workspaceManageSelect?.addEventListener("change", syncWorkspaceManagementForm);
@@ -1430,7 +1436,6 @@ function renderAll() {
   renderAccountAdminPanel();
   renderAccountResetPanel();
   renderProfilePanel();
-  renderTrialRequestsPanel();
   renderPersonalTitle();
   renderMonthOptions();
   renderOverview();
@@ -1537,7 +1542,6 @@ function applyLanguage() {
   renderAccountAdminPanel();
   renderAccountResetPanel();
   renderProfilePanel();
-  renderTrialRequestsPanel();
   renderPersonalTitle();
   renderImportDraft();
 }
@@ -1576,7 +1580,6 @@ function updateAuthUi() {
   renderAccountAdminPanel();
   renderAccountResetPanel();
   renderProfilePanel();
-  renderTrialRequestsPanel();
   renderPersonalTitle();
   document.body.classList.toggle("landing-open", shouldShowOverlay);
   document.body.classList.toggle("auth-locked", isAuthLocked());
@@ -1692,77 +1695,6 @@ function renderProfilePanel() {
   els.profileDisplayNameInput.value = identity.displayName || "";
 }
 
-function renderTrialRequestsPanel() {
-  if (!els.trialRequestsPanel) return;
-  const identity = accountState?.account || accountState?.user || null;
-  const shouldShow = !!(identity?.isDefaultUser);
-  els.trialRequestsPanel.classList.toggle("hidden", !shouldShow);
-  if (!shouldShow) return;
-
-  loadTrialRequests();
-}
-
-async function loadTrialRequests() {
-  if (!els.trialRequestsList) return;
-  els.trialRequestsList.innerHTML = "<p>Loading...</p>";
-
-  try {
-    const response = await fetch("/api/admin/trial-requests");
-    if (!response.ok) {
-      els.trialRequestsList.innerHTML = '<p class="empty-state">Could not load requests.</p>';
-      return;
-    }
-    const data = await response.json();
-    const requests = data.requests || [];
-    if (requests.length === 0) {
-      els.trialRequestsList.innerHTML = '<p class="empty-state">No pending requests.</p>';
-      return;
-    }
-    els.trialRequestsList.innerHTML = requests.map((r) => {
-      const note = r.note ? ` &mdash; ${escapeHtml(r.note)}` : "";
-      const date = new Date(r.createdAt).toLocaleDateString();
-      return `<article class="trial-request-item">
-        <div class="trial-request-info">
-          <strong>${escapeHtml(r.name)}</strong>
-          <span>${escapeHtml(r.email)}</span>
-          <small>${date}${note}</small>
-        </div>
-        <button class="ghost-btn use-request-btn" type="button" data-name="${escapeHtml(r.name)}" data-email="${escapeHtml(r.email)}">${escapeHtml(t("trialRequestUseForAccount"))}</button>
-      </article>`;
-    }).join("");
-
-    els.trialRequestsList.querySelectorAll(".use-request-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const name = btn.getAttribute("data-name");
-        const email = btn.getAttribute("data-email");
-        prepareAccountFromTrialRequest({ name, email });
-      });
-    });
-  } catch {
-    els.trialRequestsList.innerHTML = '<p class="empty-state">Could not load requests.</p>';
-  }
-}
-
-function prepareAccountFromTrialRequest({ name = "", email = "" }) {
-  const displayName = String(name || "").trim();
-  const normalizedEmail = String(email || "").trim().toLowerCase();
-  const seed = normalizedEmail || displayName;
-  const accountId = trialRequestAccountId(seed);
-  const workspaceName = displayName ? `${displayName} Workspace` : "Trial Workspace";
-
-  if (els.newAccountIdInput) els.newAccountIdInput.value = accountId;
-  if (els.newAccountDisplayNameInput) els.newAccountDisplayNameInput.value = displayName;
-  if (els.newAccountEmailInput) els.newAccountEmailInput.value = normalizedEmail;
-  if (els.newAccountWorkspaceInput) els.newAccountWorkspaceInput.value = workspaceName;
-  clearAccountAdminResult();
-  setAccountAdminStatus("accountPreparedFromTrial", false, displayName || accountId);
-
-  els.accountAdminPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
-  els.accountAdminPanel?.classList.add("panel-highlight");
-  setTimeout(() => els.accountAdminPanel?.classList.remove("panel-highlight"), 1600);
-  setTimeout(() => els.newAccountPasswordInput?.focus(), 250);
-}
-
 function renderWorkspaceManagementPanel() {
   if (!els.workspaceManagementPanel || !els.workspaceManageSelect) return;
   const workspaces = Array.isArray(accountState?.workspaces) ? accountState.workspaces : [];
@@ -1814,7 +1746,7 @@ function renderAccountSecurityPanel() {
   }
 
   const isPasswordAccount = (account.authProvider || "password") === "password";
-  const statusLabel = account.accountStatus === "trial" ? t("trialAccount") : t("activeAccount");
+  const statusLabel = accountStatusLabel(account);
   if (els.accountSecurityIdentity) {
     els.accountSecurityIdentity.innerHTML = `
       <strong>${escapeHtml(t("signedInAccount"))}</strong>
@@ -1839,6 +1771,71 @@ function renderAccountAdminPanel() {
   if (!shouldShow) {
     clearAccountAdminStatus();
     clearAccountAdminResult();
+    if (els.managedAccountsList) els.managedAccountsList.innerHTML = "";
+    return;
+  }
+
+  renderManagedAccountsList();
+}
+
+function accountStatusLabel(account) {
+  return account?.accountStatus === "trial" ? t("trialAccount") : t("activeAccount");
+}
+
+function renderManagedAccountsList() {
+  if (!els.managedAccountsList) return;
+  const currentAccountId = accountState?.account?.id || "";
+  const managedAccounts = adminAccounts.filter((account) => account.id && account.id !== currentAccountId);
+  if (managedAccounts.length === 0) {
+    els.managedAccountsList.innerHTML = `<p class="empty-state">${escapeHtml(t("managedUsersEmpty"))}</p>`;
+    return;
+  }
+
+  els.managedAccountsList.innerHTML = managedAccounts.map((account) => {
+    const isTrial = account.accountStatus === "trial";
+    const statusClass = isTrial ? "status-pill status-pill--warning" : "status-pill status-pill--ok";
+    const action = isTrial
+      ? `<button class="ghost-btn promote-account-btn" type="button" data-promote-account="${escapeHtml(account.id)}">${escapeHtml(t("promoteToStandard"))}</button>`
+      : `<span class="managed-account-note">${escapeHtml(t("noActionNeeded"))}</span>`;
+    return `<article class="managed-account-item" data-managed-account-id="${escapeHtml(account.id)}">
+      <div class="managed-account-main">
+        <strong>${escapeHtml(account.displayName || account.id)}</strong>
+        <span>${escapeHtml(account.email || account.id)}</span>
+        <small>${escapeHtml(account.authProvider || "password")}</small>
+      </div>
+      <div class="managed-account-status">
+        <span class="${statusClass}">${escapeHtml(accountStatusLabel(account))}</span>
+        ${action}
+      </div>
+    </article>`;
+  }).join("");
+}
+
+async function promoteManagedAccountFromClick(event) {
+  const button = event.target.closest("[data-promote-account]");
+  if (!button) return;
+  const accountId = button.getAttribute("data-promote-account");
+  if (!accountId) return;
+
+  setButtonLoading(button, true);
+  try {
+    const response = await fetch(`/api/admin/accounts/${encodeURIComponent(accountId)}/status`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accountStatus: "standard" }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setAccountAdminStatus("accountPromoteFailed", true);
+      return;
+    }
+    await loadAdminAccounts();
+    renderManagedAccountsList();
+    setAccountAdminStatus("accountPromoteSuccess", false, result.account?.displayName || result.account?.id || accountId);
+  } catch {
+    setAccountAdminStatus("accountPromoteFailed", true);
+  } finally {
+    setButtonLoading(button, false);
   }
 }
 
@@ -2105,6 +2102,7 @@ async function createAccountFromForm(event) {
     );
     renderAccountAdminResult(result);
     await loadAdminAccounts();
+    renderManagedAccountsList();
     renderAccountResetPanel();
   } catch {
     setAccountAdminStatus("accountCreateFailed", true);
@@ -4652,29 +4650,6 @@ function slugify(value) {
     .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
     .replace(/^-|-$/g, "");
   return `${base || "month"}-${Date.now().toString(36)}`;
-}
-
-function trialRequestAccountId(value) {
-  const base = String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/@.*/, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40)
-    .replace(/-+$/g, "");
-  const fallback = base || `trial-${Date.now().toString(36)}`;
-  const existingIds = new Set([
-    accountState?.account?.id,
-    ...(Array.isArray(adminAccounts) ? adminAccounts.map((account) => account.id) : []),
-  ].filter(Boolean));
-  if (!existingIds.has(fallback)) return fallback;
-  for (let index = 2; index < 100; index += 1) {
-    const suffix = `-${index}`;
-    const candidate = `${fallback.slice(0, 40 - suffix.length)}${suffix}`;
-    if (!existingIds.has(candidate)) return candidate;
-  }
-  return `${fallback.slice(0, 32)}-${Date.now().toString(36)}`;
 }
 
 function escapeHtml(value) {
